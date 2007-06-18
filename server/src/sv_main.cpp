@@ -59,6 +59,8 @@
 extern void G_DeferedInitNew (char *mapname);
 extern level_locals_t level;
 
+extern void P_WhackMobj(AActor *target);
+
 // denis - game manipulation, but no fancy gfx
 bool clientside = false, serverside = true;
 
@@ -2082,20 +2084,49 @@ void SV_ChangeTeam (player_t &player)  // [Toke - Teams]
 //
 void SV_Spectate (player_t &player)
 {
+	client_t *cl;
 	bool want_to_spectate = MSG_ReadByte() ? true : false;
 
 	if(want_to_spectate)
 	{
 		if(player.ingame())
-			SV_Suicide(player);
+		{
+			SV_BroadcastPrintf(PRINT_HIGH, "%s is now a spectator.", player.userinfo.netname);
+			for(size_t i = 0; i < players.size(); ++i)
+			{
+				cl = &players[i].client;
+				if(cl->version >=65)
+				{
+					MSG_WriteMarker (&cl->reliablebuf, svc_spectateplayer);
+					MSG_WriteByte (&cl->reliablebuf, player.id);
+					MSG_WriteByte (&cl->reliablebuf, 1);
+				}
+			}
+		}
 
+		P_WhackMobj(player.mo);
 		player.playerstate = PST_SPECTATE;
 		player.respawn_time = level.time;
 	}
 	else
 	{
 		if(player.playerstate == PST_SPECTATE && level.time > player.respawn_time + TICRATE*2)
+		{
+			SV_BroadcastPrintf(PRINT_HIGH, "%s has returned to gameplay.", player.userinfo.netname);
+			
+			for(size_t i = 0; i < players.size(); ++i)
+			{
+				cl = &players[i].client;
+				if(cl->version >=65)
+				{
+					MSG_WriteMarker (&cl->reliablebuf, svc_spectateplayer);
+					MSG_WriteByte (&cl->reliablebuf, player.id);
+					MSG_WriteByte (&cl->reliablebuf, 1);
+				}
+			}
+			
 			player.playerstate = PST_REBORN;
+		}
 	}
 }
 

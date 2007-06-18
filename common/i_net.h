@@ -36,7 +36,7 @@
 
 #define CHALLENGE 5560020  // challenge
 #define LAUNCHER_CHALLENGE 777123  // csdl challenge
-#define VERSION 64
+#define VERSION 65
 
 extern int   localport;
 extern int   msg_badread;
@@ -96,6 +96,7 @@ enum svc_t
 	svc_updatedeaths,		// [byte] [short]
 	svc_ctfevent,			// [Toke - CTF] - [int]
 	svc_serversettings,		// 55 [Toke] - informs clients of server settings
+	svc_spectateplayer,		// Zorro - [byte: id] [byte: status]
 
 	// for co-op
 	svc_mobjstate = 70,

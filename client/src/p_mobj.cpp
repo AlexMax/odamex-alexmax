@@ -274,6 +274,7 @@ void P_XYMovement (AActor *mo)
  	fixed_t ptryx, ptryy;
 	player_t *player;
 	fixed_t xmove, ymove;
+	bool you_spin_me_right_around = true;
 
 	if(!mo->subsector)
 		return;
@@ -372,7 +373,12 @@ void P_XYMovement (AActor *mo)
 		return; 	// no friction for missiles ever
 	}
 
-	if (mo->z > mo->floorz && !mo->waterlevel)
+	// Apply friction if this is a spectating player, even in air
+	if (mo->player)
+		if (mo->player->playerstate == PST_SPECTATE)
+			you_spin_me_right_around = false;
+			
+	if (mo->z > mo->floorz && !mo->waterlevel && you_spin_me_right_around)
 		return;		// no friction when airborne
 
 	if (mo->flags & MF_CORPSE)

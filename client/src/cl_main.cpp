@@ -76,6 +76,8 @@ huffman_client compressor;
 typedef std::map<size_t, AActor::AActorPtr> netid_map_t;
 netid_map_t actor_by_netid;
 
+void P_SpecMobj(AActor *target);
+
 EXTERN_CVAR (skin)
 EXTERN_CVAR (team)
 CVAR (friendlyfire,		"1", CVAR_SERVERINFO)
@@ -1102,7 +1104,8 @@ void CL_Corpse(void)
 	mo->flags &= ~MF_SOLID;
 
 	if (mo->player)
-		mo->player->playerstate = PST_DEAD;
+		if(mo->player->ingame())
+			mo->player->playerstate = PST_DEAD;
 }
 
 //
@@ -1917,6 +1920,23 @@ void CL_DownloadStart()
 }
 
 //
+// CL_SpectatePlayer
+// Zorro - transform a player into a spectator with no dependancy on the server killing him.
+//
+void CL_SpectatePlayer()
+{
+	player_t player = CL_FindPlayer(MSG_ReadByte());
+	size_t state = MSG_ReadByte();
+	
+	if(state)
+	{
+		P_SpecMobj(player.mo);
+		player.playerstate = PST_SPECTATE;
+	}
+	// else: server takes care reborn state, no worries for now		
+}
+
+//
 // CL_Download
 // denis - get a little chunk of the file and store it, much like a hampster. Well, hamster; but hampsters can dance and sing. Also much like Scraps, the Ice Age squirrel thing, stores his acorn. Only with a bit more success. Actually, quite a bit more success, specifically as in that the world doesn't crack apart when we store our chunk and it does when Scraps stores his (or her?) acorn. But when Scraps does it, it is funnier. The rest of Ice Age mostly sucks.
 //
@@ -2099,6 +2119,7 @@ void CL_InitCommands(void)
 	cmds[svc_actor_tracer]		= &CL_Actor_Tracer;
 	cmds[svc_missedpacket]		= &CL_CheckMissedPacket;
 	cmds[svc_forceteam]			= &CL_ForceSetTeam;
+	cmds[svc_spectateplayer]	= &CL_SpectatePlayer;
 
 	cmds[svc_ctfevent]			= &CL_CTFEvent;
 	cmds[svc_serversettings]	= &CL_GetServerSettings;

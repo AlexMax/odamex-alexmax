@@ -138,7 +138,7 @@ void P_CalcHeight (player_t *player)
 	bob = FixedMul (player->bob>>(player->mo->waterlevel > 1 ? 2 : 1), finesine[angle]);
 
 	// move viewheight
-	if (player->playerstate == PST_LIVE)
+	if (player->playerstate == PST_LIVE || player->playerstate == PST_SPECTATE)
 	{
 		player->viewheight += player->deltaviewheight;
 
@@ -310,6 +310,43 @@ void P_MovePlayer (player_t *player)
 }
 
 //
+// P_MovePlayerSpec
+//
+void P_MovePlayerSpec (player_t *player)
+{
+	ticcmd_t *cmd = &player->cmd;
+	AActor *mo = player->mo;
+	
+	// Dampen movement
+	
+	// Look left/right
+	mo->angle += cmd->ucmd.yaw << 16;
+
+	// Look up/down stuff
+	P_PlayerLookUpDown(player);
+
+	if (cmd->ucmd.forwardmove | cmd->ucmd.sidemove)
+	{
+		fixed_t forwardmove, sidemove;
+		int  movefactor;
+
+		movefactor = ORIG_FRICTION_FACTOR;
+		
+		forwardmove = (cmd->ucmd.forwardmove * movefactor) >> 8;
+		sidemove = (cmd->ucmd.sidemove * movefactor) >> 8;
+
+		if (forwardmove )
+		{
+			P_ForwardThrust (player, mo->angle, forwardmove);
+		}
+		if (sidemove)
+		{
+			P_SideThrust (player, mo->angle, sidemove);
+		}
+	}
+}
+
+//
 // P_DeathThink
 // Fall on your face when dying.
 // Decrease POV height to floor height.
@@ -377,6 +414,15 @@ void P_DeathThink (player_t *player)
 }
 
 //
+// P_SpectateThink
+//
+void P_SpectateThink(player_t *player)
+{
+	P_MovePlayerSpec(player);
+	P_CalcHeight(player);
+}
+
+//
 // P_PlayerThink
 //
 void P_PlayerThink (player_t *player)
@@ -411,7 +457,7 @@ void P_PlayerThink (player_t *player)
 	}
 	
 	if(serverside)
-	{
+	{		
 		if (player->playerstate == PST_DEAD)
 		{
 			P_DeathThink (player);

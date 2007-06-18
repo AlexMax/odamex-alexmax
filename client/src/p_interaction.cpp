@@ -986,7 +986,7 @@ void P_KillMobj (AActor *source, AActor *target, AActor *inflictor)
 	target->flags |= MF_CORPSE|MF_DROPOFF;
 	target->height >>= 2;
 
-	// [RH] Also set the thing's tid to 0. [why?]
+	// [RH] Also set the thing's tid to 0. [why?] <-- Zorro - Probably was related to hexen style scripting.
 	target->tid = 0;
 
 	if (target->player)
@@ -1070,6 +1070,21 @@ void P_KillMobj (AActor *source, AActor *target, AActor *inflictor)
 	}
 }
 
+//
+// P_WhackMobj
+// Zorro - kill an mobj locally.  If it's a player, spec it
+// todo: make this not a hack
+//
+void P_SpecMobj(AActor *target)
+{
+	target->flags &= ~(MF_SHOOTABLE|MF_FLOAT|MF_SKULLFLY);
+	target->flags |= MF_NOGRAVITY;
+	
+	P_SetMobjState (target, target->info->xdeathstate);
+	
+	if(target->player)
+		target->player->playerstate = PST_SPECTATE;
+}
 
 
 

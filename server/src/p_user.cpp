@@ -234,6 +234,13 @@ void P_MovePlayer (player_t *player)
 }		
 
 //
+// P_MovePlayerSpec
+//
+void P_MovePlayerSpec (player_t *player)
+{
+}
+
+//
 // P_DeathThink
 // Fall on your face when dying.
 // Decrease POV height to floor height.
@@ -324,6 +331,14 @@ void P_DeathThink (player_t *player)
 	}
 }
 
+//
+// P_SpectateThink
+//
+void P_SpectateThink(player_t *player)
+{
+	P_MovePlayerSpec(player);
+}
+
 EXTERN_CVAR (freelook)
 
 
@@ -356,6 +371,12 @@ void P_PlayerThink (player_t *player)
 		cmd->ucmd.forwardmove = 0xc800/2;
 		cmd->ucmd.sidemove = 0;
 		player->mo->flags &= ~MF_JUSTATTACKED;
+	}
+
+	if (player->playerstate == PST_SPECTATE)
+	{
+		P_SpectateThink (player);
+		return;
 	}
 
 	if (player->playerstate == PST_DEAD)

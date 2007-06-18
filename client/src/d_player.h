@@ -58,7 +58,9 @@ typedef enum
 	// Dead on the ground, view follows killer.
 	PST_DEAD,
 	// Ready to restart/respawn???
-	PST_REBORN			
+	PST_REBORN,
+	// Leaching packets
+	PST_SPECTATE,
 
 } playerstate_t;
 

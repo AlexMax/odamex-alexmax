@@ -38,6 +38,7 @@
 void P_MovePlayer (player_t *player);
 void P_CalcHeight (player_t *player);
 void P_DeathThink (player_t *player);
+void P_SpectateThink (player_t *player);
 
 
 angle_t cl_angle[MAXSAVETICS];
@@ -219,6 +220,24 @@ void CL_PredictMove (void)
 
 		predicting = false;
 		P_DeathThink (p);
+		p->mo->RunThink();
+		P_CalcHeight(p);
+		return;
+	}
+	
+	if (p->playerstate == PST_SPECTATE)
+	{
+		// predict forward until tic <= gametic
+		while (tic < gametic)
+		{
+			predicting = true; // disable bobbing, sounds
+			p->mo->RunThink();
+			CL_PredictSectors(); // denis - todo - replace the other calls here with CL_PredictPlayers/CL_PredictSectors
+			tic++;
+		}
+
+		predicting = false;
+		P_SpectateThink (p);
 		p->mo->RunThink();
 		P_CalcHeight(p);
 		return;

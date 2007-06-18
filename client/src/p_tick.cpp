@@ -44,7 +44,7 @@ void P_Ticker (void)
 	if(serverside)
 	{
 		for(size_t i = 0; i < players.size(); i++)
-			if(players[i].ingame())
+			if(players[i].ingame() || players[i].playerstate == PST_SPECTATE)
 				P_PlayerThink (&players[i]);
 	}
 	else if (noservermsgs && !demoplayback)
