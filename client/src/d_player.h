@@ -60,7 +60,7 @@ typedef enum
 	// Ready to restart/respawn???
 	PST_REBORN,
 	// Leaching packets
-	PST_SPECTATE,
+	PST_SPECTATE
 
 } playerstate_t;
 
