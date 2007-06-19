@@ -2121,7 +2121,7 @@ void SV_Spectate (player_t &player)
 				{
 					MSG_WriteMarker (&cl->reliablebuf, svc_spectateplayer);
 					MSG_WriteByte (&cl->reliablebuf, player.id);
-					MSG_WriteByte (&cl->reliablebuf, 1);
+					MSG_WriteByte (&cl->reliablebuf, 0);
 				}
 			}
 			
