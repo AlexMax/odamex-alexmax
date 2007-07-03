@@ -1335,7 +1335,7 @@ void SV_ConnectClient (void)
 
 	// wrong version
 	if (cl->version != VERSION
-		&& cl->version != 62 && cl->version != 63) // denis - removeme - allow legacy protocol support
+		&& cl->version < 62) // denis - removeme - allow legacy protocol support
 	{
 		MSG_WriteString (&cl->reliablebuf, "Incompatible protocol version");
 		MSG_WriteMarker (&cl->reliablebuf, svc_disconnect);
