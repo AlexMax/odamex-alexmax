@@ -2194,7 +2194,7 @@ void SV_Suicide(player_t &player)
 	player.mo->player = NULL;
 	
 	// OMG imps?
-	AActor *specmo = new AActor(player.mo->x, player.mo, player.mo->z, MT_TROOP);
+	AActor *specmo = new AActor(player.mo->x, player.mo->y, player.mo->z, MT_TROOP);
 	SV_SpawnMobj(specmo);
 	
 	//player.mo = NULL;
