@@ -1106,16 +1106,13 @@ void P_KillMobj (AActor *source, AActor *target, AActor *inflictor)
 }
 
 //
-// P_WhackMobj
+// P_SpecMobj
 // Zorro - Same as killing the Mobj, but nothing is done except clean killing.
 // (no score, dropped weapons, announcments, networking) - used for spectator toggle
 //
-void P_WhackMobj(AActor* target)
+void P_SpecMobj(AActor* target)
 {
-	// Well, I'm not sure if any of this is neccesary.  I suppose having the thing be a corpse is good.
-	target->flags &= ~(MF_SHOOTABLE|MF_FLOAT|MF_SKULLFLY);
-	
-	P_SetMobjState (target, target->info->xdeathstate);
+
 }
 
 

@@ -1071,19 +1071,13 @@ void P_KillMobj (AActor *source, AActor *target, AActor *inflictor)
 }
 
 //
-// P_WhackMobj
+// P_SpecMobj
 // Zorro - kill an mobj locally.  If it's a player, spec it
 // todo: make this not a hack
 //
 void P_SpecMobj(AActor *target)
 {
-	target->flags &= ~(MF_SHOOTABLE|MF_FLOAT|MF_SKULLFLY);
-	target->flags |= MF_NOGRAVITY;
-	
-	P_SetMobjState (target, target->info->xdeathstate);
-	
-	if(target->player)
-		target->player->playerstate = PST_SPECTATE;
+	target->player->playerstate = PST_SPECTATE;
 }
 
 

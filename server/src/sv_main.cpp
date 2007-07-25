@@ -59,7 +59,7 @@
 extern void G_DeferedInitNew (char *mapname);
 extern level_locals_t level;
 
-extern void P_WhackMobj(AActor *target);
+void P_SpecMobj(AActor *target);
 
 // denis - game manipulation, but no fancy gfx
 bool clientside = false, serverside = true;
@@ -2085,13 +2085,28 @@ void SV_ChangeTeam (player_t &player)  // [Toke - Teams]
 void SV_Spectate (player_t &player)
 {
 	client_t *cl;
+	AActor *corpsemo =  player.mo;
+	AActor *specmo;
+	
 	bool want_to_spectate = MSG_ReadByte() ? true : false;
 
 	if(want_to_spectate)
 	{
+		corpsemo->flags &= ~(MF_SHOOTABLE|MF_FLOAT|MF_SKULLFLY|MF_SOLID);
+		
+		// OMG imps?
+		specmo = new AActor(corpsemo->x, corpsemo->y, corpsemo->z, MT_TROOP);
+		SV_SpawnMobj(specmo);
+		
+		//player.mo = specmo->ptr();
+		
+		corpsemo->flags |= MF_CORPSE;
+		
+		P_SetMobjState (corpsemo, corpsemo->info->xdeathstate);
+		
 		if(player.ingame())
-		{
-			SV_BroadcastPrintf(PRINT_HIGH, "%s is now a spectator.", player.userinfo.netname);
+		{			
+			SV_BroadcastPrintf(PRINT_HIGH, "%s is now a spectator.\n", player.userinfo.netname);
 			for(size_t i = 0; i < players.size(); ++i)
 			{
 				cl = &players[i].client;
@@ -2101,10 +2116,25 @@ void SV_Spectate (player_t &player)
 					MSG_WriteByte (&cl->reliablebuf, player.id);
 					MSG_WriteByte (&cl->reliablebuf, 1);
 				}
+				else
+				{
+					// Kill the mobj the old way :(
+					MSG_WriteMarker (&cl->reliablebuf, svc_killmobj);
+					MSG_WriteShort (&cl->reliablebuf, 0);
+					MSG_WriteShort (&cl->reliablebuf, corpsemo->netid);
+					MSG_WriteShort (&cl->reliablebuf, 0);
+					MSG_WriteShort (&cl->reliablebuf, -10000);	// OdaSplat!
+					MSG_WriteLong (&cl->reliablebuf, 0);
+				}
+				
+				MSG_WriteMarker(&cl->reliablebuf, svc_mobjinfo);
+				MSG_WriteShort(&cl->reliablebuf, corpsemo->netid);
+				MSG_WriteLong(&cl->reliablebuf, corpsemo->flags);
+				
 			}
 		}
 
-		P_WhackMobj(player.mo);
+		P_SpecMobj(player.mo);
 		player.playerstate = PST_SPECTATE;
 		player.respawn_time = level.time;
 	}
@@ -2112,7 +2142,7 @@ void SV_Spectate (player_t &player)
 	{
 		if(player.playerstate == PST_SPECTATE && level.time > player.respawn_time + TICRATE*2)
 		{
-			SV_BroadcastPrintf(PRINT_HIGH, "%s has returned to gameplay.", player.userinfo.netname);
+			SV_BroadcastPrintf(PRINT_HIGH, "%s has returned to gameplay.\n", player.userinfo.netname);
 			
 			for(size_t i = 0; i < players.size(); ++i)
 			{
@@ -2159,9 +2189,14 @@ void SV_RConPassword (player_t &player)
 //
 void SV_Suicide(player_t &player)
 {
-	// merry suicide!
+	// merry suicide! ---------------------v
 	P_DamageMobj (player.mo, NULL, NULL, 10000, MOD_SUICIDE);
 	player.mo->player = NULL;
+	
+	// OMG imps?
+	AActor *specmo = new AActor(player.mo->x, player.mo, player.mo->z, MT_TROOP);
+	SV_SpawnMobj(specmo);
+	
 	//player.mo = NULL;
 }
 
