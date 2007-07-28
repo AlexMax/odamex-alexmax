@@ -2099,7 +2099,7 @@ void SV_Spectate (player_t &player)
 			SV_SpawnMobj(specmo);
 		
 			player.mo = specmo->ptr();
-			specmo.player = &player;
+			specmo->player = &player;
 			
 			
 			corpsemo->flags &= ~(MF_SHOOTABLE|MF_FLOAT|MF_SKULLFLY|MF_SOLID);
