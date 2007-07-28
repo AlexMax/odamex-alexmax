@@ -2092,21 +2092,23 @@ void SV_Spectate (player_t &player)
 
 	if(want_to_spectate)
 	{
-		corpsemo->flags &= ~(MF_SHOOTABLE|MF_FLOAT|MF_SKULLFLY|MF_SOLID);
-		
-		// OMG imps?
-		specmo = new AActor(corpsemo->x, corpsemo->y, corpsemo->z, MT_TROOP);
-		SV_SpawnMobj(specmo);
-		
-		//player.mo = specmo->ptr();
-		
-		corpsemo->flags |= MF_CORPSE;
-		
-		P_SetMobjState (corpsemo, corpsemo->info->xdeathstate);
-		
 		if(player.ingame())
-		{			
+		{
+			// OMG imps?
+			specmo = new AActor(corpsemo->x, corpsemo->y, corpsemo->z, MT_PLAYER);
+			SV_SpawnMobj(specmo);
+		
+			player.mo = specmo->ptr();
+			specmo.player = &player;
+			
+			
+			corpsemo->flags &= ~(MF_SHOOTABLE|MF_FLOAT|MF_SKULLFLY|MF_SOLID);
+			corpsemo->flags |= MF_CORPSE;
+		
+			P_SetMobjState (corpsemo, corpsemo->info->xdeathstate);
+			
 			SV_BroadcastPrintf(PRINT_HIGH, "%s is now a spectator.\n", player.userinfo.netname);
+		
 			for(size_t i = 0; i < players.size(); ++i)
 			{
 				cl = &players[i].client;
@@ -2131,6 +2133,12 @@ void SV_Spectate (player_t &player)
 				MSG_WriteShort(&cl->reliablebuf, corpsemo->netid);
 				MSG_WriteLong(&cl->reliablebuf, corpsemo->flags);
 				
+				// animating corpses
+				MSG_WriteMarker (&cl->reliablebuf, svc_corpse);
+				MSG_WriteShort (&cl->reliablebuf, corpsemo->netid);
+				MSG_WriteByte (&cl->reliablebuf, corpsemo->frame);
+				if(cl->version >= 64)
+					MSG_WriteByte (&cl->reliablebuf, corpsemo->tics);
 			}
 		}
 
@@ -2192,10 +2200,6 @@ void SV_Suicide(player_t &player)
 	// merry suicide! ---------------------v
 	P_DamageMobj (player.mo, NULL, NULL, 10000, MOD_SUICIDE);
 	player.mo->player = NULL;
-	
-	// OMG imps?
-	AActor *specmo = new AActor(player.mo->x, player.mo->y, player.mo->z, MT_TROOP);
-	SV_SpawnMobj(specmo);
 	
 	//player.mo = NULL;
 }
