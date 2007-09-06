@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_layout_file>
+	<ActiveTarget name="All (MAC)" />
+	<File name="hardware.cpp" open="0" top="0" tabpos="0">
+		<Cursor position="1563" topLine="41" />
+	</File>
+	<File name="i_main.cpp" open="0" top="0" tabpos="0">
+		<Cursor position="2940" topLine="106" />
+	</File>
+	<File name="..\src\c_console.cpp" open="0" top="0" tabpos="0">
+		<Cursor position="7545" topLine="302" />
+	</File>
+	<File name="..\src\cl_main.cpp" open="1" top="0" tabpos="2">
+		<Cursor position="16751" topLine="699" />
+	</File>
+	<File name="..\src\d_main.cpp" open="0" top="0" tabpos="1">
+		<Cursor position="19577" topLine="711" />
+	</File>
+	<File name="..\src\f_wipe.cpp" open="0" top="0" tabpos="0">
+		<Cursor position="9241" topLine="373" />
+	</File>
+	<File name="..\src\g_game.cpp" open="0" top="0" tabpos="0">
+		<Cursor position="30788" topLine="1401" />
+	</File>
+	<File name="..\src\r_plane.cpp" open="0" top="0" tabpos="0">
+		<Cursor position="3305" topLine="157" />
+	</File>
+	<File name="..\src\r_things.cpp" open="0" top="0" tabpos="0">
+		<Cursor position="37107" topLine="1465" />
+	</File>
+	<File name="..\..\common\md5.cpp" open="1" top="0" tabpos="1">
+		<Cursor position="128" topLine="0" />
+	</File>
+	<File name="..\..\common\version.cpp" open="0" top="0" tabpos="0">
+		<Cursor position="2056" topLine="66" />
+	</File>
+</CodeBlocks_layout_file>
