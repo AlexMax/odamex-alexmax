@@ -396,6 +396,8 @@ struct drawseg_s
     float*		sprtopclip;		
     float*		sprbottomclip;	
     short*		maskedtexturecol;
+    
+	fixed_t viewx, viewy, viewz;
 };
 typedef struct drawseg_s drawseg_t;
 

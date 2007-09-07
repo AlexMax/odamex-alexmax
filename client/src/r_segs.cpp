@@ -720,6 +720,7 @@ void R_RenderSegLoop1 (void)
 		//BlastColumn (colfunc);
 	}
 }
+}
 
 // [RH] This is a cache optimized version of R_RenderSegLoop(). It first
 //		draws columns into a temporary buffer with a pitch of 4 and then
@@ -730,7 +731,7 @@ void R_RenderSegLoop1 (void)
 //		On a Pentium II 300, using this code with rendering functions in
 //		C is about twice as fast as using R_RenderSegLoop1() with an
 //		assembly rendering function.
-
+/*
 void R_RenderSegLoop2 (void)
 {
 	int stop = rw_stopx & ~3;
@@ -833,7 +834,7 @@ void R_RenderSegLoop2 (void)
 		}
 	}
 }
-
+*/
 //
 // R_StoreWallRange
 // A wall segment will be drawn
@@ -979,15 +980,15 @@ R_StoreWallRange
    ds_p->curline = segclip.line;
    ds_p->dist2 = (ds_p->dist1 = segclip.dist) + segclip.diststep * (segclip.x2 - segclip.x1);
    ds_p->diststep = segclip.diststep;
-   ds_p->colormap = scalelight;
+   //ds_p->colormap = scalelight;
    
    if(segclip.clipsolid)
    {
       ds_p->silhouette = SIL_BOTH;
       ds_p->sprtopclip = screenheightarray;
       ds_p->sprbottomclip = zeroarray;
-      ds_p->bsilheight = D_MAXINT;
-      ds_p->tsilheight = D_MININT;
+      ds_p->bsilheight = MAXINT;
+      ds_p->tsilheight = MININT;
       ds_p->maskedtexturecol = NULL;
    }
    else
@@ -1003,7 +1004,7 @@ R_StoreWallRange
       else if(segclip.backsec->floorheight > viewz)
       {
          ds_p->silhouette = SIL_BOTTOM;
-         ds_p->bsilheight = D_MAXINT;
+         ds_p->bsilheight = MAXINT;
       }
       if(segclip.frontsec->ceilingheight < segclip.backsec->ceilingheight)
       {
@@ -1013,7 +1014,7 @@ R_StoreWallRange
       else if(segclip.backsec->ceilingheight < viewz)
       {
          ds_p->silhouette |= SIL_TOP;
-         ds_p->tsilheight = D_MININT;
+         ds_p->tsilheight = MININT;
       }
 
 
@@ -1059,12 +1060,12 @@ R_StoreWallRange
    if (segclip.maskedtex && !(ds_p->silhouette & SIL_TOP))
    {
       ds_p->silhouette |= SIL_TOP;
-      ds_p->tsilheight = D_MININT;
+      ds_p->tsilheight = MININT;
    }
    if (segclip.maskedtex && !(ds_p->silhouette & SIL_BOTTOM))
    {
       ds_p->silhouette |= SIL_BOTTOM;
-      ds_p->bsilheight = D_MAXINT;
+      ds_p->bsilheight = MAXINT;
    }
    ++ds_p;
 }
