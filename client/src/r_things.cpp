@@ -138,40 +138,38 @@ void R_CacheSprite (spritedef_t *sprite)
 // [RH] Removed checks for coexistance of rotation 0 with other
 //		rotations and made it look more like BOOM's version.
 //
-static void R_InstallSpriteLump (int lump, unsigned frame, unsigned rotation, BOOL flipped)
+// [ML] 2007/9/5 - Reverted to older style
+static void R_InstallSpriteLump(int lump, unsigned frame,
+                                unsigned rotation, boolean flipped)
 {
-	if (frame >= MAX_SPRITE_FRAMES || rotation > 8)
-		I_FatalError ("R_InstallSpriteLump: Bad frame characters in lump %i", lump);
+   if(frame >= MAX_SPRITE_FRAMES || rotation > 8)
+      I_Error("R_InstallSpriteLump: Bad frame characters in lump %i", lump);
 
-	if ((int)frame > maxframe)
-		maxframe = frame;
+   if((int)frame > maxframe)
+      maxframe = frame;
 
-	if (rotation == 0)
-	{
-		// the lump should be used for all rotations
-        // false=0, true=1, but array initialised to -1
-        // allows doom to have a "no value set yet" boolean value!
-		int r;
+   if(rotation == 0)
+   {    // the lump should be used for all rotations
+      int r;
+      for(r = 0; r < 8 ; ++r)
+         if(sprtemp[frame].lump[r]==-1)
+         {
+            sprtemp[frame].lump[r] = lump - firstspritelump;
+            sprtemp[frame].flip[r] = (byte) flipped;
+            sprtemp[frame].rotate = false; //jff 4/24/98 if any subbed, rotless
+         }
+      return;
+   }
 
-		for (r = 7; r >= 0; r--)
-			if (sprtemp[frame].lump[r] == -1)
-			{
-				sprtemp[frame].lump[r] = (short)(lump);
-				sprtemp[frame].flip[r] = (byte)flipped;
-				sprtemp[frame].rotate = false;
-				sprtemp[frame].width[r] = SPRITE_NEEDS_INFO;
-			}
-	}
-	else if (sprtemp[frame].lump[--rotation] == -1)
-	{
-		// the lump is only used for one rotation
-		sprtemp[frame].lump[rotation] = (short)(lump);
-		sprtemp[frame].flip[rotation] = (byte)flipped;
-		sprtemp[frame].rotate = true;
-		sprtemp[frame].width[rotation] = SPRITE_NEEDS_INFO;
-	}
+   // the lump is only used for one rotation
+   
+   if(sprtemp[frame].lump[--rotation] == -1)
+   {
+      sprtemp[frame].lump[rotation] = lump - firstspritelump;
+      sprtemp[frame].flip[rotation] = (byte) flipped;
+      sprtemp[frame].rotate = true; //jff 4/24/98 only change if rot used
+   }
 }
-
 
 // [RH] Seperated out of R_InitSpriteDefs()
 static void R_InstallSprite (const char *name, int num)
@@ -240,62 +238,139 @@ static void R_InstallSprite (const char *name, int num)
 //	letter/number appended.
 // The rotation character can be 0 to signify no rotations.
 //
-void R_InitSpriteDefs (char **namelist)
+void R_InitSpriteDefs(char **namelist)
 {
-	int i;
-	int l;
-	int intname;
-	int start;
-	int end;
-	int realsprites;
+   size_t numentries = lastspritelump-firstspritelump+1;
+   struct { int index, next; } *hash;
+   unsigned int i;
+   int realsprites;
+      
+   if(!numentries || !*namelist)
+      return;
+   
+   // count the number of sprite names
+   for(i = 0; namelist[i]; ++i)
+      ; // do nothing
+   
+   numsprites = (signed)i;
 
-	// count the number of sprite names
-	for (numsprites = 0; namelist[numsprites]; numsprites++)
-		;
-	// [RH] include skins in the count
+   sprites = Z_Malloc(numsprites *sizeof(*sprites), PU_STATIC, NULL);
+   
+   // Create hash table based on just the first four letters of each sprite
+   // killough 1/31/98
+   
+   hash = malloc(sizeof(*hash)*numentries); // allocate hash table
+
+   for(i = 0; i < numentries; ++i) // initialize hash table as empty
+      hash[i].index = -1;
+
+   for(i = 0; i < numentries; ++i)  // Prepend each sprite to hash chain
+   {                                // prepend so that later ones win
+      int j = R_SpriteNameHash(lumpinfo[i+firstspritelump]->name) % numentries;
+      hash[i].next = hash[j].index;
+      hash[j].index = i;
+   }
+
+   // scan all the lump names for each of the names,
+   //  noting the highest frame letter.
+
+   for(i = 0; i < (unsigned)numsprites; ++i)
+   {
+
+   	// [RH] include skins in the count
 	realsprites = numsprites;
 	numsprites += numskins - 1;
 
 	if (!numsprites)
 		return;
 
-	sprites = (spritedef_t *)Z_Malloc (numsprites * sizeof(*sprites), PU_STATIC, NULL);
+      const char *spritename = namelist[i];
+      int j = hash[R_SpriteNameHash(spritename) % numentries].index;
+      
+      if(j >= 0)
+      {
+         memset(sprtemp, -1, sizeof(sprtemp));
+         maxframe = -1;
+         do
+         {
+            register lumpinfo_t *lump = lumpinfo[j + firstspritelump];
 
-	start = firstspritelump - 1;
-	end = lastspritelump + 1;
+            // Fast portable comparison -- killough
+            // (using int pointer cast is nonportable):
 
-	// scan all the lump names for each of the names,
-	//	noting the highest frame letter.
-	// Just compare 4 characters as ints
-	for (i = 0; i < realsprites; i++)
-	{
-		spritename = namelist[i];
-		memset (sprtemp, -1, sizeof(sprtemp));
+            if(!((lump->name[0] ^ spritename[0]) |
+                 (lump->name[1] ^ spritename[1]) |
+                 (lump->name[2] ^ spritename[2]) |
+                 (lump->name[3] ^ spritename[3])))
+            {
+               R_InstallSpriteLump(j+firstspritelump,
+                                   lump->name[4] - 'A',
+                                   lump->name[5] - '0',
+                                   false);
+               if(lump->name[6])
+                  R_InstallSpriteLump(j+firstspritelump,
+                                      lump->name[6] - 'A',
+                                      lump->name[7] - '0',
+                                      true);
+            }
+         }
+         while((j = hash[j].next) >= 0);
 
-		maxframe = -1;
-		intname = *(int *)namelist[i];
-
-		// scan the lumps,
-		//	filling in the frames for whatever is found
-		for (l = lastspritelump; l >= firstspritelump; l--)
-		{
-			if (*(int *)lumpinfo[l].name == intname)
-			{
-				R_InstallSpriteLump (l,
-									 lumpinfo[l].name[4] - 'A', // denis - fixme - security
-									 lumpinfo[l].name[5] - '0',
-									 false);
-
-				if (lumpinfo[l].name[6])
-					R_InstallSpriteLump (l,
-									 lumpinfo[l].name[6] - 'A',
-									 lumpinfo[l].name[7] - '0',
-									 true);
-			}
-		}
-
-		R_InstallSprite (namelist[i], i);
-	}
+         // check the frames that were found for completeness
+         if((sprites[i].numframes = ++maxframe))  // killough 1/31/98
+         {
+            int frame;
+            for (frame = 0; frame < maxframe; frame++)
+            {
+               switch((int)sprtemp[frame].rotate)
+               {
+               case -1:
+                  // no rotations were found for that frame at all
+                  I_Error ("R_InitSprites: No patches found "
+                     "for %.8s frame %c", namelist[i], frame+'A');
+                  break;
+                  
+               case 0:
+                  // only the first rotation is needed
+                  break;
+                  
+               case 1:
+                  // must have all 8 frames
+                  {
+                     int rotation;
+                     for(rotation=0 ; rotation<8 ; rotation++)
+                     {
+                        if(sprtemp[frame].lump[rotation] == -1)
+                           I_Error ("R_InitSprites: Sprite %.8s frame %c "
+                                    "is missing rotations",
+                                    namelist[i], frame+'A');
+                     }
+                     break;
+                  }
+               }
+            }
+            // allocate space for the frames present and copy sprtemp to it
+            sprites[i].spriteframes =
+               Z_Malloc(maxframe * sizeof(spriteframe_t), PU_STATIC, NULL);
+            memcpy(sprites[i].spriteframes, sprtemp,
+                   maxframe*sizeof(spriteframe_t));
+         }
+      }
+      else
+      {
+         // haleyjd 08/15/02: problem here.
+         // If j was -1 above, meaning that there are no lumps for
+         // the sprite present, the sprite is left uninitialized.
+         // This creates major problems in R_PrecacheLevel if a 
+         // thing tries to subsequently use that sprite. Instead,
+         // set numframes to 0 and spriteframes to NULL. Then,
+         // check for these values before loading any sprite.
+         
+         sprites[i].numframes = 0;
+         sprites[i].spriteframes = NULL;
+      }
+   }
+   free(hash);             // free hash table
 }
 
 // [RH]

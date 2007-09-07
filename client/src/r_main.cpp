@@ -42,6 +42,8 @@
 
 #define DISTMAP			2
 
+cb_view_t view;
+
 void R_SpanInitData ();
 
 extern int *walllights;
@@ -141,6 +143,53 @@ void (*hcolfunc_post4) (int sx, int yl, int yh);
 
 static int lastcenteryfrac;
 static int FieldOfView = 2048;	// Fineangles in the SCREENWIDTH wide window
+
+// haleyjd 09/04/06: column drawing engines
+columndrawer_t *r_column_engine;
+int r_column_engine_num;
+
+static columndrawer_t *r_column_engines[NUMCOLUMNENGINES] =
+{
+   &r_normal_drawer, // normal engine
+   &r_quad_drawer,   // quad cache engine
+};
+
+//
+// R_SetColumnEngine
+//
+// Sets r_column_engine to the appropriate set of column drawers.
+//
+void R_SetColumnEngine(void)
+{
+   //if(detailshift == 0)
+      r_column_engine = r_column_engines[r_column_engine_num];
+   //else
+   //   r_column_engine = &r_lowdetail_drawer;
+}
+
+// haleyjd 09/10/06: span drawing engines
+spandrawer_t *r_span_engine;
+int r_span_engine_num;
+
+static spandrawer_t *r_span_engines[NUMSPANENGINES] =
+{
+   &r_spandrawer,    // normal engine
+   &r_lpspandrawer,  // low-precision optimized
+   &r_olpspandrawer, // old low-precision (unoptimized)
+};
+
+//
+// R_SetSpanEngine
+//
+// Sets r_span_engine to the appropriate set of span drawers.
+//
+void R_SetSpanEngine(void)
+{
+   //if(detailshift == 0)
+      r_span_engine = r_span_engines[r_span_engine_num];
+   //else
+   //   r_span_engine = &r_lowspandrawer;
+}
 
 //
 //

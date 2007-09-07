@@ -136,6 +136,10 @@ int*			flattranslation;
 
 int*			texturetranslation;
 
+// needed for pre-rendering
+fixed_t   *spritewidth, *spriteoffset, *spritetopoffset;
+// SoM: used by cardboard
+float     *spriteheight;
 
 //
 // MAPTEXTURE_T CACHING
@@ -395,9 +399,6 @@ R_GetColumn
 
 	return texturecomposite[tex] + ofs;
 }
-
-
-
 
 //
 // R_InitTextures
@@ -667,6 +668,7 @@ void R_InitFlats (void)
 //	so the sprite does not need to be cached completely
 //	just for having the header info ready during rendering.
 //
+/*
 void R_InitSpriteLumps (void)
 {
 	firstspritelump = W_GetNumForName ("S_START") + 1;
@@ -681,6 +683,40 @@ void R_InitSpriteLumps (void)
 	//		and spritetopoffset arrays, this data has now been moved into
 	//		the sprite frame definition and gets initialized by
 	//		R_InstallSpriteLump(), so there really isn't anything to do here.
+}
+*/
+
+void R_InitSpriteLumps(void)
+{
+   int i;
+   patch_t *patch;
+   
+   firstspritelump = W_GetNumForName("S_START") + 1;
+   lastspritelump = W_GetNumForName("S_END") - 1;
+   numspritelumps = lastspritelump - firstspritelump + 1;
+   
+   // killough 4/9/98: make columnd offsets 32-bit;
+   // clean up malloc-ing to use sizeof
+   
+   spritewidth = Z_Malloc(numspritelumps*sizeof*spritewidth, PU_STATIC, 0);
+   spriteoffset = Z_Malloc(numspritelumps*sizeof*spriteoffset, PU_STATIC, 0);
+   spritetopoffset =
+      Z_Malloc(numspritelumps*sizeof*spritetopoffset, PU_STATIC, 0);
+   spriteheight = Z_Malloc(numspritelumps * sizeof(float), PU_STATIC, 0);
+
+   
+   for(i = 0; i < numspritelumps; ++i)
+   {
+      // sf: loading pic
+      if(!(i&127))            // killough
+         V_LoadingIncrease();
+      
+      patch = W_CacheLumpNum(firstspritelump + i, PU_CACHE);
+      spritewidth[i]     = SHORT(patch->width) << FRACBITS;
+      spriteoffset[i]    = SHORT(patch->leftoffset) << FRACBITS;
+      spritetopoffset[i] = SHORT(patch->topoffset) << FRACBITS;
+      spriteheight[i]    = (float)SHORT(patch->height);
+   }
 }
 
 
