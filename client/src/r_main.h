@@ -167,6 +167,8 @@ R_AddPointToBox
 fixed_t R_PointToDist2 (fixed_t dx, fixed_t dy);
 void R_SetFOV (float fov);
 
+void R_SectorColormap(sector_t *s);
+
 //
 // REFRESH - the actual rendering functions.
 //

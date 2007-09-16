@@ -60,7 +60,7 @@ angle_t 		rw_normalangle;	// angle to line origin
 int 			rw_angle1;
 fixed_t 		rw_distance;
 */
-int*			walllights;
+lighttable_t*			walllights;
 
 //
 // regular wall
@@ -166,9 +166,10 @@ R_RenderMaskedSegRange
   int		x1,
   int		x2 )
 {
-	int 		lightnum;
-	int 		texnum;
-	float    dist, diststep;	
+	int 			lightnum;
+	int				texnum;
+	float			dist, diststep;	
+	lighttable_t	**wlight;
 	
 	sector_t	tempsec;		// killough 4/13/98
 	
@@ -182,27 +183,20 @@ R_RenderMaskedSegRange
 	// killough 4/11/98: draw translucent 2s normal textures
 	// [RH] modified because we don't use user-definable
 	//		translucency maps
-	if (!r_columnmethod) {
-		if (segclip.line->linedef->lucency < 240) {
-			colfunc = lucentcolfunc;
-			dc_translevel = segclip.line->linedef->lucency << 8;
-		} else
-			colfunc = basecolfunc;
-		// killough 4/11/98: end translucent 2s normal code
-	} else {
-		// [RH] Alternate drawer functions
-		if (segclip.line->linedef->lucency < 240) {
-			colfunc = lucentcolfunc;
-			hcolfunc_post1 = rt_lucent1col;
-			hcolfunc_post2 = rt_lucent2cols;
-			hcolfunc_post4 = rt_lucent4cols;
-			dc_translevel = segclip.line->linedef->lucency << 8;
-		} else {
-			hcolfunc_post1 = rt_map1col;
-			hcolfunc_post2 = rt_map2cols;
-			hcolfunc_post4 = rt_map4cols;
-		}
+	// [ML] 2007/9/15 - Unmodified because what's wrong with
+	//					user-definable maps?
+	
+   	colfunc = r_column_engine->DrawColumn;
+   	
+   	if(segclip.line->linedef->tranlump >= 0 && general_translucency)
+   	{
+		colfunc = r_column_engine->DrawTLColumn;
+		tranmap = main_tranmap;
+		
+		if(segclip.line->linedef->tranlump > 0)
+			tranmap = W_CacheLumpNum(segclip.line->linedef->tranlump-1, PU_STATIC);
 	}
+	// killough 4/11/98: end translucent 2s normal code
 
 	segclip.frontsec = segclip.line->frontsector;
 	segclip.backsec = segclip.line->backsector;
@@ -213,10 +207,10 @@ R_RenderMaskedSegRange
 
 	// killough 4/13/98: get correct lightlevel for 2s normal textures
 	lightnum = (R_FakeFlat(segclip.frontsec, &tempsec, NULL, NULL, false)
-			->lightlevel >> LIGHTSEGSHIFT) + (foggy ? 0 : extralight);
+			->lightlevel >> LIGHTSEGSHIFT) + extralight;
 
 	// [RH] Only do it if not foggy and allowed
-	if (!foggy && !(level.flags & LEVEL_EVENLIGHTING))
+	if (!(level.flags & LEVEL_EVENLIGHTING))
 	{
 		if (segclip.line->v1->y == segclip.line->v2->y)
 			lightnum--;
@@ -224,16 +218,17 @@ R_RenderMaskedSegRange
 			lightnum++;
 	}
 
-	walllights = lightnum >= LIGHTLEVELS ? scalelight[LIGHTLEVELS-1] :
-		lightnum <  0           ? scalelight[0] : scalelight[lightnum];
+	wlight = ds->colormap[lightnum >= LIGHTLEVELS || fixedcolormap ? 
+				LIGHTLEVELS-1 : lightnum <  0 ? 0 : lightnum ] ;
 
 	maskedtexturecol = ds->maskedtexturecol;
 /*
 	rw_scalestep = ds->scalestep;
 	spryscale = ds->scale1 + (x1 - ds->x1) * rw_scalestep;
-*/
 	rw_lightstep = ds->lightstep;
-	rw_light = ds->light + (x1 - ds->x1) * rw_lightstep;
+	rw_light = ds->light + (x1 - ds->x1) * rw_lightstep;	
+*/
+
 	mfloorclip = ds->sprbottomclip;
 	mceilingclip = ds->sprtopclip;
 
@@ -255,10 +250,15 @@ R_RenderMaskedSegRange
 	}
 	column.texmid += segclip.line->sidedef->rowoffset;
 
-	if (fixedlightlev)
-		column.colormap = basecolormap + fixedlightlev;
-	else if (fixedcolormap)
-		column.colormap = fixedcolormap;
+   if(fixedcolormap)
+   {
+      // haleyjd 10/31/02: invuln fix
+      if(fixedcolormap == 
+         fullcolormap + INVERSECOLORMAP*256*sizeof(lighttable_t))
+         column.colormap = fixedcolormap;
+      else
+         column.colormap = walllights[MAXLIGHTSCALE-1];
+   }
 
 	// draw the columns
 /*
@@ -362,6 +362,10 @@ R_RenderMaskedSegRange
          maskedtexturecol[column.x] = 0x7fffffff;
       }
    }
+
+   // Except for main_tranmap, mark others purgable at this point
+   if(segclip.line->linedef->tranlump > 0 && general_translucency)
+      Z_ChangeTag(tranmap, PU_CACHE); // killough 4/11/98*/   
 }
 
 
@@ -528,198 +532,177 @@ static void BlastColumn (void (*blastfunc)())
 //		on a Pentium II, can be slower than R_RenderSegLoop2().
 void R_RenderSegLoop1 (void)
 {
-	float t, b, h, l, top, bottom;
-	int i, texx;
-	float basescale;
-	
-	if (fixedlightlev)
-		dc_colormap = basecolormap + fixedlightlev;
-	else if (fixedcolormap)
-		dc_colormap = fixedcolormap;
-	else if (!walllights)
-		walllights = scalelight[0];
+   float t, b, h, l, top, bottom;
+   int i, texx;
+   float basescale;
 
-	for (i = segclip.x1; i <= segclip.x2; i++)
-	{
-		dc_x = rw_x;
+   for(i = segclip.x1; i <= segclip.x2; i++)
+   {
+      top = ceilingclip[i];
 
-		top = ceilingclip[i];
+      t = segclip.top;
+      b = segclip.bottom;
+      if(t < top)
+         t = top;
 
-		t = segclip.top;
-		b = segclip.bottom;
-		if(t < top)
-		   t = top;
-	
-		if(b > floorclip[i])
-		   b = floorclip[i];
+      if(b > floorclip[i])
+         b = floorclip[i];
 
+      if(segclip.markceiling && segclip.ceilingplane)
+      {
+         bottom = t - 1;
 
-		if(segclip.markceiling && segclip.ceilingplane)
-		{
-		   bottom = t - 1;
+         if(bottom > floorclip[i])
+            bottom = floorclip[i];
 
-		   if(bottom > floorclip[i])
-			bottom = floorclip[i];
+         // ahh the fraction... Some times the top can be greater than the bottom by less than
+         // 1 but the pixel should still be included because the fractional portion is being
+         // discarded anyway.
+         if(bottom - top > -1.0f)
+         {
+            segclip.ceilingplane->top[i] = (int)top;
+            segclip.ceilingplane->bottom[i] = (int)bottom;
+         }
+      }
 
-		   // ahh the fraction... Some times the top can be greater than the bottom by less than
-		   // 1 but the pixel should still be included because the fractional portion is being
-		   // discarded anyway.
-		   if(bottom - top > -1.0f)
-		   {
-			segclip.ceilingplane->top[i] = (int)top;
-			segclip.ceilingplane->bottom[i] = (int)bottom;
-		   }
-		}	
-		if(segclip.markfloor && segclip.floorplane)
-		{
-		top = b + 1;
-		 bottom = floorclip[i];
+      if(segclip.markfloor && segclip.floorplane)
+      {
+         top = b + 1;
+         bottom = floorclip[i];
 
-		if(top < ceilingclip[i])
-			top = ceilingclip[i];
+         if(top < ceilingclip[i])
+            top = ceilingclip[i];
 
-		// ahh the fraction... Some times the top can be greater than the bottom by less than
-		// 1 but the pixel should still be included because the fractional portion is being
-		// discarded anyway.
-		 if(bottom - top > -1.0f)
-		{
-			segclip.floorplane->top[i] = (int)top;
-			segclip.floorplane->bottom[i] = (int)bottom;
-		}		
-	
-	if(segclip.toptex || segclip.midtex || segclip.bottomtex || segclip.maskedtex)
-	{
-	   int index;
+         // ahh the fraction... Some times the top can be greater than the bottom by less than
+         // 1 but the pixel should still be included because the fractional portion is being
+         // discarded anyway.
+         if(bottom - top > -1.0f)
+         {
+            segclip.floorplane->top[i] = (int)top;
+            segclip.floorplane->bottom[i] = (int)bottom;
+         }
+      }
 
-	   basescale = 1.0f / (segclip.dist * view.yfoc);
+      if(segclip.toptex || segclip.midtex || segclip.bottomtex || segclip.maskedtex)
+      {
+         int index;
 
-	   column.step = (int)(basescale * FRACUNIT);
-	   column.x = i;
+         basescale = 1.0f / (segclip.dist * view.yfoc);
 
-	   texx = (int)((segclip.len * basescale) + segclip.toffsetx);
+         column.step = (int)(basescale * FRACUNIT);
+         column.x = i;
 
-	   if(ds_p->maskedtexturecol)
-		ds_p->maskedtexturecol[i] = texx;
+         texx = (int)((segclip.len * basescale) + segclip.toffsetx);
 
-	   // calculate lighting
-	   // SoM: ANYRES
-	   if(!fixedcolormap)
-	   {
-		// SoM: it took me about 5 solid minutes of looking at the old doom code
-		// and running test levels through it to do the math and get 2560 as the
-		// light distance factor.
-		index = (int)(segclip.dist * 2560.0f);
-	   
-		if(index >=  MAXLIGHTSCALE)
-		   index = MAXLIGHTSCALE - 1;
+         if(ds_p->maskedtexturecol)
+            ds_p->maskedtexturecol[i] = texx;
 
-		column.colormap = segclip.walllights[index];
-	   }
-	   else
-		column.colormap = fixedcolormap;
+         // calculate lighting
+         // SoM: ANYRES
+         if(!fixedcolormap)
+         {
+            // SoM: it took me about 5 solid minutes of looking at the old doom code
+            // and running test levels through it to do the math and get 2560 as the
+            // light distance factor.
+            index = (int)(segclip.dist * 2560.0f);
+         
+            if(index >=  MAXLIGHTSCALE)
+               index = MAXLIGHTSCALE - 1;
 
-	   if(segclip.twosided == false && segclip.midtex)
-	   {
-		column.y1 = (int)t;
-		column.y2 = (int)b;
+            column.colormap = segclip.walllights[index];
+         }
+         else
+            column.colormap = fixedcolormap;
 
-		column.texmid = segclip.midtexmid;
+         if(segclip.twosided == false && segclip.midtex)
+         {
+            column.y1 = (int)t;
+            column.y2 = (int)b;
 
-		column.source = R_GetColumn(segclip.midtex, texx);
-		column.texheight = segclip.midtexh;
+            column.texmid = segclip.midtexmid;
 
-		colfunc();
+            column.source = R_GetColumn(segclip.midtex, texx);
+            column.texheight = segclip.midtexh;
 
-		ceilingclip[i] = view.height - 1.0f;
-		floorclip[i] = 0.0f;
-	   }
-	   else if(segclip.twosided)
-	   {
-		if(segclip.toptex)
-		{
-		   h = segclip.high;
-		   if(h > floorclip[i])
-			h = floorclip[i];
+            colfunc();
 
-		   column.y1 = (int)t;
-		   column.y2 = (int)h;
+            ceilingclip[i] = view.height - 1.0f;
+            floorclip[i] = 0.0f;
+         }
+         else if(segclip.twosided)
+         {
+            if(segclip.toptex)
+            {
+               h = segclip.high;
+               if(h > floorclip[i])
+                  h = floorclip[i];
 
-		   if(column.y2 >= column.y1)
-		   {
-			column.texmid = segclip.toptexmid;
+               column.y1 = (int)t;
+               column.y2 = (int)h;
 
-			column.source = R_GetColumn(segclip.toptex, texx);
-			column.texheight = segclip.toptexh;
+               if(column.y2 >= column.y1)
+               {
+                  column.texmid = segclip.toptexmid;
 
-			colfunc();
+                  column.source = R_GetColumn(segclip.toptex, texx);
+                  column.texheight = segclip.toptexh;
 
-			ceilingclip[i] = h + 1.0f;
-		   }
-		   else
-			ceilingclip[i] = t;
+                  colfunc();
 
-		   segclip.high += segclip.highstep;
-		}
-		else if(segclip.markceiling)
-		   ceilingclip[i] = t;
+                  ceilingclip[i] = h + 1.0f;
+               }
+               else
+                  ceilingclip[i] = t;
+
+               segclip.high += segclip.highstep;
+            }
+            else if(segclip.markceiling)
+               ceilingclip[i] = t;
 
 
-		if(segclip.bottomtex)
-		{
-		   l = segclip.low;
-		   if(l < ceilingclip[i])
-			l = ceilingclip[i];
+            if(segclip.bottomtex)
+            {
+               l = segclip.low;
+               if(l < ceilingclip[i])
+                  l = ceilingclip[i];
 
-		   column.y1 = (int)l;
-		   column.y2 = (int)b;
+               column.y1 = (int)l;
+               column.y2 = (int)b;
 
-		   if(column.y2 >= column.y1)
-		   {
-			column.texmid = segclip.bottomtexmid;
+               if(column.y2 >= column.y1)
+               {
+                  column.texmid = segclip.bottomtexmid;
 
-			column.source = R_GetColumn(segclip.bottomtex, texx);
-			column.texheight = segclip.bottomtexh;
+                  column.source = R_GetColumn(segclip.bottomtex, texx);
+                  column.texheight = segclip.bottomtexh;
 
-			colfunc();
+                  colfunc();
 
-			floorclip[i] = l - 1.0f;
-		   }
-		   else
-				floorclip[i] = b;
+                  floorclip[i] = l - 1.0f;
+               }
+               else
+                  floorclip[i] = b;
 
-				segclip.low += segclip.lowstep;
-			}
-			else if(segclip.markfloor)
-			   floorclip[i] = b;
-		   }
-		}
-		else
-		{
-		   if(segclip.markfloor) floorclip[i] = b;
-		   if(segclip.markceiling) ceilingclip[i] = t;
-		}
+               segclip.low += segclip.lowstep;
+            }
+            else if(segclip.markfloor)
+               floorclip[i] = b;
+         }
+      }
+      else
+      {
+         if(segclip.markfloor) floorclip[i] = b;
+         if(segclip.markceiling) ceilingclip[i] = t;
+      }
 
-		segclip.len += segclip.lenstep;
-		segclip.dist += segclip.diststep;
-		segclip.top += segclip.topstep;
-		segclip.bottom += segclip.bottomstep;	
-	
-	
-		if (!fixedcolormap)
-		{
-			// calculate lighting
-			unsigned index = rw_light >> LIGHTSCALESHIFT;
+      segclip.len += segclip.lenstep;
+      segclip.dist += segclip.diststep;
+      segclip.top += segclip.topstep;
+      segclip.bottom += segclip.bottomstep;
 
-			if (index >= MAXLIGHTSCALE)
-				index = MAXLIGHTSCALE-1;
-
-			dc_colormap = walllights[index] + basecolormap;	// [RH] add basecolormap
-		}
-		
-		// [ML] 2007/9/5 - We're going to chance it and not use this for now.
-		//BlastColumn (colfunc);
-	}
-}
+	// [ML] 2007/9/5 - We're going to chance it and not use this for now.
+	//BlastColumn (colfunc);
+   }
 }
 
 // [RH] This is a cache optimized version of R_RenderSegLoop(). It first
@@ -944,11 +927,10 @@ R_StoreWallRange
 		// OPTIMIZE: get rid of LIGHTSEGSHIFT globally
 		if (!fixedcolormap)
 		{
-			int lightnum = (segclip.frontsec->lightlevel >> LIGHTSEGSHIFT)
-					+ (foggy ? 0 : extralight);
+			int lightnum = (segclip.frontsec->lightlevel >> LIGHTSEGSHIFT) + extralight;
 
 			// [RH] Only do it if not foggy and allowed
-			if (!foggy && !(level.flags & LEVEL_EVENLIGHTING))
+			if (!(level.flags & LEVEL_EVENLIGHTING))
 			{
 				if (segclip.line->v1->y == segclip.line->v2->y)
 					lightnum--;
@@ -957,11 +939,11 @@ R_StoreWallRange
 			}
 
 			if (lightnum < 0)
-				walllights = scalelight[0];
+				segclip.walllights = scalelight[0];
 			else if (lightnum >= LIGHTLEVELS)
-				walllights = scalelight[LIGHTLEVELS-1];
+				segclip.walllights = scalelight[LIGHTLEVELS-1];
 			else
-				walllights = scalelight[lightnum];
+				segclip.walllights = scalelight[lightnum];
 		}
    // drawsegs need to be taken care of here
    if(ds_p == drawsegs + maxdrawsegs)

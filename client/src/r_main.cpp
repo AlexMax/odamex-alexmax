@@ -155,6 +155,71 @@ static columndrawer_t *r_column_engines[NUMCOLUMNENGINES] =
 };
 
 //
+// R_SectorColormap
+//
+// Sets a sector's colormap parts (upper, middle, lower)
+//
+void R_SectorColormap(sector_t *s)
+{
+   int cm;
+   area_t viewarea;
+   
+   // killough 3/20/98, 4/4/98: select colormap based on player status
+   // haleyjd 03/04/07: rewritten to get colormaps from the sector itself
+   // instead of from its heightsec if it has one (heightsec colormaps are
+   // transferred to their affected sectors at level setup now).
+   
+   if(s->heightsec == -1)
+      viewarea = area_normal;
+   else
+   {
+      sector_t *viewsector = R_PointInSubsector(viewx, viewy)->sector;
+      
+      // find which area the viewpoint is in
+      viewarea =
+         viewsector->heightsec == -1 ? area_normal :
+         viewz < sectors[viewsector->heightsec].floorheight ? area_below :
+         viewz > sectors[viewsector->heightsec].ceilingheight ? area_above :
+         area_normal;
+   }
+
+   switch(viewarea)
+   {
+   case area_normal:
+      cm = s->midmap;
+      break;
+   case area_above:
+      cm = s->topmap;
+      break;
+   case area_below:
+      cm = s->bottommap;
+      break;
+   }
+
+   fullcolormap = colormaps[cm];
+   zlight = c_zlight[cm];
+   scalelight = c_scalelight[cm];
+
+   if(viewplayer->fixedcolormap)
+   {
+      int i;
+      // killough 3/20/98: localize scalelightfixed (readability/optimization)
+      static lighttable_t *scalelightfixed[MAXLIGHTSCALE];
+
+      fixedcolormap = fullcolormap   // killough 3/20/98: use fullcolormap
+        + viewplayer->fixedcolormap*256*sizeof(lighttable_t);
+        
+      walllights = scalelightfixed;
+
+      for(i = 0; i < MAXLIGHTSCALE; ++i)
+         scalelightfixed[i] = fixedcolormap;
+   }
+   else
+      fixedcolormap = NULL;   
+}
+
+
+//
 // R_SetColumnEngine
 //
 // Sets r_column_engine to the appropriate set of column drawers.
@@ -361,7 +426,7 @@ fixed_t R_PointToDist2 (fixed_t dx, fixed_t dy)
 // at the given angle. rw_distance must be calculated first.
 //
 //
-
+/*
 fixed_t R_ScaleFromGlobalAngle (angle_t visangle)
 {
 	fixed_t scale;
@@ -385,13 +450,14 @@ fixed_t R_ScaleFromGlobalAngle (angle_t visangle)
 		scale = 64*FRACUNIT;
 	return scale;
 }
+*/
 
 //
 //
 // R_InitTables
 //
 //
-
+/*
 void R_InitTables (void)
 {
 	int i;
@@ -413,7 +479,7 @@ void R_InitTables (void)
 		finesine[i] = (fixed_t)(FRACUNIT * sin (a));
 	}
 }
-
+*/
 
 //
 //
@@ -421,65 +487,72 @@ void R_InitTables (void)
 //
 //
 
-void R_InitTextureMapping (void)
+vstatic void R_InitTextureMapping (void)
 {
-	int i, t, x;
+   register int i, x, limit;
+   float vtan;
+   
+   // Use tangent table to generate viewangletox:
+   //  viewangletox will give the next greatest x
+   //  after the view angle.
+   //
+   // Calc focal length so fov angles cover SCREENWIDTH
 
-	// Use tangent table to generate viewangletox: viewangletox will give
-	// the next greatest x after the view angle.
+   // Cardboard
+   view.fov = (float)fov * PI / 180.0f; // 90 degrees
+   view.tan = vtan = (float)tan(view.fov / 2);
+   view.xfoc = view.xcenter / vtan;
+   view.yfoc = view.xfoc * 1.2f;
+   view.focratio = view.yfoc / view.xfoc;
 
-	const fixed_t hitan = finetangent[FINEANGLES/4+FieldOfView/2];
-	const fixed_t lotan = finetangent[FINEANGLES/4-FieldOfView/2];
-	const int highend = viewwidth + 1;
+   // Unfortunately, cardboard still has to co-exist with the old fixed point code
+   focallen_x = (int)(view.xfoc * FRACUNIT);
+   focallen_y = (int)(view.yfoc * FRACUNIT);
 
-	// Calc focallength so FieldOfView angles covers viewwidth.
-	FocalLengthX = FixedDiv (centerxfrac, hitan);
-	FocalLengthY = FixedDiv (FixedMul (centerxfrac, yaspectmul), hitan);
+   // SoM: rewrote old LUT generation code to work with variable FOV
+   i = 0;
+   limit = -(int)((view.xcenter / view.xfoc) * 65536.0f);
+   while(i < FINEANGLES/2 && finetangent[i] < limit)
+      viewangletox[i++] = viewwidth + 1;
 
-	for (i = 0; i < FINEANGLES/2; i++)
-	{
-		fixed_t tangent = finetangent[i];
+   limit = -limit;
+   while(i < FINEANGLES/2 && finetangent[i] <= limit)
+   {
+      int t;
 
-		if (tangent > hitan)
-			t = -1;
-		else if (tangent < lotan)
-			t = highend;
-		else
-		{
-			t = (centerxfrac - FixedMul (tangent, FocalLengthX) + FRACUNIT - 1) >> FRACBITS;
+      t = FixedMul(finetangent[i], focallen_x);
+      t = (centerxfrac - t + FRACUNIT-1) >> FRACBITS;
+      if(t < -1)
+         viewangletox[i++] = -1;
+      else if(t > viewwidth+1)
+         viewangletox[i++] = viewwidth+1;
+      else
+         viewangletox[i++] = t;
+   }
 
-			if (t < -1)
-				t = -1;
-			else if (t > highend)
-				t = highend;
-		}
-		viewangletox[i] = t;
-	}
-
-	// Scan viewangletox[] to generate xtoviewangle[]:
-	//	xtoviewangle will give the smallest view angle
-	//	that maps to x.
-	for (x = 0; x <= viewwidth; x++)
-	{
-		i = 0;
-		while (viewangletox[i] > x)
-			i++;
-		xtoviewangle[x] = (i<<ANGLETOFINESHIFT)-ANG90;
-	}
-
-	// Take out the fencepost cases from viewangletox.
-	for (i = 0; i < FINEANGLES/2; i++)
-	{
-		t = FixedMul (finetangent[i], FocalLengthX);
-		t = centerx - t;
-
-		if (viewangletox[i] == -1)
-			viewangletox[i] = 0;
-		else if (viewangletox[i] == highend)
-			viewangletox[i]--;
-	}
-
-	clipangle = xtoviewangle[0];
+   while(i < FINEANGLES/2)
+      viewangletox[i++] = -1;
+    
+   // Scan viewangletox[] to generate xtoviewangle[]:
+   //  xtoviewangle will give the smallest view angle
+   //  that maps to x.
+   
+   for(x = 0; x <= viewwidth; ++x)
+   {
+      for(i = 0; viewangletox[i] > x; ++i)
+         ;
+      xtoviewangle[x] = (i << ANGLETOFINESHIFT) - ANG90;
+   }
+    
+   // Take out the fencepost cases from viewangletox.
+   for(i = 0; i < FINEANGLES/2; ++i)
+      if(viewangletox[i] == -1)
+         viewangletox[i] = 0;
+      else 
+         if(viewangletox[i] == viewwidth+1)
+            viewangletox[i] = viewwidth;
+        
+   clipangle = xtoviewangle[0];
 }
 
 //
@@ -760,18 +833,18 @@ END_CUSTOM_CVAR (screenblocks)
 
 // [ML] Disabled 16/3/06, now always 0 (Original)
 // [Russell] Reenabled 14/3/07, fixes smudging of graphics
-//BEGIN_CUSTOM_CVAR (r_columnmethod, "1", CVAR_ARCHIVE)
-//{
-    /*
+BEGIN_CUSTOM_CVAR (r_columnmethod, "1", CVAR_ARCHIVE)
+{
+    
 	if (var != 0 && var != 1)
 		var.Set (1);
 	else
 		// Trigger the change
 		r_detail.Callback ();
-    */
-//}
-//END_CUSTOM_CVAR (r_columnmethod)
-CVAR (r_columnmethod, "1", CVAR_ARCHIVE)
+    
+}
+END_CUSTOM_CVAR (r_columnmethod)
+//CVAR (r_columnmethod, "1", CVAR_ARCHIVE)
 
 //
 //
@@ -837,6 +910,11 @@ void R_SetupFrame (player_t *player)
 	if(!camera || !camera->subsector)
 		return;
 
+   // haleyjd 09/04/06: set or change column drawing engine
+   // haleyjd 09/10/06: set or change span drawing engine
+   R_SetColumnEngine();
+   R_SetSpanEngine();
+   
 	if (player->cheats & CF_CHASECAM)
 	{
 		// [RH] Use chasecam view
@@ -858,6 +936,19 @@ void R_SetupFrame (player_t *player)
 	viewsin = finesine[viewangle>>ANGLETOFINESHIFT];
 	viewcos = finecosine[viewangle>>ANGLETOFINESHIFT];
 
+
+   // SoM: Cardboard
+   view.x = viewx / 65536.0f;
+   view.y = viewy / 65536.0f;
+   view.z = viewz / 65536.0f;
+   view.angle = (ANG90 - viewangle) * PI / (ANGLE_1 * 180);
+   view.pitch = (ANG90 - pitch) * PI / (ANGLE_1 * 180);
+   view.sin = (float)sin(view.angle);
+   if(view.angle == PI * 0.5f || view.angle == PI * 1.5f)
+      view.cos = 0.0f;
+   else
+      view.cos = (float)cos(view.angle);
+      
 	// killough 3/20/98, 4/4/98: select colormap based on player status
 	// [RH] Can also select a blend
 

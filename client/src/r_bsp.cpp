@@ -509,8 +509,6 @@ extern int       *texturewidthmask;
 
 void R_AddLine (seg_t *line)
 {
-static void R_AddLine(seg_t *line)
-{
    float x1, x2;
    float toffsetx, toffsety;
    float i1, i2, pstep;
@@ -688,7 +686,7 @@ static void R_AddLine(seg_t *line)
    }
    else
    {
-      boolean mark;
+      bool mark;
 
       seg.twosided = true;
 
@@ -703,23 +701,17 @@ static void R_AddLine(seg_t *line)
                 || ((seg.frontsec->ceilingheight <= seg.backsec->floorheight
                 || seg.backsec->ceilingheight <= seg.frontsec->floorheight 
                 || seg.backsec->floorheight >= seg.backsec->ceilingheight) 
-                && !((seg.frontsec->ceilingpic == skyflatnum 
-                   || seg.frontsec->ceilingpic == sky2flatnum)
-                   && (seg.backsec->ceilingpic == skyflatnum 
-                   ||  seg.backsec->ceilingpic == sky2flatnum))) ? true : false;
+                && !(seg.frontsec->ceilingpic == skyflatnum
+                   && seg.backsec->ceilingpic == skyflatnum)) ? true : false;
 
       seg.markceiling = mark || seg.clipsolid ||
          seg.top != seg.high ||
          seg.frontsec->ceiling_xoffs != seg.backsec->ceiling_xoffs ||
          seg.frontsec->ceiling_yoffs != seg.backsec->ceiling_yoffs ||
          seg.frontsec->ceilingpic != seg.backsec->ceilingpic ||
-         seg.frontsec->c_portal != seg.backsec->c_portal ||
          seg.frontsec->ceilinglightsec != seg.backsec->ceilinglightsec ? true : false;
 
-      if((seg.frontsec->ceilingpic == skyflatnum 
-          || seg.frontsec->ceilingpic == sky2flatnum)
-          && (seg.backsec->ceilingpic == skyflatnum 
-          ||  seg.backsec->ceilingpic == sky2flatnum))
+      if(seg.frontsec->ceilingpic == skyflatnum && seg.backsec->ceilingpic == skyflatnum)
          seg.top = seg.high;
 
       if(seg.high < seg.top && side->toptexture)
@@ -741,7 +733,6 @@ static void R_AddLine(seg_t *line)
          seg.frontsec->floor_xoffs != seg.backsec->floor_xoffs ||
          seg.frontsec->floor_yoffs != seg.backsec->floor_yoffs ||
          seg.frontsec->floorpic != seg.backsec->floorpic ||
-         seg.frontsec->f_portal != seg.backsec->f_portal ||
          seg.frontsec->floorlightsec != seg.backsec->floorlightsec ? true : false;
 
       seg.low = (seg.backsec->floorheight / 65536.0f) - view.z;
@@ -955,20 +946,19 @@ void R_Subsector (int num)
 	seg.frontsec = sub->sector;;
 	count = sub->numlines;
 	line = &segs[sub->firstline];
+	
+	R_SectorColormap(seg.frontsec);
 
 	// killough 3/8/98, 4/4/98: Deep water / fake ceiling effect
 	seg.frontsec = R_FakeFlat(seg.frontsec, &tempsec, &floorlightlevel,
 						   &ceilinglightlevel, false);	// killough 4/11/98
 
-	basecolormap = seg.frontsec->ceilingcolormap->maps;
+	//basecolormap = seg.frontsec->ceilingcolormap->maps;
 
    seg.floorplane = seg.frontsec->floorheight < viewz || // killough 3/7/98
-     (seg.frontsec->heightsec != -1 &&
-      (sectors[seg.frontsec->heightsec].ceilingpic == skyflatnum ||
-       sectors[seg.frontsec->heightsec].ceilingpic == sky2flatnum)) ?
+     (seg.frontsec->heightsec != -1 && sectors[seg.frontsec->heightsec].ceilingpic == skyflatnum) ?
      R_FindPlane(seg.frontsec->floorheight, 
-                 (seg.frontsec->floorpic == skyflatnum ||
-                  seg.frontsec->floorpic == sky2flatnum) &&  // kilough 10/98
+                 seg.frontsec->floorpic == skyflatnum &&  // kilough 10/98
                  seg.frontsec->sky & PL_SKYFLAT ? seg.frontsec->sky :
                  seg.frontsec->floorpic,
                  floorlightlevel,                // killough 3/16/98
@@ -976,14 +966,10 @@ void R_Subsector (int num)
                  seg.frontsec->floor_yoffs) : NULL;
 
    seg.ceilingplane = seg.frontsec->ceilingheight > viewz ||
-     (seg.frontsec->ceilingpic == skyflatnum ||
-      seg.frontsec->ceilingpic == sky2flatnum) ||
-     (seg.frontsec->heightsec != -1 &&
-      (sectors[seg.frontsec->heightsec].floorpic == skyflatnum ||
-       sectors[seg.frontsec->heightsec].floorpic == sky2flatnum)) ?
+     seg.frontsec->ceilingpic == skyflatnum ||
+     (seg.frontsec->heightsec != -1 && sectors[seg.frontsec->heightsec].floorpic == skyflatnum) ?
      R_FindPlane(seg.frontsec->ceilingheight,     // killough 3/8/98
-                 (seg.frontsec->ceilingpic == skyflatnum ||
-                  seg.frontsec->ceilingpic == sky2flatnum) &&  // kilough 10/98
+                 seg.frontsec->ceilingpic == skyflatnum &&  // kilough 10/98
                  seg.frontsec->sky & PL_SKYFLAT ? seg.frontsec->sky :
                  seg.frontsec->ceilingpic,
                  ceilinglightlevel,              // killough 4/11/98
@@ -991,8 +977,8 @@ void R_Subsector (int num)
                  seg.frontsec->ceiling_yoffs) : NULL;
 
 	// [RH] set foggy flag
-	foggy = level.fadeto || frontsector->floorcolormap->fade
-						 || frontsector->ceilingcolormap->fade;
+	//foggy = level.fadeto || frontsector->floorcolormap->fade
+	//					 || frontsector->ceilingcolormap->fade;
 
 	// killough 9/18/98: Fix underwater slowdown, by passing real sector
 	// instead of fake one. Improve sprite lighting by basing sprite

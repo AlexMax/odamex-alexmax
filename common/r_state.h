@@ -45,6 +45,18 @@ extern "C" int			realviewwidth;
 extern "C" int			viewheight;
 extern "C" int			realviewheight;
 
+
+// needed for pre rendering (fracs)
+extern fixed_t *spritewidth;
+extern fixed_t *spriteoffset;
+extern fixed_t *spritetopoffset;
+// SoM: Needed for cardboard
+extern float   *spriteheight;
+
+extern lighttable_t **colormaps;          // killough 3/20/98, 4/4/98
+extern lighttable_t *fullcolormap;        // killough 3/20/98
+
+
 extern int				firstflat;
 extern int				numflats;
 
@@ -63,7 +75,6 @@ extern int				numspritelumps;
 
 extern size_t			numskins;	// [RH]
 extern playerskin_t*	skins;		// [RH]
-
 
 
 //
@@ -146,14 +157,16 @@ extern int				viewangletox[FINEANGLES/2];
 extern angle_t			*xtoviewangle;
 //extern fixed_t		finetangent[FINEANGLES/2];
 
-extern fixed_t			rw_distance;
-extern angle_t			rw_normalangle;
+//extern fixed_t			rw_distance;
+//extern angle_t			rw_normalangle;
 
 
 
 // angle to line origin
-extern int				rw_angle1;
+//extern int				rw_angle1;
 
+// Segs count?
+extern int              sscount;
 
 extern visplane_t*		floorplane;
 extern visplane_t*		ceilingplane;

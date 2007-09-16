@@ -70,8 +70,8 @@ visplane_t 				*ceilingplane;
 //
 
 size_t					maxopenings;
-short					*openings;
-short					*lastopening;
+float					*openings;
+float					*lastopening;
 
 
 //
@@ -79,8 +79,8 @@ short					*lastopening;
 //	floorclip starts out SCREENHEIGHT
 //	ceilingclip starts out -1
 //
-short					*floorclip;
-short					*ceilingclip;
+float					*floorclip;
+float					*ceilingclip;
 
 //
 // spanstart holds the start of a plane span
@@ -104,6 +104,9 @@ static fixed_t			xscale, yscale;
 static fixed_t			pviewx, pviewy;
 static angle_t			baseangle;
 
+cb_span_t  span;
+cb_plane_t plane;
+
 #ifdef USEASM
 extern "C" void R_SetSpanSource_ASM (byte *flat);
 extern "C" void R_SetSpanColormap_ASM (byte *colormap);
@@ -122,13 +125,6 @@ void R_InitPlanes (void)
 //
 // R_MapPlane
 //
-// Uses global vars:
-//  planeheight
-//  ds_source
-//  basexscale
-//  baseyscale
-//  viewx
-//  viewy
 //
 // BASIC PRIMITIVE
 //
@@ -138,10 +134,7 @@ R_MapPlane
   int		x1,
   int		x2 )
 {
-    angle_t	angle;
-    fixed_t	distance;
-    fixed_t	length;
-    unsigned	index;
+	float dy, xstep, ystep, realy, slope;
 
 #ifdef RANGECHECK
 	if (x2 < x1 || x1<0 || x2>=viewwidth || (unsigned)y>=(unsigned)viewheight)
@@ -150,41 +143,27 @@ R_MapPlane
 	}
 #endif
 
-	// Find the z-coordinate of the left edge of the span in camera space
-	// This is some simple triangle scaling:
-	//		(vertical distance of plane from camera) * (focal length)
-	//		---------------------------------------------------------
-	//		     (vertical distance of span from screen center)
-	distance = FixedMul (planeheight, yslope[y]);
+   // SoM: because ycenter is an actual row of pixels (and it isn't really the center row because
+   // there are an even number of rows) some corrections need to be made depending on where the 
+   // row lies relative to the ycenter row.
+   if(view.ycenter == y)
+      dy = 0.01f;
+   else if(y < view.ycenter)
+      dy = (float)fabs(view.ycenter - y) - 1;
+   else
+      dy = (float)fabs(view.ycenter - y) + 1;
 
-	// Use this to determine stepping values. Because the plane is always
-	// viewed with constant z, knowing the distance from the span is enough
-	// to do a rough approximation of the stepping values. In reality, you
-	// should find the (u,v) coordinates at the left and right edges of the
-	// span and step between them, but that involves more math (including
-	// some divides).
-	ds_xstep = FixedMul (xstepscale, distance) << 10;
-	ds_ystep = FixedMul (ystepscale, distance) << 10;
+   slope = (float)fabs(plane.height / dy);
+   realy = slope * view.yfoc;
 
-	// Find the length of a 2D vector from the camera to the left edge of
-	// the span in camera space. This is accomplished using some trig:
-	//		    (distance)
-	//		------------------
-	//		 sin (view angle)
-	length = FixedMul (distance, distscale[x1]);
+   xstep = view.cos * slope * view.focratio;
+   ystep = -view.sin * slope * view.focratio;
 
-	// Find the angle from the center of the screen to the start of the span.
-	// This is also precalculated in the distscale array used above (minus the
-	// baseangle rotation). Baseangle compensates for the player's view angle
-	// and also for the texture's rotation relative to the world.
-	angle = (baseangle + xtoviewangle[x1]) >> ANGLETOFINESHIFT;
 
-	// Find the (u,v) coordinate of the left edge of the span by extending a
-	// ray from the camera position out into texture space. (For all intents and
-	// purposes, texture space is equivalent to world space here.) The (u,v) values
-	// are multiplied by scaling factors for the plane to scale the texture.
-	ds_xfrac = FixedMul (xscale, pviewx + FixedMul (finecosine[angle], length)) << 10;
-	ds_yfrac = FixedMul (yscale, pviewy - FixedMul (finesine[angle], length)) << 10;
+   span.xfrac = (int)((plane.pviewx + plane.xoffset + (view.sin * realy) + ((x1 - view.xcenter + 0.2) * xstep)) * plane.fixedunit);
+   span.yfrac = (int)((plane.pviewy - plane.yoffset + (view.cos * realy) + ((x1 - view.xcenter + 0.2) * ystep)) * plane.fixedunit);
+   span.xstep = (int)(xstep * plane.fixedunit);
+   span.ystep = (int)(ystep * plane.fixedunit);
 
 	if (fixedlightlev)
 		ds_colormap = basecolormap + fixedlightlev;
@@ -206,11 +185,6 @@ R_MapPlane
 		R_SetSpanColormap_ASM (ds_colormap);
 #endif
 
-	ds_y = y;
-	ds_x1 = x1;
-	ds_x2 = x2;
-
-	spanfunc ();
 }
 
 //
@@ -220,19 +194,27 @@ R_MapPlane
 void R_ClearPlanes (void)
 {
 	int i;
+	float a;
+
+	a = (float)(consoleactive ? (current_height-viewwindowy) < 0 ? 0 : current_height-viewwindowy : 0);
+
 	
 	// opening / clipping determination
 	for (i = 0; i < viewwidth ; i++)
 	{
-		floorclip[i] = (short)viewheight;
+		floorclip[i] = view.height - 1.0f;
+		ceilingclip[i] = a;
 	}
-	memset (ceilingclip, 0xff, sizeof(*ceilingclip) * viewwidth);
+	//memset (ceilingclip, 0xff, sizeof(*ceilingclip) * viewwidth);
 
 	for (i = 0; i < MAXVISPLANES; i++)	// new code -- killough
 		for (*freehead = visplanes[i], visplanes[i] = NULL; *freehead; )
 			freehead = &(*freehead)->next;
 
 	lastopening = openings;
+
+   // texture calculation
+   memset (cachedheight, 0, sizeof(cachedheight));	
 }
 
 //
@@ -303,8 +285,12 @@ visplane_t *R_FindPlane (fixed_t height, int picnum, int lightlevel,
 	check->minx = viewwidth;			// Was SCREENWIDTH -- killough 11/98
 	check->maxx = -1;
 	
-	memset (check->top, 0xff, sizeof(*check->top) * screen->width);
-				
+	//memset (check->top, 0xff, sizeof(*check->top) * screen->width);
+   {
+      register unsigned i = 0;
+      register int *p = check->top;
+      while(i < check->max_width) p[i++] = 0x7FFFFFFF;
+   }				
 	return check;
 }
 
@@ -388,14 +374,14 @@ R_MakeSpans
   int		t2,
   int		b2 )
 {
-	for (; t1 < t2 && t1 <= b1; t1++)
-		R_MapPlane (t1, spanstart[t1], x-1);
-	for (; b1 > b2 && b1 >= t1; b1--)
-		R_MapPlane (b1, spanstart[b1] ,x-1);
-	while (t2 < t1 && t2 <= b2)
-		spanstart[t2++] = x;
-	while (b2 > b1 && b2 >= t2)
-		spanstart[b2--] = x;
+   for(; t2 > t1 && t1 <= b1; t1++)
+      R_MapPlane(t1, spanstart[t1], x - 1);
+   for(; b2 < b1 && t1 <= b1; b1--)
+      R_MapPlane(b1, spanstart[b1], x - 1);
+   while(t2 < t1 && t2 <= b2)
+      spanstart[t2++] = x;
+   while(b2 > b1 && t2 <= b2)
+      spanstart[b2--] = x;
 }
 
 //
@@ -410,6 +396,8 @@ static visplane_t *_skypl;
 static int skytex;
 static angle_t skyflip;
 static int frontpos;
+
+extern void R_DrawNewSkyColumn(void);
 
 static void _skycolumn (void (*drawfunc)(void), int x)
 {

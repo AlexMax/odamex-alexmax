@@ -56,7 +56,7 @@ extern int      linesize;        // killough 11/98
 void R_VideoErase(unsigned int x, unsigned int y, unsigned int w, unsigned int h);
 
 // start of a 64*64 tile image
-extern byte **translationtables; // haleyjd 01/12/04: now ptr-to-ptr
+extern byte *translationtables; // haleyjd 01/12/04: now ptr-to-ptr
 
 //
 // spandrawer_t
@@ -84,6 +84,9 @@ void R_InitBuffer(int width, int height);
 
 // Initialize color translation tables, for player rendering etc.
 void R_InitTranslationTables(void);
+
+// [RH] Actually create a player's translation table.
+void R_BuildPlayerTranslation (int player, int color);
 
 // Rendering function.
 void R_FillBackScreen(void);

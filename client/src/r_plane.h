@@ -64,22 +64,45 @@ R_MakeSpans
   
 void R_DrawPlanes (void);
 
-visplane_t *R_FindPlane
-( fixed_t		height,
-  int			picnum,
-  int			lightlevel,
-  fixed_t		xoffs,		// killough 2/28/98: add x-y offsets
-  fixed_t		yoffs,
-  fixed_t		xscale,
-  fixed_t		yscale,
-  angle_t		angle);
+visplane_t *R_FindPlane(
+                        fixed_t height, 
+                        int picnum,
+                        int lightlevel,
+                        fixed_t xoffs,  // killough 2/28/98: add x-y offsets
+                        fixed_t yoffs );
 
-visplane_t *R_CheckPlane (visplane_t *pl, int start, int stop);
+visplane_t *R_CheckPlane(visplane_t *pl, int start, int stop);
 
 BOOL R_AlignFlat (int linenum, int side, int fc);
 
 // [RH] Added for multires support
 BOOL R_PlaneInitData (void);
+
+typedef struct
+{
+   int x1, x2, y;
+   unsigned xfrac, yfrac, xstep, ystep;
+   void *source;
+   lighttable_t *colormap;
+} cb_span_t;
+
+typedef struct
+{
+   float xoffset, yoffset;
+   float height;
+   float pviewx, pviewy, pviewz;
+   int   picnum;
+
+   // SoM: we use different fixed point numbers for different flat sizes
+   float fixedunit;
+
+   lighttable_t **planezlight;
+   lighttable_t *fixedcolormap;
+   void *source;
+} cb_plane_t;
+
+extern cb_span_t span;
+extern cb_plane_t plane;
 
 
 #endif // __R_PLANE_H__
