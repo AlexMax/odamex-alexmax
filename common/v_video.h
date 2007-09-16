@@ -431,8 +431,9 @@ extern byte newgamma[256];
 EXTERN_CVAR (gammalevel)
 
 // Translucency tables
-extern unsigned int Col2RGB8[65][256];
-extern byte RGB32k[32][32][32];
+extern unsigned int Col2RGB[65][256];
+//extern byte RGB32k[32][32][32];
+extern byte RGB8k[16][32][16];
 
 // Allocates buffer screens, call before R_Init.
 void V_Init (void);
@@ -441,7 +442,7 @@ void V_Init (void);
 extern int V_ColorFill;
 
 // The color map for #1 and #2 above
-extern byte *V_ColorMap;
+extern byte **V_ColorMap;
 
 // The palette lookup table to be used with for direct modes
 extern unsigned int *V_Palette;

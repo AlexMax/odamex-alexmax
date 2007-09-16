@@ -56,7 +56,7 @@ extern int      linesize;        // killough 11/98
 void R_VideoErase(unsigned int x, unsigned int y, unsigned int w, unsigned int h);
 
 // start of a 64*64 tile image
-extern byte *translationtables; // haleyjd 01/12/04: now ptr-to-ptr
+extern byte **translationtables; // haleyjd 01/12/04: now ptr-to-ptr
 
 //
 // spandrawer_t
@@ -96,7 +96,8 @@ void R_DrawViewBorder(void);
 
 extern byte *tranmap;         // translucency filter maps 256x256  // phares 
 extern byte *main_tranmap;    // killough 4/11/98
-extern byte *ylookup[];       // killough 11/98
+//extern byte *ylookup[];       // killough 11/98
+extern "C" byte**	ylookup;
 
 #define FUZZTABLE 50 
 #define FUZZOFF (SCREENWIDTH)

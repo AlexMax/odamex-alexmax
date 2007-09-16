@@ -295,12 +295,12 @@ int wipe_doBurn (int ticks)
 				else
 				{
 					int bglevel = 64-fglevel;
-					unsigned int *fg2rgb = Col2RGB8[fglevel];
-					unsigned int *bg2rgb = Col2RGB8[bglevel];
+					unsigned int *fg2rgb = Col2RGB[fglevel];
+					unsigned int *bg2rgb = Col2RGB[bglevel];
 					unsigned int fg = fg2rgb[fromnew[x]];
 					unsigned int bg = bg2rgb[fromold[x]];
 					fg = (fg+bg) | 0x1f07c1f;
-					to[x] = RGB32k[0][0][fg & (fg>>15)];
+					to[x] = RGB8k[0][0][fg & (fg>>15)];
 					done = false;
 				}
 			}
@@ -341,8 +341,8 @@ int wipe_doFade (int ticks)
 	{
 		int x, y;
 		fixed_t bglevel = 64 - fade;
-		unsigned int *fg2rgb = Col2RGB8[fade];
-		unsigned int *bg2rgb = Col2RGB8[bglevel];
+		unsigned int *fg2rgb = Col2RGB[fade];
+		unsigned int *bg2rgb = Col2RGB[bglevel];
 		byte *fromnew = (byte *)wipe_scr_end;
 		byte *fromold = (byte *)wipe_scr_start;
 		byte *to = screen->buffer;
@@ -354,7 +354,7 @@ int wipe_doFade (int ticks)
 				unsigned int fg = fg2rgb[fromnew[x]];
 				unsigned int bg = bg2rgb[fromold[x]];
 				fg = (fg+bg) | 0x1f07c1f;
-				to[x] = RGB32k[0][0][fg & (fg>>15)];
+				to[x] = RGB8k[0][0][fg & (fg>>15)];
 			}
 			fromnew += screen->width;
 			fromold += screen->width;

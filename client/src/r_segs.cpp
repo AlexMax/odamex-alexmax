@@ -166,6 +166,7 @@ R_RenderMaskedSegRange
   int		x1,
   int		x2 )
 {
+	column_t 		*col;
 	int 			lightnum;
 	int				texnum;
 	float			dist, diststep;	
@@ -203,7 +204,7 @@ R_RenderMaskedSegRange
 
 	texnum = texturetranslation[segclip.line->sidedef->midtexture];
 
-	basecolormap = segclip.frontsec->floorcolormap->maps;	// [RH] Set basecolormap
+	//basecolormap = segclip.frontsec->floorcolormap->maps;	// [RH] Set basecolormap
 
 	// killough 4/13/98: get correct lightlevel for 2s normal textures
 	lightnum = (R_FakeFlat(segclip.frontsec, &tempsec, NULL, NULL, false)

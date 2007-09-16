@@ -83,7 +83,7 @@ DCanvas::vdrawsfunc DCanvas::Dsfuncs[6] =
 	(vdrawsfunc)DCanvas::DrawColorLucentPatchD
 };
 
-byte *V_ColorMap;
+byte **V_ColorMap;
 int V_ColorFill;
 
 // Palette lookup table for direct modes
