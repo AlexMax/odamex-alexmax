@@ -283,11 +283,11 @@ sector_t *R_FakeFlat(sector_t *sec, sector_t *tempsec,
 {
 	if (floorlightlevel)
 		*floorlightlevel = sec->floorlightsec == NULL ?
-			sec->lightlevel : sec->floorlightsec->lightlevel;
+			sec->lightlevel : sectors[sec->floorlightsec].lightlevel;
 
 	if (ceilinglightlevel)
 		*ceilinglightlevel = sec->ceilinglightsec == NULL ? // killough 4/11/98
-			sec->lightlevel : sec->ceilinglightsec->lightlevel;
+         sec->lightlevel : sectors[sec->ceilinglightsec].lightlevel;
 
 	if (sec->heightsec)
 	{
@@ -302,197 +302,78 @@ sector_t *R_FakeFlat(sector_t *sec, sector_t *tempsec,
 		tempsec->floorheight   = s->floorheight;
 		tempsec->ceilingheight = s->ceilingheight;
 
-		if (sec->alwaysfake)
-		{
-		// Code for ZDoom. Allows the effect to be visible outside sectors with
-		// fake flat. The original is still around in case it turns out that this
-		// isn't always appropriate (which it isn't).
-			if (viewz <= s->floorheight && s->floorheight > sec->floorheight)
-			{
-				tempsec->floorheight = sec->floorheight;
-				tempsec->floorcolormap = s->floorcolormap;
-				tempsec->floorpic = s->floorpic;
-				tempsec->floor_xoffs = s->floor_xoffs;
-				tempsec->floor_yoffs = s->floor_yoffs;
-				tempsec->floor_xscale = s->floor_xscale;
-				tempsec->floor_yscale = s->floor_yscale;
-				tempsec->floor_angle = s->floor_angle;
-				tempsec->base_floor_angle = s->base_floor_angle;
-				tempsec->base_floor_yoffs = s->base_floor_yoffs;
+      // killough 11/98: prevent sudden light changes from non-water sectors:
+      if(underwater && (tempsec->floorheight   = sec->floorheight,
+                        tempsec->ceilingheight = s->floorheight-1, !back))
+      {
+         // head-below-floor hack
+         tempsec->floorpic    = s->floorpic;
+         tempsec->floor_xoffs = s->floor_xoffs;
+         tempsec->floor_yoffs = s->floor_yoffs;
 
-				tempsec->ceilingheight = s->floorheight - 1;
-				tempsec->ceilingcolormap = s->ceilingcolormap;
-				if (s->ceilingpic == skyflatnum)
-				{
-					tempsec->floorheight   = tempsec->ceilingheight+1;
-					tempsec->ceilingpic    = tempsec->floorpic;
-					tempsec->ceiling_xoffs = tempsec->floor_xoffs;
-					tempsec->ceiling_yoffs = tempsec->floor_yoffs;
-					tempsec->ceiling_xscale = tempsec->floor_xscale;
-					tempsec->ceiling_yscale = tempsec->floor_yscale;
-					tempsec->ceiling_angle = tempsec->floor_angle;
-					tempsec->base_ceiling_angle = tempsec->base_floor_angle;
-					tempsec->base_ceiling_yoffs = tempsec->base_floor_yoffs;
-				}
-				else
-				{
-					tempsec->ceilingpic    = s->ceilingpic;
-					tempsec->ceiling_xoffs = s->ceiling_xoffs;
-					tempsec->ceiling_yoffs = s->ceiling_yoffs;
-					tempsec->ceiling_xscale = s->ceiling_xscale;
-					tempsec->ceiling_yscale = s->ceiling_yscale;
-					tempsec->ceiling_angle = s->ceiling_angle;
-					tempsec->base_ceiling_angle = s->base_ceiling_angle;
-					tempsec->base_ceiling_yoffs = s->base_ceiling_yoffs;
-				}
-				tempsec->lightlevel = s->lightlevel;
+         // haleyjd 03/13/05: removed redundant if(underwater) check
+         if(s->ceilingpic == skyflatnum)
+         {
+            tempsec->floorheight   = tempsec->ceilingheight+1;
+            tempsec->ceilingpic    = tempsec->floorpic;
+            tempsec->ceiling_xoffs = tempsec->floor_xoffs;
+            tempsec->ceiling_yoffs = tempsec->floor_yoffs;
+         }
+         else
+         {
+            tempsec->ceilingpic    = s->ceilingpic;
+            tempsec->ceiling_xoffs = s->ceiling_xoffs;
+            tempsec->ceiling_yoffs = s->ceiling_yoffs;
+         }
 
-				if (floorlightlevel)
-					*floorlightlevel = s->floorlightsec == NULL ? s->lightlevel :
-						s->floorlightsec->lightlevel; // killough 3/16/98
+         tempsec->lightlevel  = s->lightlevel;
+         
+         if(floorlightlevel)
+         {
+            *floorlightlevel = s->floorlightsec == -1 ? s->lightlevel :
+               sectors[s->floorlightsec].lightlevel; // killough 3/16/98
+         }
 
-				if (ceilinglightlevel)
-					*ceilinglightlevel = s->ceilinglightsec == NULL ? s->lightlevel :
-						s->ceilinglightsec->lightlevel; // killough 4/11/98
-			}
-			else if (viewz > s->ceilingheight && s->ceilingheight < sec->ceilingheight)
-			{
-				tempsec->ceilingheight = s->ceilingheight;
-				tempsec->floorheight   = s->ceilingheight + 1;
-				tempsec->ceilingcolormap = s->ceilingcolormap;
-				tempsec->floorcolormap = s->floorcolormap;
+         if (ceilinglightlevel)
+         {
+            *ceilinglightlevel = s->ceilinglightsec == -1 ? s->lightlevel :
+               sectors[s->ceilinglightsec].lightlevel; // killough 4/11/98
+         }
+      }
+      else if(heightsec != -1 && 
+              viewz >= sectors[heightsec].ceilingheight &&
+              sec->ceilingheight > s->ceilingheight)
+      {   
+         // Above-ceiling hack
+         tempsec->ceilingheight = s->ceilingheight;
+         tempsec->floorheight   = s->ceilingheight + 1;
 
-				tempsec->floorpic    = tempsec->ceilingpic    = s->ceilingpic;
-				tempsec->floor_xoffs = tempsec->ceiling_xoffs = s->ceiling_xoffs;
-				tempsec->floor_yoffs = tempsec->ceiling_yoffs = s->ceiling_yoffs;
-				tempsec->floor_xscale = tempsec->ceiling_xscale = s->ceiling_xscale;
-				tempsec->floor_yscale = tempsec->ceiling_yscale = s->ceiling_yscale;
-				tempsec->floor_angle = tempsec->ceiling_angle = s->ceiling_angle;
-				tempsec->base_floor_angle = tempsec->base_ceiling_angle = s->base_ceiling_angle;
-				tempsec->base_floor_yoffs = tempsec->base_ceiling_yoffs = s->base_ceiling_yoffs;
+         tempsec->floorpic    = tempsec->ceilingpic    = s->ceilingpic;
+         tempsec->floor_xoffs = tempsec->ceiling_xoffs = s->ceiling_xoffs;
+         tempsec->floor_yoffs = tempsec->ceiling_yoffs = s->ceiling_yoffs;
 
-				if (s->floorpic != skyflatnum)
-				{
-					tempsec->ceilingheight = sec->ceilingheight;
-					tempsec->floorpic      = s->floorpic;
-					tempsec->floor_xoffs   = s->floor_xoffs;
-					tempsec->floor_yoffs   = s->floor_yoffs;
-					tempsec->floor_xscale  = s->floor_xscale;
-					tempsec->floor_yscale  = s->floor_yscale;
-					tempsec->floor_angle   = s->floor_angle;
-					tempsec->base_floor_angle = s->base_floor_angle;
-					tempsec->base_floor_yoffs = s->base_floor_yoffs;
-				}
+         if(s->floorpic != skyflatnum)
+         {
+            tempsec->ceilingheight = sec->ceilingheight;
+            tempsec->floorpic      = s->floorpic;
+            tempsec->floor_xoffs   = s->floor_xoffs;
+            tempsec->floor_yoffs   = s->floor_yoffs;
+         }
+         
+         tempsec->lightlevel  = s->lightlevel;
+         
+         if(floorlightlevel)
+         {
+            *floorlightlevel = s->floorlightsec == -1 ? s->lightlevel :
+               sectors[s->floorlightsec].lightlevel; // killough 3/16/98
+         }
 
-				tempsec->lightlevel  = s->lightlevel;
-
-				if (floorlightlevel)
-					*floorlightlevel = s->floorlightsec == NULL ? s->lightlevel :
-						s->floorlightsec->lightlevel; // killough 3/16/98
-
-				if (ceilinglightlevel)
-					*ceilinglightlevel = s->ceilinglightsec == NULL ? s->lightlevel :
-						s->ceilinglightsec->lightlevel; // killough 4/11/98
-			}
-		}
-		else
-		{
-		// Original BOOM code
-			if ((underwater && (tempsec->  floorheight = sec->floorheight,
-								tempsec->ceilingheight = s->floorheight-1,
-								!back)) || viewz <= s->floorheight)
-			{					// head-below-floor hack
-				tempsec->floorpic    = s->floorpic;
-				tempsec->floor_xoffs = s->floor_xoffs;
-				tempsec->floor_yoffs = s->floor_yoffs;
-				tempsec->floor_xscale = s->floor_xscale;
-				tempsec->floor_yscale = s->floor_yscale;
-				tempsec->floor_angle = s->floor_angle;
-				tempsec->base_floor_angle = s->base_floor_angle;
-				tempsec->base_floor_yoffs = s->base_floor_yoffs;
-
-				if (underwater)
-				{
-					tempsec->lightlevel  = s->lightlevel;
-					tempsec->floorcolormap = s->floorcolormap;
-					tempsec->ceilingheight = s->floorheight - 1;
-					tempsec->ceilingcolormap = s->ceilingcolormap;
-					if (s->ceilingpic == skyflatnum)
-					{
-						tempsec->floorheight   = tempsec->ceilingheight+1;
-						tempsec->ceilingpic    = tempsec->floorpic;
-						tempsec->ceiling_xoffs = tempsec->floor_xoffs;
-						tempsec->ceiling_yoffs = tempsec->floor_yoffs;
-						tempsec->ceiling_xscale = tempsec->floor_xscale;
-						tempsec->ceiling_yscale = tempsec->floor_yscale;
-						tempsec->ceiling_angle = tempsec->floor_angle;
-						tempsec->base_ceiling_angle = tempsec->base_floor_angle;
-						tempsec->base_ceiling_yoffs = tempsec->base_floor_yoffs;
-					}
-					else
-					{
-						tempsec->ceilingpic    = s->ceilingpic;
-						tempsec->ceiling_xoffs = s->ceiling_xoffs;
-						tempsec->ceiling_yoffs = s->ceiling_yoffs;
-						tempsec->ceiling_xscale = s->ceiling_xscale;
-						tempsec->ceiling_yscale = s->ceiling_yscale;
-						tempsec->ceiling_angle = s->ceiling_angle;
-						tempsec->base_ceiling_angle = s->base_ceiling_angle;
-						tempsec->base_ceiling_yoffs = s->base_ceiling_yoffs;
-					}
-				}
-				else
-				{
-					tempsec->floorheight = sec->floorheight;
-				}
-
-				if (floorlightlevel)
-					*floorlightlevel = s->floorlightsec == NULL ? s->lightlevel :
-						s->floorlightsec->lightlevel; // killough 3/16/98
-
-				if (ceilinglightlevel)
-					*ceilinglightlevel = s->ceilinglightsec == NULL ? s->lightlevel :
-						s->ceilinglightsec->lightlevel; // killough 4/11/98
-			}
-			else if (heightsec && viewz >= heightsec->ceilingheight &&
-					 sec->ceilingheight > s->ceilingheight)
-			{	// Above-ceiling hack
-				tempsec->ceilingheight = s->ceilingheight;
-				tempsec->floorheight   = s->ceilingheight + 1;
-				tempsec->ceilingcolormap = s->ceilingcolormap;
-				tempsec->floorcolormap = s->floorcolormap;
-
-				tempsec->floorpic    = tempsec->ceilingpic    = s->ceilingpic;
-				tempsec->floor_xoffs = tempsec->ceiling_xoffs = s->ceiling_xoffs;
-				tempsec->floor_yoffs = tempsec->ceiling_yoffs = s->ceiling_yoffs;
-				tempsec->floor_xscale = tempsec->ceiling_xscale = s->ceiling_xscale;
-				tempsec->floor_yscale = tempsec->ceiling_yscale = s->ceiling_yscale;
-				tempsec->floor_angle = tempsec->ceiling_angle = s->ceiling_angle;
-				tempsec->base_floor_angle = tempsec->base_ceiling_angle = s->base_ceiling_angle;
-				tempsec->base_floor_yoffs = tempsec->base_ceiling_yoffs = s->base_ceiling_yoffs;
-
-				if (s->floorpic != skyflatnum)
-				{
-					tempsec->ceilingheight = sec->ceilingheight;
-					tempsec->floorpic      = s->floorpic;
-					tempsec->floor_xoffs   = s->floor_xoffs;
-					tempsec->floor_yoffs   = s->floor_yoffs;
-					tempsec->floor_xscale  = s->floor_xscale;
-					tempsec->floor_yscale  = s->floor_yscale;
-					tempsec->floor_angle   = s->floor_angle;
-				}
-
-				tempsec->lightlevel  = s->lightlevel;
-
-				if (floorlightlevel)
-					*floorlightlevel = s->floorlightsec == NULL ? s->lightlevel :
-						s->floorlightsec->lightlevel; // killough 3/16/98
-
-				if (ceilinglightlevel)
-					*ceilinglightlevel = s->ceilinglightsec == NULL ? s->lightlevel :
-						s->ceilinglightsec->lightlevel; // killough 4/11/98
-			}
-		}
+         if(ceilinglightlevel)
+         {
+            *ceilinglightlevel = s->ceilinglightsec == -1 ? s->lightlevel :
+               sectors[s->ceilinglightsec].lightlevel; // killough 4/11/98
+         }
+      }
 		sec = tempsec;					// Use other sector
 	}
 	return sec;

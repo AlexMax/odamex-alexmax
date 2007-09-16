@@ -97,6 +97,7 @@ struct sector_s
 	short		ceilingpic;
 	short		lightlevel;
 	short		special;
+	short		oldspecial;      //jff 2/16/98 remembers if sector WAS secret (automap)	
 	short		tag;
 	int			nexttag,firsttag;	// killough 1/30/98: improves searches for tags.
 
@@ -143,25 +144,13 @@ struct sector_s
 	fixed_t   floor_xoffs,   floor_yoffs;
 	fixed_t ceiling_xoffs, ceiling_yoffs;
 
-	// [RH] floor and ceiling texture scales
-	fixed_t   floor_xscale,   floor_yscale;
-	fixed_t ceiling_xscale, ceiling_yscale;
-
-	// [RH] floor and ceiling texture rotation
-	angle_t	floor_angle, ceiling_angle;
-
-	fixed_t base_ceiling_angle, base_ceiling_yoffs;
-	fixed_t base_floor_angle, base_floor_yoffs;
-
 	// killough 3/7/98: support flat heights drawn at another sector's heights
 	struct sector_s *heightsec;		// other sector, or NULL if no other sector
 
 	// killough 4/11/98: support for lightlevels coming from another sector
-	struct sector_s *floorlightsec, *ceilinglightsec;
+	int floorlightsec, ceilinglightsec;
 
 	unsigned int bottommap, midmap, topmap; // killough 4/4/98: dynamic colormaps
-											// [RH] these can also be blend values if
-											//		the alpha mask is non-zero
 
 	// list of mobjs that are at least partially in the sector
 	// thinglist is a subset of touching_thinglist
@@ -173,11 +162,19 @@ struct sector_s
 	float gravity;		// [RH] Sector gravity (1.0 is normal)
 	short damage;		// [RH] Damage to do while standing on floor
 	short mod;			// [RH] Means-of-death for applied damage
-	struct dyncolormap_s *floorcolormap;	// [RH] Per-sector colormap
-	struct dyncolormap_s *ceilingcolormap;
 
 	bool alwaysfake;	// [RH] Always apply heightsec modifications?
 	byte waterzone;		// [RH] Sector is underwater?
+
+   // haleyjd 07/04/07: Happy July 4th :P
+   // Angles for flat rotation!	
+   float floorangle, ceilingangle, floorbaseangle, ceilingbaseangle;
+
+   // Cardboard optimization
+   // They are set in R_Subsector and R_FakeFlat and are
+   // only valid for that sector for that frame.
+   unsigned frameid;
+   float ceilingheightf, floorheightf;	
 };
 typedef struct sector_s sector_t;
 
