@@ -303,7 +303,7 @@ sector_t *R_FakeFlat(sector_t *sec, sector_t *tempsec,
 		tempsec->ceilingheight = s->ceilingheight;
 
       // killough 11/98: prevent sudden light changes from non-water sectors:
-      if(underwater && (tempsec->floorheight   = sec->floorheight,
+      if(underwater && (tempsec->floorheight   = s->floorheight,
                         tempsec->ceilingheight = s->floorheight-1, !back))
       {
          // head-below-floor hack
@@ -340,8 +340,8 @@ sector_t *R_FakeFlat(sector_t *sec, sector_t *tempsec,
                sectors[s->ceilinglightsec].lightlevel; // killough 4/11/98
          }
       }
-      else if(heightsec != -1 && 
-              viewz >= sectors[heightsec].ceilingheight &&
+      else if(heightsec && 
+              viewz >= heightsec->ceilingheight &&
               sec->ceilingheight > s->ceilingheight)
       {   
          // Above-ceiling hack
@@ -423,7 +423,10 @@ void R_AddLine (seg_t *line)
       && seg.backsec->ceilingheight == seg.frontsec->ceilingheight
       
       // sf: coloured lighting
-      && seg.backsec->heightsec == seg.frontsec->heightsec
+      // haleyjd 03/04/07: must test against maps, not heightsec
+      && seg.backsec->bottommap == seg.frontsec->bottommap 
+      && seg.backsec->midmap    == seg.frontsec->midmap 
+      && seg.backsec->topmap    == seg.frontsec->topmap
 
       )
       return;
@@ -572,7 +575,7 @@ void R_AddLine (seg_t *line)
       seg.twosided = true;
 
       mark = seg.frontsec->lightlevel != seg.backsec->lightlevel ||
-             seg.frontsec->heightsec != -1 ||
+             seg.frontsec->heightsec != NULL ||
              seg.frontsec->heightsec != seg.backsec->heightsec ? true : false;
 
 
@@ -837,7 +840,7 @@ void R_Subsector (int num)
 	//basecolormap = seg.frontsec->ceilingcolormap->maps;
 
    seg.floorplane = seg.frontsec->floorheight < viewz || // killough 3/7/98
-     (seg.frontsec->heightsec != -1 && sectors[seg.frontsec->heightsec].ceilingpic == skyflatnum) ?
+     (seg.frontsec->heightsec && seg.frontsec->heightsec->ceilingpic == skyflatnum) ?
      R_FindPlane(seg.frontsec->floorheight, 
                  seg.frontsec->floorpic == skyflatnum &&  // kilough 10/98
                  seg.frontsec->sky & PL_SKYFLAT ? seg.frontsec->sky :
@@ -848,7 +851,7 @@ void R_Subsector (int num)
 
    seg.ceilingplane = seg.frontsec->ceilingheight > viewz ||
      seg.frontsec->ceilingpic == skyflatnum ||
-     (seg.frontsec->heightsec != -1 && sectors[seg.frontsec->heightsec].floorpic == skyflatnum) ?
+     (seg.frontsec->heightsec && seg.frontsec->heightsec->floorpic == skyflatnum) ?
      R_FindPlane(seg.frontsec->ceilingheight,     // killough 3/8/98
                  seg.frontsec->ceilingpic == skyflatnum &&  // kilough 10/98
                  seg.frontsec->sky & PL_SKYFLAT ? seg.frontsec->sky :

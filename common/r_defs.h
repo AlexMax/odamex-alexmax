@@ -146,7 +146,7 @@ struct sector_s
 
 	// killough 3/7/98: support flat heights drawn at another sector's heights
 	struct sector_s *heightsec;		// other sector, or NULL if no other sector
-
+    //int heightsec;    // other sector, or -1 if no other sector
 	// killough 4/11/98: support for lightlevels coming from another sector
 	int floorlightsec, ceilinglightsec;
 
