@@ -310,9 +310,9 @@ void CB_DrawColumn_8(void)
    frac = column.texmid + (int)((column.y1 - view.ycenter + 1) * fracstep);
 
    {
-      register byte *source = column.source;
+      register byte *source = (byte *)(column.source);
       register lighttable_t *colormap = column.colormap;
-      register heightmask = column.texheight - 1;
+      register int heightmask = column.texheight - 1;
       
       if(column.texheight & heightmask)
       {
@@ -634,9 +634,9 @@ void CB_DrawTLColumn_8(void)
 
    // killough 2/1/98, 2/21/98: more performance tuning
    {
-      register byte *source = column.source;
+      register byte *source = (byte *)(column.source);
       register lighttable_t *colormap = column.colormap;
-      register heightmask = column.texheight - 1;
+      register int heightmask = column.texheight - 1;
       
       if(column.texheight & heightmask)
       {
@@ -704,9 +704,9 @@ void CB_DrawTLTRColumn_8(void)
    frac = column.texmid + (int)((column.y1 - view.ycenter + 1) * fracstep);
 
    {
-      register byte *source = column.source;
+      register byte *source = (byte *)(column.source);
       register lighttable_t *colormap = column.colormap;
-      register heightmask = column.texheight - 1;
+      register int heightmask = column.texheight - 1;
       
       if(column.texheight & heightmask)
       {
@@ -834,7 +834,7 @@ void CB_DrawTRColumn_8(void)
    frac = column.texmid + (int)((column.y1 - view.ycenter + 1) * fracstep);
 
    {
-      register byte *source = column.source;
+      register byte *source = (byte *)(column.source);
       register lighttable_t *colormap = column.colormap;
       register int heightmask = column.texheight - 1;
       
@@ -914,7 +914,7 @@ void CB_DrawFlexColumn_8(void)
    frac = column.texmid + (int)((column.y1 - view.ycenter + 1) * fracstep);
 
    {
-      register byte *source = column.source;
+      register byte *source = (byte *)(column.source);
       register lighttable_t *colormap = column.colormap;
       register int heightmask = column.texheight - 1;
       
@@ -1024,7 +1024,7 @@ void CB_DrawFlexTRColumn_8(void)
    frac = column.texmid + (int)((column.y1 - view.ycenter + 1) * fracstep);
 
    {
-      register byte *source = column.source;
+      register byte *source = (byte *)(column.source);
       register lighttable_t *colormap = column.colormap;
       register int heightmask = column.texheight - 1;
       
@@ -1135,7 +1135,7 @@ void CB_DrawAddColumn_8(void)
    frac = column.texmid + (int)((column.y1 - view.ycenter + 1) * fracstep);
 
    {
-      register byte *source = column.source;
+      register byte *source = (byte *)(column.source);
       register lighttable_t *colormap = column.colormap;
       register int heightmask = column.texheight - 1;
       
@@ -1327,7 +1327,7 @@ void CB_DrawAddTRColumn_8(void)
    frac = column.texmid + (int)((column.y1 - view.ycenter + 1) * fracstep);
 
    {
-      register byte *source = column.source;
+      register byte *source = (byte *)(column.source);
       register lighttable_t *colormap = column.colormap;
       register int heightmask = column.texheight - 1;
       
@@ -1560,14 +1560,14 @@ void R_InitTranslationTables(void)
    numtranslations = TRANSLATIONCOLOURS + numlumps;
 
    // allocate the array of pointers
-   translationtables = Z_Malloc(sizeof(byte *) * numtranslations, PU_STATIC, 0);
+   translationtables = (byte **)Z_Malloc(sizeof(byte *) * numtranslations, PU_STATIC, 0);
    
    // build the internal player translations
    for(i = 0; i < TRANSLATIONCOLOURS; ++i)
    {
       byte *transtbl;
 
-      transtbl = translationtables[i] = Z_Malloc(256, PU_STATIC, 0);
+      transtbl = translationtables[i] =  (byte *)Z_Malloc(256, PU_STATIC, 0);
 
       for(c = 0; c < 256; ++c)
       {
@@ -1582,7 +1582,7 @@ void R_InitTranslationTables(void)
    {
       int lumpnum = (i - TRANSLATIONCOLOURS) + firsttranslationlump + 1;
 
-      translationtables[i] = W_CacheLumpNum(lumpnum, PU_STATIC);
+      translationtables[i] =  (byte *)W_CacheLumpNum(lumpnum, PU_STATIC);
    }
 }
 
@@ -1591,7 +1591,7 @@ void R_InitTranslationTables(void)
 void R_BuildPlayerTranslation (int player, int color)
 {
 	palette_t *pal = GetDefaultPalette();
-	byte *table = &translationtables[player * 256];
+	byte **table = &translationtables[player * 256];
 	int i;
 	float r = (float)RPART(color) / 255.0f;
 	float g = (float)GPART(color) / 255.0f;
@@ -1613,7 +1613,7 @@ void R_BuildPlayerTranslation (int player, int color)
 
 	for (i = 0x70; i < 0x80; i++) {
 		HSVtoRGB (&r, &g, &b, h, s, v);
-		table[i] = BestColor (pal->basecolors,
+		table[i] = (byte *)BestColor (pal->basecolors,
 							  (int)(r * 255.0f),
 							  (int)(g * 255.0f),
 							  (int)(b * 255.0f),
@@ -1914,7 +1914,7 @@ void R_DrawNewSkyColumn(void)
   // killough 2/1/98: more performance tuning
 
   {
-    register const byte *source = column.source;            
+    register const byte *source = (byte *)(column.source);            
     register const lighttable_t *colormap = column.colormap; 
     register int heightmask = column.texheight-1;
     if (column.texheight & heightmask)   // not a power of 2 -- killough

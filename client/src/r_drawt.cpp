@@ -25,7 +25,8 @@
 //
 //-----------------------------------------------------------------------------
 
-#ifdef 0
+
+#ifdef USETHIS
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1035,6 +1036,6 @@ void R_DrawMaskedColumnHoriz (column_t *column)
 		column = (column_t *)((byte *)column + column->length + 4);
 	}
 }
-#endif
-VERSION_CONTROL (r_drawt_cpp, "$Id: r_drawt.cpp 5 2007-01-16 19:13:59Z denis $")
 
+VERSION_CONTROL (r_drawt_cpp, "$Id: r_drawt.cpp 5 2007-01-16 19:13:59Z denis $")
+#endif
