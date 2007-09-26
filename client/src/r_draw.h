@@ -102,8 +102,8 @@ extern "C" byte**	ylookup;
 #define FUZZTABLE 50 
 #define FUZZOFF (SCREENWIDTH)
 
-extern const int fuzzoffset[];
-extern int fuzzpos;
+extern "C" const int fuzzoffset[];
+extern "C" int fuzzpos;
 
 // Cardboard
 typedef struct
