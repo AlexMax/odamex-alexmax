@@ -303,7 +303,7 @@ void MSG_WriteShort (buf_t *b, int c);
 void MSG_WriteLong (buf_t *b, int c);
 void MSG_WriteBool(buf_t *b, bool);
 void MSG_WriteFloat(buf_t *b, float);
-void MSG_WriteString (buf_t *b, std::string);
+void MSG_WriteString (buf_t *b, const char *s);
 void MSG_WriteChunk (buf_t *b, const void *p, unsigned l);
 
 int MSG_BytesLeft(void);
@@ -313,9 +313,9 @@ int MSG_ReadByte (void);
 void *MSG_ReadChunk (size_t &size);
 int MSG_ReadShort (void);
 int MSG_ReadLong (void);
-SDWORD MSG_ReadBool(bool &);
-SDWORD MSG_ReadFloat(float &);
-char *MSG_ReadString(std::string = "");
+bool MSG_ReadBool(void);
+float MSG_ReadFloat(void);
+char *MSG_ReadString (void);
 
 bool MSG_DecompressMinilzo ();
 bool MSG_CompressMinilzo (buf_t &buf, size_t start_offset, size_t write_gap);

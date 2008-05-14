@@ -31,6 +31,8 @@
 #include <string.h>
 #include <stdio.h>
 
+#include <sstream>
+
 /* [Petteri] Use Winsock for Win32: */
 #ifdef _WIN32
 #	define WIN32_LEAN_AND_MEAN
@@ -424,7 +426,7 @@ void MSG_WriteLong (buf_t *b, int c)
 //
 // MSG_WriteBool
 //
-// Write an 8bit boolean value to a buffer
+// Write an boolean value to a buffer
 void MSG_WriteBool(buf_t *b, bool Boolean)
 {   
     MSG_WriteByte(b, Boolean ? 1 : 0);
@@ -433,37 +435,29 @@ void MSG_WriteBool(buf_t *b, bool Boolean)
 //
 // MSG_WriteFloat
 //
-// Write a 32bit floating point number to a buffer
+// Write a floating point number to a buffer
 void MSG_WriteFloat(buf_t *b, float Float)
 {
-    union
-    {
-        int Integer;
-        float Float;
-    } FloatConverter;
+    std::stringstream StringStream;
+
+    StringStream << Float;
     
-    FloatConverter.Float = Float;
-    
-    MSG_WriteLong(b, FloatConverter.Integer);
+    MSG_WriteString(b, (char *)StringStream.str().c_str());
 }
 
 //
 // MSG_WriteString
 //
-// Write a string to a buffer with a byte count (maxed at 65536)
-void MSG_WriteString (buf_t *b, std::string String)
+// Write a string to a buffer and null terminate it
+void MSG_WriteString (buf_t *b, const char *s)
 {
-    if (!String.size())
-    {
-        // must write a null char.
-        MSG_WriteShort(b, 1);
+    if (!s)
         MSG_WriteByte(b, 0);
-    }
     else
-    {
-        MSG_WriteShort(b, String.size() + 1);
-        SZ_Write(b, String.c_str(), String.size() + 1);
-    }
+	{
+        SZ_Write (b, s, strlen(s));
+        MSG_WriteByte(b, 0);
+	}
 }
 
 int MSG_BytesLeft(void)
@@ -684,48 +678,40 @@ int MSG_ReadLong (void)
 
 //
 // MSG_ReadString
-//
-// Read a string with a byte count (maxed at 65536)
-char *MSG_ReadString(std::string String)
-{   
-    static std::string TempString;
-    
-    TempString.clear();
-    
+// 
+// Read a null terminated string
+char *MSG_ReadString (void)
+{
+    static std::string String;
+
     if (!MSG_BytesLeft())
     {
         msg_badread = true;
-               
         return "";
     }
-    
-    WORD Size = MSG_ReadShort();
-    
-    if (msg_readcount + Size > net_message.cursize)
-    {
-        msg_badread = true;
-        
-        return "";
-    }
-    
-    for (WORD i = 0; i < Size; ++i)
-    {
-        SBYTE Ch = (SBYTE)MSG_ReadByte();
-        
-        String += Ch;
-    }
 
-    TempString = String;
+    String.clear();
 
-    return (char *)TempString.c_str();
+    SBYTE Ch = (SBYTE)MSG_ReadByte();
+
+    while (Ch != '\0' && MSG_BytesLeft())
+    {
+       String += Ch;
+
+       Ch = (SBYTE)MSG_ReadByte();
+	}
+
+    return (char *)String.c_str();
 }
 
 //
 // MSG_ReadBool
 //
-// Read an 8bit boolean value
-SDWORD MSG_ReadBool(bool &Boolean)
+// Read a boolean value
+bool MSG_ReadBool(void)
 {
+    bool Boolean;
+    
     if (msg_readcount + 1 > net_message.cursize)
     {
         msg_badread = true;
@@ -735,38 +721,23 @@ SDWORD MSG_ReadBool(bool &Boolean)
     Boolean = ((unsigned char)net_message.data[msg_readcount] ? true : false);
     ++msg_readcount;
     
-    return 1;
+    return Boolean;
 }
 
 //
 // MSG_ReadFloat
 //
-// Read a 32bit floating point number
-SDWORD MSG_ReadFloat(float &Float)
-{
-    union
-    {
-        int Integer;
-        float Float;
-    } FloatConverter;
-    
-    if (msg_readcount + 4 > net_message.cursize)
-    {
-        msg_badread = true;
+// Read a floating point number
+float MSG_ReadFloat(void)
+{  
+    std::stringstream StringStream;
+    float Float;
         
-        return -1;
-    }
-
-    FloatConverter.Integer = net_message.data[msg_readcount]
-                            + (net_message.data[msg_readcount+1]<<8)
-                            + (net_message.data[msg_readcount+2]<<16)
-                            + (net_message.data[msg_readcount+3]<<24);
-
-    msg_readcount += 4;
+    StringStream << MSG_ReadString();
     
-    Float = FloatConverter.Float;
+    StringStream >> Float;
     
-    return 1;
+    return Float;
 }
 
 //
