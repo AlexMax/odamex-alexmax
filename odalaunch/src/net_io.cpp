@@ -359,22 +359,19 @@ wxInt32 BufferedSocket::ReadString(wxString &str)
     wxDataInputStream dis(*recv_buf);
     dis.BigEndianOrdered(BigEndian);
 
-    wxString in_str;
+    wxUint16 Size;
     
-    // ooh, a priming read!
-    wxChar ch = (wxChar)dis.Read8();
+    Read16(Size);
 
-    wxUint16 i = 0;
-    
-    while (ch != '\0' && recv_buf->CanRead())
-    {      
-        in_str << ch;
-         
-        ch = (wxChar)dis.Read8();
+    wxInt8 Ch;
+   
+    for (wxUint16 i = 0; i < Size || Ch != '\0'; ++i)
+    {
+        Read8(Ch);
+        
+        str << (wxChar)Ch;
     }
-    
-    str = in_str;
-    
+
     return 1;
 }
 
