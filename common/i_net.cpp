@@ -422,36 +422,47 @@ void MSG_WriteLong (buf_t *b, int c)
 }
 
 //
-// MSG_WriteString
+// MSG_WriteBool
 //
-// Write a string to a buffer and null terminate it
-void MSG_WriteString (buf_t *b, const char *s)
+// Write an 8bit boolean value to a buffer
+void MSG_WriteBool(buf_t *b, bool Boolean)
+{   
+    MSG_WriteByte(b, Boolean ? 1 : 0);
+}
+
+//
+// MSG_WriteFloat
+//
+// Write a 32bit floating point number to a buffer
+void MSG_WriteFloat(buf_t *b, float Float)
 {
-    if (!s)
-        MSG_WriteByte(b, 0);
-    else
-	{
-        SZ_Write (b, s, strlen(s));
-        MSG_WriteByte(b, 0);
-	}
+    union
+    {
+        int Integer;
+        float Float;
+    } FloatConverter;
+    
+    FloatConverter.Float = Float;
+    
+    MSG_WriteLong(b, FloatConverter.Integer);
 }
 
 //
 // MSG_WriteString
 //
 // Write a string to a buffer with a byte count (maxed at 65536)
-void MSG_WriteString (buf_t *b, std::string &String)
+void MSG_WriteString (buf_t *b, std::string String)
 {
     if (!String.size())
     {
-        MSG_WriteShort(b, 0);
+        // must write a null char.
+        MSG_WriteShort(b, 1);
         MSG_WriteByte(b, 0);
     }
     else
     {
-        MSG_WriteShort(b, String.size());
-        SZ_Write(b, String.c_str(), String.size());
-        MSG_WriteByte(b, 0);
+        MSG_WriteShort(b, String.size() + 1);
+        SZ_Write(b, String.c_str(), String.size() + 1);
     }
 }
 
@@ -673,77 +684,89 @@ int MSG_ReadLong (void)
 
 //
 // MSG_ReadString
-// 
-// Read a null terminated string
-char *MSG_ReadString (void)
-{
-    static std::string String;
-
+//
+// Read a string with a byte count (maxed at 65536)
+char *MSG_ReadString(std::string String)
+{   
+    static std::string TempString;
+    
+    TempString.clear();
+    
     if (!MSG_BytesLeft())
     {
         msg_badread = true;
+               
         return "";
-    }
-
-    String.clear();
-
-    SBYTE Ch = (SBYTE)MSG_ReadByte();
-
-    while (Ch != '\0' && MSG_BytesLeft())
-    {
-       String += Ch;
-
-       Ch = (SBYTE)MSG_ReadByte();
-	}
-
-    return (char *)String.c_str();
-}
-
-//
-// MSG_ReadString
-//
-// Read a string from a buffer with a byte count (maxed at 65536)
-SDWORD MSG_ReadString(std::string &String)
-{
-    if (!MSG_BytesLeft())
-    {
-        msg_badread = true;
-        
-        String = "";
-        
-        return -1;
     }
     
     WORD Size = MSG_ReadShort();
     
-    if (msg_readcount + Size + 1 > net_message.cursize)
+    if (msg_readcount + Size > net_message.cursize)
     {
         msg_badread = true;
         
-        String = "";
+        return "";
+    }
+    
+    for (WORD i = 0; i < Size; ++i)
+    {
+        SBYTE Ch = (SBYTE)MSG_ReadByte();
         
+        String += Ch;
+    }
+
+    TempString = String;
+
+    return (char *)TempString.c_str();
+}
+
+//
+// MSG_ReadBool
+//
+// Read an 8bit boolean value
+SDWORD MSG_ReadBool(bool &Boolean)
+{
+    if (msg_readcount + 1 > net_message.cursize)
+    {
+        msg_badread = true;
         return -1;
     }
     
-    WORD i;
+    Boolean = ((unsigned char)net_message.data[msg_readcount] ? true : false);
+    ++msg_readcount;
     
-    for (i = 0; i < Size; ++i)
-    {
-        String += (SBYTE)MSG_ReadByte();
-    }
+    return 1;
+}
 
-    // Don't return an empty string if there is no null terminator.
-    if (!MSG_BytesLeft())
+//
+// MSG_ReadFloat
+//
+// Read a 32bit floating point number
+SDWORD MSG_ReadFloat(float &Float)
+{
+    union
+    {
+        int Integer;
+        float Float;
+    } FloatConverter;
+    
+    if (msg_readcount + 4 > net_message.cursize)
     {
         msg_badread = true;
         
         return -1;
     }
 
-    // Read the null terminator.
-    MSG_ReadByte();
+    FloatConverter.Integer = net_message.data[msg_readcount]
+                            + (net_message.data[msg_readcount+1]<<8)
+                            + (net_message.data[msg_readcount+2]<<16)
+                            + (net_message.data[msg_readcount+3]<<24);
 
-    return i;
+    msg_readcount += 4;
+    
+    Float = FloatConverter.Float;
+    
+    return 1;
 }
 
 //
@@ -913,4 +936,5 @@ void I_SetPort(netadr_t &addr, int port)
 }
 
 VERSION_CONTROL (i_net_cpp, "$Id$")
+
 
