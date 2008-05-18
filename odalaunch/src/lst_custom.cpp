@@ -40,7 +40,7 @@ enum
 };
 
 // Sorting arrow XPM images
-static char *SortArrowAscending[] =
+static const char *SortArrowAscending[] =
 {
     "16 15 3 1",
     "  c None",
@@ -64,7 +64,7 @@ static char *SortArrowAscending[] =
     "                "
 };
 
-static char *SortArrowDescending[] =
+static const char *SortArrowDescending[] =
 {
     "16 15 3 1",
     "  c None",
@@ -372,7 +372,7 @@ void wxAdvancedListCtrl::Sort(wxInt32 Column, wxInt32 Order, wxInt32 Lowest, wxI
         Item1Check.SetId(LowSection);
         GetItem(Item1Check);
         
-        while ((LowSection < HighSection) && 
+        while ((LowSection <= HighSection) && 
                (SortRoutine(Order, Item1Check, MiddleItem) < 0)) 
         {
             ++LowSection;
@@ -383,7 +383,7 @@ void wxAdvancedListCtrl::Sort(wxInt32 Column, wxInt32 Order, wxInt32 Lowest, wxI
         Item2Check.SetId(HighSection);
         GetItem(Item2Check);
 
-        while ((LowSection < HighSection) && 
+        while ((LowSection <= HighSection) && 
                (SortRoutine(Order, Item2Check, MiddleItem) > 0))
         { 
             --HighSection;
@@ -517,7 +517,7 @@ void wxAdvancedListCtrl::ColourList()
 // Our variation of InsertItem, so we can do magical things!
 long wxAdvancedListCtrl::ALCInsertItem(wxListItem &info)
 {
-    Sort();
+    //Sort();
 
     // TODO: We need to remember this item id, because the last item on the list
     // does not get sorted, we can't move sort either, because then the return 

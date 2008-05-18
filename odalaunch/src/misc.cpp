@@ -31,7 +31,7 @@
 #include "misc.h"
 
 /* XPM */
-static char *padlock_xpm[] = 
+static const char *padlock_xpm[] = 
 {
 "16 16 157 2 0 0",
 "   c #000000",
@@ -265,7 +265,8 @@ void AddServerToList(wxAdvancedListCtrl *list, Server &s, wxInt32 index, wxInt8 
     if (insert)    
     {
         li.SetColumn(serverlist_field_name);
-        list->SetColumnImage(li, (s.info.passworded ? 0 : -1));
+        // TODO: Uncomment when the server has a full password implementation
+        //list->SetColumnImage(li, (s.info.passworded ? 0 : -1));
         li.SetText(s.info.name);
         
         li.SetId(list->ALCInsertItem(li));
@@ -274,7 +275,8 @@ void AddServerToList(wxAdvancedListCtrl *list, Server &s, wxInt32 index, wxInt8 
     {
         li.SetId(index);
         li.SetColumn(serverlist_field_name);
-        list->SetColumnImage(li, (s.info.passworded ? 0 : -1));
+        // TODO: Uncomment when the server has a full password implementation
+        //list->SetColumnImage(li, (s.info.passworded ? 0 : -1));
         li.SetText(s.info.name);
         
         list->SetItem(li);
@@ -345,6 +347,8 @@ void AddServerToList(wxAdvancedListCtrl *list, Server &s, wxInt32 index, wxInt8 
     li.SetText(iwad);
     
     list->SetItem(li);
+    
+    list->Sort();
 }
 
 typedef enum
@@ -458,26 +462,20 @@ void AddPlayersToList(wxAdvancedListCtrl *list, Server &s)
             
             li.SetColumn(playerlist_field_team); 
             
-            li.SetBackgroundColour(*wxWHITE);
-            li.SetTextColour(*wxBLACK);
-            
             switch(s.info.playerinfo[i].team)
 			{
                 case 0:
-                    li.SetBackgroundColour(*wxWHITE);
                     li.SetTextColour(*wxBLUE);      
                     teamstr = _T("BLUE");
                     teamscore = s.info.teamplayinfo.bluescore;
                     break;
 				case 1:
-                    li.SetBackgroundColour(*wxWHITE);
                     li.SetTextColour(*wxRED);
                     teamstr = _T("RED");
 					teamscore = s.info.teamplayinfo.redscore;
 					break;
 				case 2:
                     // no gold in 'dem mountains boy.
-                    li.SetBackgroundColour(*wxWHITE);
                     li.SetTextColour(wxColor(255,200,40));
                     teamscore = s.info.teamplayinfo.goldscore;
                     teamstr = _T("GOLD");
@@ -498,7 +496,8 @@ void AddPlayersToList(wxAdvancedListCtrl *list, Server &s)
             
             list->SetItem(li);
         }
-            
+        
+        list->Sort();
     }
     
 }

@@ -31,6 +31,7 @@
 #include <algorithm>
 
 #ifdef WIN32
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #else
 #include <sys/stat.h>
@@ -1223,6 +1224,9 @@ std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> wadnames,
 
 	Z_Init();
 
+	gamestate_t oldgamestate = gamestate;
+	gamestate = GS_STARTUP; // prevent console from trying to use nonexistant font
+
 	wadfiles.clear();
 
 	std::string custwad;
@@ -1289,6 +1293,8 @@ std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> wadnames,
 	last_success = fails.empty();
 	last_wadnames = wadnames;
 	last_hashes = needhashes;
+
+	gamestate = oldgamestate; // GS_STARTUP would prevent netcode connecting properly
 
 	return fails;
 }

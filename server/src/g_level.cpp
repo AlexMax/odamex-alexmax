@@ -79,6 +79,8 @@ extern int mapchange;
 // Start time for timing demos
 int starttime;
 
+BOOL firstmapinit = true; // Nes - Avoid drawing same init text during every rebirth in single-player servers.
+
 extern BOOL netdemo;
 BOOL savegamerestore;
 
@@ -555,7 +557,7 @@ EXTERN_CVAR (maxplayers)
 void G_PlayerReborn (player_t &player);
 void SV_ServerSettingChange();
 
-void G_InitNew (char *mapname)
+void G_InitNew (const char *mapname)
 {
 	size_t i;
 
@@ -729,6 +731,9 @@ void G_DoLoadLevel (int position)
 {
 	static int lastposition = 0;
 	size_t i;
+	
+	if (position != -1)
+		firstmapinit = true;
 
 	if (position == -1)
 		position = lastposition;
@@ -737,7 +742,10 @@ void G_DoLoadLevel (int position)
 
 	G_InitLevelLocals ();
 
-	Printf (PRINT_HIGH, "--- %s: \"%s\" ---\n", level.mapname, level.level_name);
+	if (firstmapinit) {
+		Printf (PRINT_HIGH, "--- %s: \"%s\" ---\n", level.mapname, level.level_name);
+		firstmapinit = false;
+	}
 
 	if (wipegamestate == GS_LEVEL)
 		wipegamestate = GS_FORCEWIPE;
@@ -768,6 +776,13 @@ void G_DoLoadLevel (int position)
 		players[i].deathcount = 0; // [Toke - Scores - deaths]
 		players[i].killcount = 0; // [deathz0r] Coop kills
 		players[i].points = 0;
+	}
+
+	// [deathz0r] It's a smart idea to reset the team points
+	if (teamplay)
+	{
+		for (size_t i = 0; i < NUMTEAMS; i++)
+			TEAMpoints[i] = 0;
 	}
 
 	// initialize the msecnode_t freelist.					phares 3/25/98
