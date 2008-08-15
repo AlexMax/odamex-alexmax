@@ -995,7 +995,7 @@ void WI_Ticker (void)
 	switch (state)
 	{
 		case StatCount:
-			if (deathmatch)
+			if (gametype != GM_COOP)
 				WI_updateNoState();
 			else
 				WI_updateStats();

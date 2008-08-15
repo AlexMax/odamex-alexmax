@@ -85,10 +85,8 @@ void	G_DoSaveGame (void);
 void	CL_RunTics (void);
 
 EXTERN_CVAR (skill)
-EXTERN_CVAR (deathmatch)
 EXTERN_CVAR (novert)
 EXTERN_CVAR (monstersrespawn)
-EXTERN_CVAR (teamplay)
 
 EXTERN_CVAR (chasedemo)
 
@@ -389,7 +387,7 @@ END_COMMAND (weapprev)
 
 BEGIN_COMMAND (spynext)
 {
-	extern bool ctfmode, st_firsttime;
+	extern bool st_firsttime;
 
 	size_t curr;
 	size_t s = players.size();
@@ -412,8 +410,7 @@ BEGIN_COMMAND (spynext)
 			break;
 		}
 		else if (consoleplayer().spectator ||
-				(!deathmatch || ((teamplay || ctfmode)
-				&& players[curr].userinfo.team == consoleplayer().userinfo.team)))
+				(gametype != GM_DM && players[curr].userinfo.team == consoleplayer().userinfo.team))
 		{
 			displayplayer_id = players[curr].id;
 			break;
@@ -1297,7 +1294,7 @@ void G_DeathMatchSpawnPlayer (player_t &player)
 	int selections;
 	mapthing2_t *spot;
 
-	if(!serverside || !deathmatch)
+	if(!serverside || gametype == GM_COOP)
 		return;
 
 	//if (!ctfmode)
@@ -1394,7 +1391,7 @@ void G_DoReborn (player_t &player)
 		player.mo->player = NULL;
 
 	// spawn at random spot if in death match
-	if (deathmatch)
+	if (gametype != GM_COOP)
 	{
 		G_DeathMatchSpawnPlayer (player);
 		return;
@@ -1676,7 +1673,7 @@ void G_BeginRecording (void)
     *demo_p++ = skill-1;
     *demo_p++ = episode;
     *demo_p++ = mapid;
-    *demo_p++ = deathmatch;
+    *demo_p++ = gametype;
     *demo_p++ = monstersrespawn;
     *demo_p++ = fastmonsters;
     *demo_p++ = nomonsters;
@@ -1928,7 +1925,7 @@ void G_DoPlayDemo (bool justStreamInput)
 		skill = s;
 		byte episode = *demo_p++;
 		byte map = *demo_p++;
-		deathmatch = *demo_p++;
+		gametype = *demo_p++;
 		monstersrespawn = *demo_p++;
 		fastmonsters = *demo_p++;
 		nomonsters = *demo_p++;
@@ -2151,7 +2148,7 @@ BOOL CheckIfExitIsGood (AActor *self)
         if(players[i].fragcount == fraglimit)
             break;
 
-    if (deathmatch && self)
+    if (gametype != GM_COOP && self)
     {
         if (!allowexit && fragexitswitch && i == players.size())
             return false;

@@ -275,7 +275,6 @@ END_COMMAND (wad)
 
 EXTERN_CVAR(allowexit)
 EXTERN_CVAR(nomonsters)
-EXTERN_CVAR(deathmatch)
 
 void G_DoNewGame (void)
 {
@@ -296,7 +295,7 @@ void G_DoNewGame (void)
 	serverside = true;
 	allowexit = "1";
 	nomonsters = "0";
-	deathmatch = "0";
+	gametype = "0";
 
 	players.clear();
 	players.push_back(player_t());
@@ -463,7 +462,7 @@ void G_DoCompleted (void)
 	strncpy (wminfo.lname0, level.info->pname, 8);
 	strncpy (wminfo.current, level.mapname, 8);
 
-	if (deathmatch &&
+	if (gametype != GM_COOP &&
 		!(level.flags & LEVEL_CHANGEMAPCHEAT)) {
 		strncpy (wminfo.next, level.mapname, 8);
 		strncpy (wminfo.lname1, level.info->pname, 8);
@@ -640,7 +639,7 @@ void G_WorldDone (void)
 		else
 			nextcluster = FindClusterInfo (FindLevelInfo (level.secretmap)->cluster);
 
-		if (nextcluster->cluster != level.cluster && !deathmatch) {
+		if (nextcluster->cluster != level.cluster && gametype == GM_COOP) {
 			// Only start the finale if the next level's cluster is different
 			// than the current one and we're not in deathmatch.
 			if (nextcluster->entertext) {

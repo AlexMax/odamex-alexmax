@@ -67,12 +67,10 @@ struct serverinfo_t     // Server information structure
     wxString        iwad;           // The main game file
     wxString        iwad_hash;      // IWAD hash
     wxString        *pwads;         // Array of PWAD file names
-    wxInt8          gametype;       // Gametype (0 = Coop, 1 = DM)
+    wxInt8          gametype;       // Gametype (0 = Coop, 1 = DM, 2 = TeamDM, 3 = CTF)
     wxUint8         gameskill;      // Gameskill
-    bool            teamplay;       // Teamplay enabled?
     player_t        *playerinfo;    // Player information array, use numplayers
     wxString        *wad_hashes;    // IWAD and PWAD hashes
-    bool            ctf;            // CTF enabled?
     wxString        webaddr;        // Website address of server
     teamplay_t      teamplayinfo;   // Teamplay information if enabled
     wxUint16        version;

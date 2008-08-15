@@ -26,12 +26,8 @@
 // Server settings
 // -----------------------
 
-// Deathmatch game mode
-CVAR (deathmatch,		"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
-// Teamplay game mode
-CVAR (teamplay,			"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
-// Capture The Flag game mode
-CVAR (usectf,			"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
+// Game mode
+CVAR (gametype,			"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_NOENABLEDISABLE)
 // (Teamplay/CTF): Players can injure others on the same team
 CVAR (friendlyfire,		"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 // (Teamplay/CTF): Game ends when team score is reached

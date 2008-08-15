@@ -326,14 +326,13 @@ void AddServerToList(wxAdvancedListCtrl *list, Server &s, wxInt32 index, wxInt8 
     // what game type do we like to play
     wxString gmode = _T("");
 
-    if (s.info.gametype == 0)
-        gmode = _T("COOP");
-    else if (s.info.gametype == 1)
-        gmode = _T("DM");
-    if(s.info.gametype && s.info.teamplay)
-        gmode = _T("TEAM DM");
-    if(s.info.ctf)
-        gmode = _T("CTF");
+	switch(s.info.gametype) {
+		case 0: gmode = _T("COOP"); break;
+		case 1: gmode = _T("DM"); break;
+		case 2: gmode = _T("TEAM DM"); break;
+		case 3: gmode = _T("CTF"); break;
+		default: break;
+	}
 
     li.SetColumn(serverlist_field_type);
     li.SetText(gmode);
@@ -382,7 +381,7 @@ void AddPlayersToList(wxAdvancedListCtrl *list, Server &s)
 {   
     SetupPlayerListHeader(list);
     
-    if (s.info.teamplay)
+    if (s.info.gametype == 2 || s.info.gametype == 3)
     {
         list->InsertColumn(playerlist_field_team,
                            _T("Team"),
@@ -455,7 +454,7 @@ void AddPlayersToList(wxAdvancedListCtrl *list, Server &s)
         
         list->SetItem(li);
         
-        if (s.info.teamplay)
+        if (s.info.gametype == 2 || s.info.gametype == 3)
 		{
             wxString teamstr = _T("UNKNOWN");
             wxInt32 teamscore = 0;

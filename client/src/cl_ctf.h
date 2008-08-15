@@ -76,8 +76,6 @@ extern	DCanvas	   *screen;
 extern	int			ST_WIDTH;
 extern	int			ST_HEIGHT;
 
-extern	bool		ctfmode;
-
 //	Local Function Prototypes
 void	CL_CTFEvent		(void);
 

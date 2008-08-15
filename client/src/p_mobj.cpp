@@ -1002,7 +1002,7 @@ void P_RespawnSpecials (void)
 		return;
 
 	// only respawn items in deathmatch
-	if (!deathmatch || !itemsrespawn)
+	if (gametype == GM_COOP || !itemsrespawn)
 		return;
 
 	// nothing left to respawn?
@@ -1126,7 +1126,7 @@ void P_SpawnPlayer (player_t &player, mapthing2_t *mthing)
 		p->mo->flags |= MF_SPECTATOR;
 
 	// give all cards in death match mode
-	if (deathmatch)
+	if (gametype != GM_COOP)
 		for (int i = 0; i < NUMCARDS; i++)
 			p->cards[i] = true;
 
@@ -1186,7 +1186,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		playerstarts.push_back(*mthing);
 		player_t &p = idplayer(playernum+1);
 
-		if (!deathmatch &&
+		if (gametype == GM_COOP &&
 			(validplayer(p) && p.ingame()))
 		{
 			P_SpawnPlayer (p, mthing);
@@ -1203,7 +1203,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	else if (mthing->type >= 5080 && mthing->type <= 5082)
 		return;
 
-	if (deathmatch)
+	if (gametype != GM_COOP)
 	{
 		if (!(mthing->flags & MTF_DEATHMATCH))
 			return;
@@ -1271,7 +1271,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	}
 
 	// don't spawn keycards and players in deathmatch
-	if (deathmatch && mobjinfo[i].flags & MF_NOTDMATCH)
+	if (gametype != GM_COOP && mobjinfo[i].flags & MF_NOTDMATCH)
 		return;
 
 	// don't spawn deathmatch weapons in offline single player mode

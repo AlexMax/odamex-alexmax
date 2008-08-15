@@ -30,7 +30,6 @@
 
 bool G_CheckSpot (player_t &player, mapthing2_t *mthing);
 
-EXTERN_CVAR (usectf)
 EXTERN_CVAR (blueteam)
 EXTERN_CVAR (redteam)
 EXTERN_CVAR (goldteam)
@@ -44,8 +43,6 @@ EXTERN_CVAR (ctf_flagtimeout)
 flagdata CTFdata[NUMFLAGS];
 int TEAMpoints[NUMFLAGS];
 bool TEAMenabled[NUMFLAGS];
-
-bool ctfmode = false;
 
 // denis - this is a lot clearer than doubly nested switches
 static mobjtype_t flag_table[NUMFLAGS][NUMFLAGSTATES] =
@@ -81,12 +78,10 @@ static int ctf_points[NUM_CTF_SCORE] =
 //
 void CTF_Load (void)
 {
-	if (!usectf) return;
+	if (gametype != GM_CTF) return;
 
 	for(size_t i = 0; i < NUMFLAGS; i++)
 		TEAMpoints[i] = 0;
-
-	ctfmode = true;
 }
 
 //
@@ -95,7 +90,6 @@ void CTF_Load (void)
 //
 void CTF_Unload (void)
 {
-	ctfmode = false;
 }
 
 //
@@ -422,7 +416,7 @@ void CTF_CheckFlags (player_t &player)
 //
 void CTF_RememberFlagPos (mapthing2_t *mthing)
 {
-	if (!ctfmode)
+	if (gametype != GM_CTF)
 		return;
 
 	flag_t f;

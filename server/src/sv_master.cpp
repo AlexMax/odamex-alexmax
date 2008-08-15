@@ -357,10 +357,8 @@ void SV_SendServerInfo()
 	for (i = 1; i < numwads; ++i)
 		MSG_WriteString(&ml_message, wadnames[i].c_str());
 
-	MSG_WriteByte(&ml_message, (int)deathmatch);
+	MSG_WriteByte(&ml_message, (int)gametype);
 	MSG_WriteByte(&ml_message, (int)skill);
-    MSG_WriteByte(&ml_message, (int)ctfmode ? 1 : teamplay);
-	MSG_WriteByte(&ml_message, (int)ctfmode);
 
 	for (i = 0; i < players.size(); ++i)
 	{
@@ -370,7 +368,7 @@ void SV_SendServerInfo()
 			MSG_WriteShort(&ml_message, players[i].fragcount);
 			MSG_WriteLong(&ml_message, players[i].ping);
 
-			if (teamplay || ctfmode)
+			if (gametype == GM_TEAMDM || gametype == GM_CTF)
 				MSG_WriteByte(&ml_message, players[i].userinfo.team);
 			else
 				MSG_WriteByte(&ml_message, TEAM_NONE);
@@ -382,7 +380,7 @@ void SV_SendServerInfo()
 
 	MSG_WriteString(&ml_message, website.cstring());
 
-	if (ctfmode || teamplay)
+	if (gametype == GM_TEAMDM || gametype == GM_CTF)
 	{
 		MSG_WriteLong(&ml_message, scorelimit);
 		

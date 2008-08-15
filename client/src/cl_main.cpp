@@ -108,12 +108,10 @@ EXTERN_CVAR (scorelimit)
 EXTERN_CVAR (monstersrespawn)
 EXTERN_CVAR (itemsrespawn)
 EXTERN_CVAR (allowcheats)
-EXTERN_CVAR (teamplay)
 EXTERN_CVAR (allowtargetnames)
 EXTERN_CVAR(cl_mouselook)
 EXTERN_CVAR(sv_freelook)
 EXTERN_CVAR (interscoredraw)
-EXTERN_CVAR (usectf)
 EXTERN_CVAR(cl_connectalert)
 
 void CL_RunTics (void);
@@ -161,7 +159,6 @@ void CL_QuitNetGame(void)
 
 	memset (&serveraddr, 0, sizeof(serveraddr));
 	connected = false;
-	ctfmode = false;
 	gameaction = ga_fullconsole;
 	noservermsgs = false;
 	AM_Stop();
@@ -372,19 +369,6 @@ BEGIN_COMMAND (kill)
         Printf (PRINT_HIGH, "You must run the server with '+set allowcheats 1' to enable this command.\n");
 }
 END_COMMAND (kill)
-
-
-BEGIN_COMMAND (gamemode)
-{
-						Printf (PRINT_HIGH,	"----------------------[Game Modes]----- \n");
-						Printf (PRINT_HIGH,	" Deathmatch - %d \n", deathmatch.value());
-    if (ctfmode)        Printf (PRINT_HIGH, " CTF	     - ON \n");
-    else                Printf (PRINT_HIGH, " CTF        - OFF \n");
-    if (teamplay)       Printf (PRINT_HIGH, " TeamPlay   - ON \n");
-    else                Printf (PRINT_HIGH, " TeamPlay   - OFF \n");
-						Printf (PRINT_HIGH,	"--------------------------------------- \n");
-}
-END_COMMAND (gamemode)
 
 
 BEGIN_COMMAND (serverinfo)
@@ -619,7 +603,7 @@ void CL_UpdateFrags(void)
 {
 	player_t &p = CL_FindPlayer(MSG_ReadByte());
 
-	if(deathmatch)
+	if(gametype != GM_COOP)
 		p.fragcount = MSG_ReadShort();
 	else
 		p.killcount = MSG_ReadShort();
@@ -778,8 +762,6 @@ bool CL_PrepareConnect(void)
 
 	MSG_ReadByte();							// gametype
 	MSG_ReadByte();							// skill
-	recv_teamplay_stats |= MSG_ReadByte();	// teamplay
-	recv_teamplay_stats |= MSG_ReadByte();	// ctf
 
 	for(i = 0; i < playercount; i++)
 	{
@@ -799,7 +781,7 @@ bool CL_PrepareConnect(void)
 	MSG_ReadString();
 
 	// Receive conditional teamplay information
-	if (recv_teamplay_stats)
+	if (gametype == GM_TEAMDM || gametype == GM_CTF)
 	{
 		MSG_ReadLong();
 
@@ -1346,7 +1328,7 @@ void CL_SpawnPlayer()
 	P_SetupPsprites (p);
 
 	// give all cards in death match mode
-	if(deathmatch)
+	if(gametype != GM_COOP)
 		for (i = 0; i < NUMCARDS; i++)
 			p->cards[i] = true;
 }
@@ -1847,10 +1829,6 @@ void CL_GetServerSettings(void)
 			
 			var = cvar_t::FindCVar (CvarName.c_str(), &prev);
 			
-			// CTF Hack, please fix :'(
-			if (var == &usectf)
-                ctfmode = (CvarValue.c_str()[0] == '1') ? true : false;
-			
 			// GhostlyDeath <June 19, 2008> -- Read CVAR or dump it               
 			if (var)
 			{
@@ -1871,14 +1849,14 @@ void CL_GetServerSettings(void)
 	}
 	else
 	{
-		ctfmode = MSG_ReadByte() ? true : false;
+		//ctfmode = MSG_ReadByte() ? true : false;
 
 		// General server settings
 		maxclients.Set((int)MSG_ReadShort());
 
 		// Game settings
 		allowcheats.Set((BOOL)MSG_ReadByte());
-		deathmatch.Set((BOOL)MSG_ReadByte());
+		//deathmatch.Set((BOOL)MSG_ReadByte());
 		fraglimit.Set((int)MSG_ReadShort());
 		timelimit.Set((int)MSG_ReadShort());
 
@@ -1901,7 +1879,7 @@ void CL_GetServerSettings(void)
 		// Teamplay/CTF
 		scorelimit.Set((int)MSG_ReadShort());
 		friendlyfire.Set((BOOL)MSG_ReadByte());
-		teamplay.Set(MSG_ReadByte());
+		//teamplay.Set(MSG_ReadByte());
 	
 		allowtargetnames.Set((BOOL)MSG_ReadByte());
 
@@ -2560,7 +2538,7 @@ void CL_RunTics (void)
 		TicCount = 0;
 	}
 
-	if (ctfmode)
+	if (gametype == GM_CTF)
 		CTF_RunTics ();
 }
 

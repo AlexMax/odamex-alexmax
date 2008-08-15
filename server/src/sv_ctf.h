@@ -102,7 +102,6 @@ mapthing2_t    *CTF_SelectTeamPlaySpot	(player_t &player, int selections);
 EXTERN_CVAR (scorelimit)
 
 //	Server-Side CTF Game Data
-extern bool ctfmode;
 extern flagdata CTFdata[NUMFLAGS];
 extern int TEAMpoints[NUMFLAGS];
 extern bool TEAMenabled[NUMFLAGS];

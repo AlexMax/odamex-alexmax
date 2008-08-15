@@ -238,7 +238,7 @@ BEGIN_COMMAND (map)
 		}
 	}
 	
-	if (deathmatch)
+	if (gametype != GM_COOP)
 	{
 		for (size_t i = 0; i < players.size(); i++)
 		{
@@ -613,7 +613,7 @@ void G_ChangeMap (void)
         }
 
 		// if deathmatch, stay on same level
-		if(deathmatch)
+		if(gametype != GM_COOP)
 			next = level.mapname;
 		else
 			if(secretexit && W_CheckNumForName (level.secretmap) != -1)
@@ -668,7 +668,7 @@ void G_ChangeMap (void)
 	if(strlen(endmapscript.cstring()))
 		AddCommandString(endmapscript.cstring(), true);
 
-	if (deathmatch) {
+	if (gametype != GM_COOP) {
 		// make everyone a spectator again
 		for (size_t i = 0; i < players.size(); i++)
 		{
@@ -722,7 +722,7 @@ void G_DoNewGame (void)
 		if(!players[i].ingame())
 			continue;
 
-		if (teamplay || ctfmode)
+		if (gametype == GM_TEAMDM || gametype == GM_CTF)
 			SV_CheckTeam(players[i]);
 		else
 			players[i].userinfo.color = players[i].prefcolor;
@@ -756,12 +756,11 @@ void G_InitNew (const char *mapname)
 			LevelInfos[i].flags &= ~LEVEL_VISITED;
 	}
 
-	bool old_deathmatch = deathmatch ? true : false;
-	bool old_ctfmode = ctfmode ? true : false;
+	int old_gametype = gametype;
 
 	cvar_t::UnlatchCVars ();
 
-	if(old_deathmatch != (deathmatch ? true : false))
+	if(old_gametype != gametype || gametype != GM_COOP)
 		unnatural_level_progression = true;
 
 	SV_ServerSettingChange();
@@ -840,8 +839,8 @@ void G_InitNew (const char *mapname)
 	G_DoLoadLevel (0);
 
 	// denis - hack to fix ctfmode, as it is only known after the map is processed!
-	if(old_ctfmode != ctfmode)
-		SV_ServerSettingChange();
+	//if(old_ctfmode != ctfmode)
+	//	SV_ServerSettingChange();
 }
 
 //
@@ -961,7 +960,7 @@ void G_DoLoadLevel (int position)
 	}
 
 	// [deathz0r] It's a smart idea to reset the team points
-	if (teamplay)
+	if (gametype == GM_TEAMDM || gametype == GM_CTF)
 	{
 		for (size_t i = 0; i < NUMTEAMS; i++)
 			TEAMpoints[i] = 0;
@@ -1049,7 +1048,7 @@ void G_WorldDone (void)
 		else
 			nextcluster = FindClusterInfo (FindLevelInfo (level.secretmap)->cluster);
 
-		if (nextcluster->cluster != level.cluster && !deathmatch) {
+		if (nextcluster->cluster != level.cluster && gametype == GM_COOP) {
 			// Only start the finale if the next level's cluster is different
 			// than the current one and we're not in deathmatch.
 			if (nextcluster->entertext) {
