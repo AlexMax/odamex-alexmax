@@ -641,7 +641,7 @@ void dlgMain::OnOpenOdaGet(wxCommandEvent &event)
 // About information
 void dlgMain::OnAbout(wxCommandEvent& event)
 {
-    wxString strAbout = _T("Odamex Launcher 0.4.2 - "
+    wxString strAbout = _T("Odamex Launcher 0.4.1 - "
                             "Copyright 2008 The Odamex Team");
     
     wxMessageBox(strAbout, strAbout);

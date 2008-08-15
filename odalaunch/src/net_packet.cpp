@@ -188,10 +188,12 @@ void Server::ResetData()
 
 	info.gametype = -1;
 	info.gameskill = 0;
+	info.teamplay = false;
 
 	info.playerinfo = NULL;
     info.wad_hashes = NULL;
     
+	info.ctf = false;
 	info.webaddr = _T("");
 	
 	info.teamplayinfo.scorelimit = 0;
@@ -251,6 +253,11 @@ wxInt32 Server::Parse()
         
     Socket.Read8(info.gametype);
     Socket.Read8(info.gameskill);
+    Socket.ReadBool(info.teamplay); 
+    Socket.ReadBool(info.ctf);
+    
+    // hack to enable teamplay if disabled and ctf is enabled
+    info.teamplay |= info.ctf;
     
     if (info.numplayers > 0)
     {          
@@ -293,7 +300,7 @@ wxInt32 Server::Parse()
         
     Socket.ReadString(info.webaddr);
         
-    if (info.gametype == 2 || info.gametype == 3)
+    if ((info.teamplay) || (info.ctf && info.teamplay))
     {
         Socket.Read32(info.teamplayinfo.scorelimit);
             
