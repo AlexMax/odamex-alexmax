@@ -357,8 +357,10 @@ void SV_SendServerInfo()
 	for (i = 1; i < numwads; ++i)
 		MSG_WriteString(&ml_message, wadnames[i].c_str());
 
-	MSG_WriteByte(&ml_message, (int)gametype);
+	MSG_WriteByte(&ml_message, (int)(gametype == GM_DM));
 	MSG_WriteByte(&ml_message, (int)skill);
+	MSG_WriteByte(&ml_message, (int)(gametype == GM_TEAMDM));
+	MSG_WriteByte(&ml_message, (int)(gametype == GM_CTF));
 
 	for (i = 0; i < players.size(); ++i)
 	{
