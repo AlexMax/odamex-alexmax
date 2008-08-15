@@ -295,7 +295,7 @@ void G_DoNewGame (void)
 	serverside = true;
 	allowexit = "1";
 	nomonsters = "0";
-	gametype = "0";
+	gametype = GM_COOP;
 
 	players.clear();
 	players.push_back(player_t());

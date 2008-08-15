@@ -83,10 +83,10 @@ extern	BOOL			multiplayer;
 // Game mode
 EXTERN_CVAR (gametype)
 
-#define GM_COOP		0
-#define GM_DM		1
-#define GM_TEAMDM	2
-#define GM_CTF		3
+#define GM_COOP		0.0f
+#define GM_DM		1.0f
+#define GM_TEAMDM	2.0f
+#define GM_CTF		3.0f
 
 
 // -------------------------

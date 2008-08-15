@@ -1814,6 +1814,11 @@ void CL_ReadPacketHeader(void)
 	packetnum++;
 }
 
+// Nes - Following cvars are for maintaining compatability only.
+CVAR (usectf, "0", CVAR_SERVERINFO)
+CVAR (teamplay, "0", CVAR_SERVERINFO)
+CVAR (deathmatch, "0", CVAR_SERVERINFO)
+
 void CL_GetServerSettings(void)
 {
 	cvar_t *var = NULL, *prev = NULL;
@@ -1847,17 +1852,25 @@ void CL_GetServerSettings(void)
                 var->Set(CvarValue.c_str());
 			}
 		}
+					
+		// Nes - Maintain compatability with severs using deathmatch/teamplay/usectf.
+		if (SERVERREL < 2) {
+			if (usectf) gametype = GM_CTF;
+			else if (teamplay) gametype = GM_TEAMDM;
+			else if (deathmatch) gametype = GM_DM;
+			else gametype = GM_COOP;
+		}
 	}
 	else
 	{
-		//ctfmode = MSG_ReadByte() ? true : false;
+		MSG_ReadByte(); //ctfmode = MSG_ReadByte() ? true : false;
 
 		// General server settings
 		maxclients.Set((int)MSG_ReadShort());
 
 		// Game settings
 		allowcheats.Set((BOOL)MSG_ReadByte());
-		//deathmatch.Set((BOOL)MSG_ReadByte());
+		MSG_ReadByte(); //deathmatch.Set((BOOL)MSG_ReadByte());
 		fraglimit.Set((int)MSG_ReadShort());
 		timelimit.Set((int)MSG_ReadShort());
 
@@ -1880,7 +1893,7 @@ void CL_GetServerSettings(void)
 		// Teamplay/CTF
 		scorelimit.Set((int)MSG_ReadShort());
 		friendlyfire.Set((BOOL)MSG_ReadByte());
-		//teamplay.Set(MSG_ReadByte());
+		MSG_ReadByte(); //teamplay.Set(MSG_ReadByte());
 	
 		allowtargetnames.Set((BOOL)MSG_ReadByte());
 
