@@ -743,6 +743,7 @@ bool CL_PrepareConnect(void)
 	DWORD server_token = MSG_ReadLong();
 	std::string server_host = MSG_ReadString();
 
+	byte recv_teamplay_stats = 0;
 	gameversiontosend = 0;
 
 	byte playercount = MSG_ReadByte(); // players
@@ -761,8 +762,8 @@ bool CL_PrepareConnect(void)
 
 	MSG_ReadByte();							// deathmatch
 	MSG_ReadByte();							// skill
-	MSG_ReadByte();							// teamplay
-	MSG_ReadByte();							// ctf
+	recv_teamplay_stats |= MSG_ReadByte();	// teamplay
+	recv_teamplay_stats |= MSG_ReadByte();	// ctf
 
 	for(i = 0; i < playercount; i++)
 	{
@@ -782,7 +783,7 @@ bool CL_PrepareConnect(void)
 	MSG_ReadString();
 
 	// Receive conditional teamplay information
-	if (gametype == GM_TEAMDM || gametype == GM_CTF)
+	if (recv_teamplay_stats)
 	{
 		MSG_ReadLong();
 
