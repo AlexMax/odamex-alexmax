@@ -1815,14 +1815,12 @@ void CL_ReadPacketHeader(void)
 	packetnum++;
 }
 
-// Nes - Following cvars are for maintaining compatability only.
-CVAR (usectf, "0", CVAR_SERVERINFO)
-CVAR (teamplay, "0", CVAR_SERVERINFO)
-CVAR (deathmatch, "0", CVAR_SERVERINFO)
-
 void CL_GetServerSettings(void)
 {
 	cvar_t *var = NULL, *prev = NULL;
+	
+	// Nes - Maintain compatability with severs using deathmatch/teamplay/usectf.
+	unsigned int deathmatchcvar = 0, teamplaycvar = 0, usectfcvar = 0;
 	
 	// GhostlyDeath <June 19, 2008> -- If 0.4.1+ use string list instead
 	if ((SERVERMAJ >= 0) &&
@@ -1851,14 +1849,25 @@ void CL_GetServerSettings(void)
                                   CVAR_SERVERINFO | CVAR_AUTO | CVAR_UNSETTABLE);
                                   
                 var->Set(CvarValue.c_str());
+                
+				// Nes - Maintain compatability with severs using deathmatch/teamplay/usectf.
+				if (SERVERMIN == 4 && SERVERREL < 2 && strcmp(CvarValue.c_str(), "0") != 0) {
+					if (strcmp(CvarName.c_str(), "deathmatch") == 0) {
+						deathmatchcvar = 1;
+					} else if (strcmp(CvarName.c_str(), "teamplay") == 0) {
+						teamplaycvar = 1;
+					} else if (strcmp(CvarName.c_str(), "usectf") == 0) {
+						usectfcvar = 1;
+					}
+				}
 			}
 		}
 					
 		// Nes - Maintain compatability with severs using deathmatch/teamplay/usectf.
-		if (SERVERREL < 2) {
-			if (usectf) gametype = GM_CTF;
-			else if (teamplay) gametype = GM_TEAMDM;
-			else if (deathmatch) gametype = GM_DM;
+		if (SERVERMIN == 4 && SERVERREL < 2) {
+			if (usectfcvar) gametype = GM_CTF;
+			else if (teamplaycvar) gametype = GM_TEAMDM;
+			else if (deathmatchcvar) gametype = GM_DM;
 			else gametype = GM_COOP;
 		}
 	}
