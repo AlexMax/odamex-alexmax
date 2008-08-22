@@ -1164,6 +1164,7 @@ void P_SpawnPlayer (player_t &player, mapthing2_t *mthing)
 }
 
 EXTERN_CVAR(maxplayers)
+EXTERN_CVAR(sv_teamstarts_noteam)
 
 //
 // P_SpawnMapThing
@@ -1183,7 +1184,8 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		return;
 
 	// count deathmatch start positions
-	if (mthing->type == 11)
+	if (mthing->type == 11 || ((mthing->type == 5080 || mthing->type == 5081 || mthing->type == 5082))
+		&& sv_teamstarts_noteam)
 	{
 		if (deathmatch_p == &deathmatchstarts[MaxDeathmatchStarts])
 		{
@@ -1199,7 +1201,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	}
 
 	// [Toke - CTF - starts] CTF starts - count Blue team start positions
-	if (mthing->type == 5080)
+	if (mthing->type == 5080 && !sv_teamstarts_noteam)
 	{
 		if (blueteam_p == &blueteamstarts[MaxBlueTeamStarts])
 		{
@@ -1214,7 +1216,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	}
 
 	// [Toke - CTF - starts] CTF starts - count Red team start positions
-	if (mthing->type == 5081)
+	if (mthing->type == 5081 && !sv_teamstarts_noteam)
 	{
 		if (redteam_p == &redteamstarts[MaxRedTeamStarts])
 		{
@@ -1229,7 +1231,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	}
 
 	// [Toke - CTF - starts] CTF starts - count Gold team start positions
-	if (mthing->type == 5082)
+	if (mthing->type == 5082 && !sv_teamstarts_noteam)
 	{
 		if (goldteam_p == &goldteamstarts[MaxGoldTeamStarts])
 		{
