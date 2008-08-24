@@ -537,7 +537,7 @@ void CTF_Sound (flag_t f, flag_score_t event)
 	{
 		const char *snd = flag_sound[event][f == (flag_t)i];
 		if(snd && *snd)
-			SV_SoundTeam (CHAN_VOICE, snd, ATTN_NONE, i);
+			SV_SoundTeam (CHAN_ANNOUNCER, snd, ATTN_NONE, i);
 	}
 }
 
