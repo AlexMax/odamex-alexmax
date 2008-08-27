@@ -30,11 +30,9 @@
 
 bool G_CheckSpot (player_t &player, mapthing2_t *mthing);
 
-EXTERN_CVAR (blueteam)
-EXTERN_CVAR (redteam)
-EXTERN_CVAR (goldteam)
-
 extern int shotclock;
+
+EXTERN_CVAR (teamsinplay)
 
 EXTERN_CVAR (ctf_manualreturn)
 EXTERN_CVAR (ctf_flagathometoscore)
@@ -42,7 +40,6 @@ EXTERN_CVAR (ctf_flagtimeout)
 
 flagdata CTFdata[NUMFLAGS];
 int TEAMpoints[NUMFLAGS];
-bool TEAMenabled[NUMFLAGS];
 
 // denis - this is a lot clearer than doubly nested switches
 static mobjtype_t flag_table[NUMFLAGS][NUMFLAGSTATES] =
@@ -71,26 +68,6 @@ static int ctf_points[NUM_CTF_SCORE] =
 	10, // CAPTURE
 	0 // DROP
 };
-
-//
-//	[Toke - CTF] CTF_Load
-//	Loads CTF mode
-//
-void CTF_Load (void)
-{
-	if (gametype != GM_CTF) return;
-
-	for(size_t i = 0; i < NUMFLAGS; i++)
-		TEAMpoints[i] = 0;
-}
-
-//
-//	[Toke - CTF] CTF_Unload
-//	Unloads CTF mode
-//
-void CTF_Unload (void)
-{
-}
 
 //
 //	[Toke - CTF] SV_CTFEvent
@@ -324,17 +301,6 @@ void SV_FlagDrop (player_t &player, flag_t f)
 }
 
 //
-//	[Toke - CTF] SV_FlagSetup
-//	Sets up flags at the start of each map
-//
-void SV_FlagSetup (void)
-{
-	for(size_t i = 0; i < NUMFLAGS; i++)
-		if(TEAMenabled[i])
-			CTF_SpawnFlag((flag_t)i);
-}
-
-//
 //	[Toke - CTF] CTF_RunTics
 //	Runs once per gametic when ctf is enabled
 //
@@ -425,7 +391,6 @@ void CTF_RememberFlagPos (mapthing2_t *mthing)
 	{
 		case ID_BLUE_FLAG: f = it_blueflag; break;
 		case ID_RED_FLAG: f = it_redflag; break;
-		case ID_GOLD_FLAG: f = it_goldflag; break;
 		default:
 			return;
 	}
@@ -447,7 +412,7 @@ mapthing2_t *CTF_SelectTeamPlaySpot (player_t &player, int selections)
     {
         case TEAM_BLUE:
         {
-            if (!blueteam)
+            if (gametype != GM_CTF && teamsinplay < 1)
                 break;
             
             for (int j = 0; j < MaxBlueTeamStarts; ++j)
@@ -463,7 +428,7 @@ mapthing2_t *CTF_SelectTeamPlaySpot (player_t &player, int selections)
         
         case TEAM_RED:
         {
-            if (!redteam)
+            if (gametype != GM_CTF && teamsinplay < 2)
                 break;
                 
             for (size_t j = 0; j < MaxRedTeamStarts; ++j)
@@ -479,7 +444,7 @@ mapthing2_t *CTF_SelectTeamPlaySpot (player_t &player, int selections)
 		
         case TEAM_GOLD:
         {
-            if (!goldteam)
+            if (gametype != GM_CTF && teamsinplay < 3)
                 break;
             
             for (size_t j = 0; j < MaxGoldTeamStarts; ++j)
@@ -500,14 +465,19 @@ mapthing2_t *CTF_SelectTeamPlaySpot (player_t &player, int selections)
         break;
     }
 
-    if (blueteam && MaxBlueTeamStarts)
-        return &blueteamstarts[0];
-    else 
-    if (redteam && MaxRedTeamStarts)
-        return &redteamstarts[0];
-    else
-    if (goldteam && MaxGoldTeamStarts)
-        return &goldteamstarts[0];
+	if (gametype == GM_CTF) {
+		if (MaxBlueTeamStarts) return &blueteamstarts[0];
+		else if (MaxRedTeamStarts) return &redteamstarts[0];
+	} else {
+		if (teamsinplay >= 1 && MaxBlueTeamStarts)
+			return &blueteamstarts[0];
+		else 
+		if (teamsinplay >= 2 && MaxRedTeamStarts)
+			return &redteamstarts[0];
+		else
+		if (teamsinplay >= 3 && MaxGoldTeamStarts)
+			return &goldteamstarts[0];
+	}
 
 	return NULL;
 }

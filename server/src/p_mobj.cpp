@@ -1293,38 +1293,19 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	}
 
 	// [Toke - CTF] Setup flag sockets
-	if (mthing->type >= ID_BLUE_FLAG && mthing->type <= ID_GOLD_FLAG) // Check for items with flag socks ID's
-	{
-		if (mthing->type == ID_BLUE_FLAG)
-		{
-			Printf (PRINT_HIGH, "Map contains BLUE FLAG, enabling TEAM BLUE \n");
-
-			CTF_Load ();
-			TEAMenabled[it_blueflag] = true;
-
-			CTF_RememberFlagPos (mthing);
-		}
-
-		if (mthing->type == ID_RED_FLAG)
-		{
-			Printf (PRINT_HIGH, "Map contains RED FLAG, enabling TEAM RED \n");
-
-			CTF_Load ();
-			TEAMenabled[it_redflag] = true;
-
-			CTF_RememberFlagPos (mthing);
-		}
-
-		if (mthing->type == ID_GOLD_FLAG)
-		{
-			Printf (PRINT_HIGH, "Map contains GOLD FLAG, enabling TEAM GOLD \n");
-
-			CTF_Load ();
-			TEAMenabled[it_goldflag] = true;
-
-			CTF_RememberFlagPos (mthing);
-		}
+	if (mthing->type == ID_BLUE_FLAG)
+	{	
+		CTF_RememberFlagPos (mthing);
+		CTF_SpawnFlag(it_blueflag);
 	}
+
+	if (mthing->type == ID_RED_FLAG)
+	{
+		
+		CTF_RememberFlagPos (mthing);
+		CTF_SpawnFlag(it_redflag);
+	}
+
 
 	// [RH] sound sequence overrides
 	if (mthing->type >= 1400 && mthing->type < 1410)

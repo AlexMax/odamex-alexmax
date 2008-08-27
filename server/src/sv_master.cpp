@@ -92,6 +92,8 @@ EXTERN_CVAR (cleanmaps)
 EXTERN_CVAR (fragexitswitch)
 //bond===========================
 
+EXTERN_CVAR (teamsinplay)
+
 EXTERN_CVAR (maxplayers)
 EXTERN_CVAR (password)
 EXTERN_CVAR (website)
@@ -388,10 +390,12 @@ void SV_SendServerInfo()
 		
 		for(size_t i = 0; i < NUMTEAMS; i++)
 		{
-			MSG_WriteByte(&ml_message, TEAMenabled[i]);
-
-			if (TEAMenabled[i])
+			if ((gametype == GM_CTF && i < 2) || (gametype != GM_CTF && i < teamsinplay)) {
+				MSG_WriteByte(&ml_message, 1);
 				MSG_WriteLong(&ml_message, TEAMpoints[i]);
+			} else {
+				MSG_WriteByte(&ml_message, 0);
+			}
 		}
 	}
 	

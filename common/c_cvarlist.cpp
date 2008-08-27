@@ -32,10 +32,8 @@ CVAR (gametype,			"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_
 CVAR (friendlyfire,		"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 // (Teamplay/CTF): Game ends when team score is reached
 CVAR (scorelimit,		"5", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
-// (Teamplay/CTF): Teams that are enabled
-CVAR (blueteam,			"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
-CVAR (redteam,			"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
-CVAR (goldteam,			"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
+// (Teamplay): Teams that are enabled
+CVAR (teamsinplay,		"2", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH) // numteams
 // (CTF) Flag settings
 CVAR (ctf_manualreturn,	"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 CVAR (ctf_flagathometoscore,	"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)

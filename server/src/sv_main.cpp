@@ -176,9 +176,6 @@ EXTERN_CVAR (infiniteammo)
 // Teamplay/CTF
 EXTERN_CVAR (scorelimit)
 EXTERN_CVAR (friendlyfire)
-EXTERN_CVAR (blueteam)
-EXTERN_CVAR (redteam)
-EXTERN_CVAR (goldteam)
 
 // Private server settings
 CVAR_FUNC_IMPL (password)
@@ -1117,6 +1114,8 @@ void SV_ForceSetTeam (player_t &who, team_t team)
 	MSG_WriteShort (&cl->reliablebuf, team);
 }
 
+EXTERN_CVAR (teamsinplay)
+
 //
 //	SV_CheckTeam
 //
@@ -1130,7 +1129,10 @@ void SV_CheckTeam (player_t &player)
 		case TEAM_RED:
 		case TEAM_GOLD:
 
-		if(TEAMenabled[player.userinfo.team])
+		if(gametype == GM_CTF && player.userinfo.team < 2)
+			break;
+
+		if(gametype != GM_CTF && player.userinfo.team < teamsinplay)
 			break;
 
 		default:
@@ -1148,7 +1150,7 @@ void SV_CheckTeam (player_t &player)
 			player.userinfo.color = (0x00FF0000);
 			break;
 		case TEAM_GOLD:
-			player.userinfo.color = (0x0000204E);
+			player.userinfo.color = (0x00FFFF00);
 			break;
 		default:
 			break;
@@ -1163,7 +1165,7 @@ void SV_CheckTeam (player_t &player)
 team_t SV_GoodTeam (void)
 {
 	for(size_t i = 0; i < NUMTEAMS; i++)
-		if(TEAMenabled[i])
+		if((gametype == GM_CTF && i < 2) || (gametype != GM_CTF && i < teamsinplay))
 			return (team_t)i;
 
 	I_Error ("Teamplay is set and no teams are enabled!\n");
@@ -3129,7 +3131,10 @@ void SV_ChangeTeam (player_t &player)  // [Toke - Teams]
 	if(team >= NUMTEAMS)
 		return;
 
-	if(!TEAMenabled[team])
+	if(gametype == GM_CTF && team >= 2)
+		return;
+
+	if(gametype != GM_CTF && team >= teamsinplay)
 		return;
 
 	team_t old_team = player.userinfo.team;
@@ -3148,7 +3153,7 @@ void SV_ChangeTeam (player_t &player)  // [Toke - Teams]
 			break;
 
 		case TEAM_GOLD:
-			player.userinfo.skin = R_FindSkin ("GoldTeam"); // denis - todo - test this
+			player.userinfo.skin = R_FindSkin ("GoldTeam");
 			break;
 
 		default:
@@ -3758,36 +3763,6 @@ BEGIN_COMMAND (playerinfo)
 	Printf (PRINT_HIGH, "--------------------------------------- \n");
 }
 END_COMMAND (playerinfo)
-
-//
-//	SV_MapEnd
-//
-//	Runs once at the END of each map BEFORE the map has been loaded,
-//
-void SV_MapEnd (void)
-{
-	if (gametype == GM_CTF)
-		CTF_Unload (); // [Toke - CTF - Setup] Turns off CTF mode at the end of each map
-}
-
-//
-//	SV_MapStart
-//
-//	Runs once at the START of each map AFTER the map has been loaded,
-//
-void SV_MapStart (void)
-{
-	if (gametype == GM_CTF)
-		SV_FlagSetup (); // [Toke - CTF - Setup] Sets up the flags at the start of each CTF map
-
-	// Setup teamplay teams
-	if (gametype == GM_TEAMDM)
-	{
-		TEAMenabled[TEAM_BLUE] = blueteam ? true : false;
-		TEAMenabled[TEAM_RED] = redteam ? true : false;
-		TEAMenabled[TEAM_GOLD] = goldteam ? true : false;
-	}
-}
 
 void OnChangedSwitchTexture (line_t *line, int useAgain)
 {

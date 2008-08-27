@@ -692,8 +692,6 @@ void G_DoNewGame (void)
 {
 	size_t i;
 
-	SV_MapEnd ();
-
 	for(i = 0; i < players.size(); i++)
 	{
 		if(!players[i].ingame())
@@ -714,8 +712,6 @@ void G_DoNewGame (void)
 	// run script at the start of each map
 	if(strlen(startmapscript.cstring()))
 		AddCommandString(startmapscript.cstring(), true);
-
-	SV_MapStart ();
 
 	for(i = 0; i < players.size(); i++)
 	{
@@ -903,10 +899,6 @@ void G_DoCompleted (void)
 //
 extern gamestate_t 	wipegamestate;
 extern float BaseBlendA;
-
-EXTERN_CVAR (blueteam)
-EXTERN_CVAR (redteam)
-EXTERN_CVAR (goldteam)
 
 void G_DoLoadLevel (int position)
 {

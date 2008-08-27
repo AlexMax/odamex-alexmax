@@ -30,7 +30,10 @@
 //	Map ID for flags
 #define	ID_BLUE_FLAG	5130
 #define	ID_RED_FLAG		5131
-#define	ID_GOLD_FLAG	5133
+// Reserve for maintaining the DOOM CTF standard.
+//#define ID_NEUTRAL_FLAG	5132
+//#define ID_TEAM3_FLAG	5133
+//#define ID_TEAM4_FLAG	5134
 
 // flags can only be in one of these states
 enum flag_state_t
@@ -82,12 +85,9 @@ enum flag_score_t
 void			SV_CTFEvent				(flag_t f, flag_score_t event, player_t &who);
 bool			SV_FlagTouch			(player_t &player, flag_t f, bool firstgrab);
 void			SV_SocketTouch			(player_t &player, flag_t f);
-void			SV_FlagSetup			(void);
 void			CTF_Connect				(player_t &player);
 
 //	Internal Events
-void			CTF_Load				(void);
-void			CTF_Unload				(void);
 void			CTF_RunTics				(void);
 void			CTF_SpawnFlag			(flag_t f);
 void			CTF_SpawnDroppedFlag	(flag_t f, int x, int y, int z);
@@ -104,7 +104,6 @@ EXTERN_CVAR (scorelimit)
 //	Server-Side CTF Game Data
 extern flagdata CTFdata[NUMFLAGS];
 extern int TEAMpoints[NUMFLAGS];
-extern bool TEAMenabled[NUMFLAGS];
 extern char *team_names[NUMTEAMS+2];
 
 #endif
