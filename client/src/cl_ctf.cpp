@@ -121,9 +121,6 @@ void CL_CTFEvent (void)
 			break;
 
 		case SCORE_RETURN:
-			CTFdata[flag].state = flag_home;
-			break;
-
 		case SCORE_CAPTURE:
 			if(validplayer(player))
 				CTF_CheckFlags(player);
