@@ -229,16 +229,16 @@ bool SV_FlagTouch (player_t &player, flag_t f, bool firstgrab)
 
 	if(player.userinfo.team == (team_t)f)
 	{
-		if(CTFdata[f].state == flag_home)
+		if(CTFdata[f].state == flag_home) // Do nothing.
 		{
 			// score?
-			for(size_t i = 0; i < NUMFLAGS; i++)
-				if(player.userinfo.team != (team_t)i && player.flags[i] && ctf_flagathometoscore)
-					SV_FlagScore(player, (flag_t)i);
+			//for(size_t i = 0; i < NUMFLAGS; i++)
+			//	if(player.userinfo.team != (team_t)i && player.flags[i] && ctf_flagathometoscore)
+			//		SV_FlagScore(player, (flag_t)i);
 
 			return false;
 		}
-		else
+		else // Returning team flag.
 		{
 			if (ctf_manualreturn)
 				SV_FlagGrab(player, f, firstgrab);
@@ -246,7 +246,7 @@ bool SV_FlagTouch (player_t &player, flag_t f, bool firstgrab)
 				SV_FlagReturn(player, f);
 		}
 	}
-	else
+	else // Grabbing enemy flag.
 	{
 		SV_FlagGrab(player, f, firstgrab);
 	}
@@ -264,15 +264,17 @@ void SV_SocketTouch (player_t &player, flag_t f)
 	if (shotclock)
 		return;
 
+	// Returning team's flag manually.
 	if (player.userinfo.team == (team_t)f && player.flags[f]) {
-		player.flags[f] = false; // take ex-carrier's flag
+		player.flags[f] = false;
 		CTFdata[f].flagger = 0;
 		SV_FlagReturn(player, f);
 	}
 	
+	// Scoring with enemy flag.
 	for(size_t i = 0; i < NUMFLAGS; i++)
 		if(player.userinfo.team == (team_t)f && player.userinfo.team != (team_t)i &&
-			player.flags[i] && !ctf_flagathometoscore)
+			player.flags[i] && (!ctf_flagathometoscore || CTFdata[f].state == flag_home))
 			SV_FlagScore(player, (flag_t)i);
 }
 
@@ -382,9 +384,6 @@ void CTF_CheckFlags (player_t &player)
 //
 void CTF_RememberFlagPos (mapthing2_t *mthing)
 {
-	if (gametype != GM_CTF)
-		return;
-
 	flag_t f;
 
 	switch(mthing->type)
@@ -400,6 +399,8 @@ void CTF_RememberFlagPos (mapthing2_t *mthing)
 	data->x = mthing->x << FRACBITS;
 	data->y = mthing->y << FRACBITS;
 	data->z = mthing->z << FRACBITS;
+	
+	data->flaglocated = true;
 }
 
 //

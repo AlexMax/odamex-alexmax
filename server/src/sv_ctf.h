@@ -48,6 +48,9 @@ enum flag_state_t
 // data associated with a flag
 struct flagdata
 {
+	// Does this flag have a spawn yet?
+	bool flaglocated;
+	
 	// Flag actors when not being carried
 	AActor::AActorPtr actor;
 	

@@ -986,7 +986,30 @@ void G_DoLoadLevel (int position)
 	for (i = 0; i < players.size(); i++)
 		players[i].joinafterspectatortime -= level.time;
 
+	flagdata *tempflag;
+
+	// Nes - CTF Pre flag setup
+	if (gametype == GM_CTF) {
+		tempflag = &CTFdata[it_blueflag];
+		tempflag->flaglocated = false;
+		
+		tempflag = &CTFdata[it_redflag];
+		tempflag->flaglocated = false;
+	}
+
 	P_SetupLevel (level.mapname, position);
+	
+	// Nes - CTF Post flag setup
+	if (gametype == GM_CTF) {
+		tempflag = &CTFdata[it_blueflag];
+		if (!tempflag->flaglocated)
+			SV_BroadcastPrintf(PRINT_HIGH, "WARNING: Blue flag pedestal not found! No blue flags in game.\n");
+		
+		tempflag = &CTFdata[it_redflag];
+		if (!tempflag->flaglocated)
+			SV_BroadcastPrintf(PRINT_HIGH, "WARNING: Red flag pedestal not found! No red flags in game.\n");
+	}
+
 	displayplayer_id = consoleplayer_id;				// view the guy you are playing
 
 	gameaction = ga_nothing;

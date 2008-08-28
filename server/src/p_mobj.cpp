@@ -1292,21 +1292,6 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		return;
 	}
 
-	// [Toke - CTF] Setup flag sockets
-	if (mthing->type == ID_BLUE_FLAG)
-	{	
-		CTF_RememberFlagPos (mthing);
-		CTF_SpawnFlag(it_blueflag);
-	}
-
-	if (mthing->type == ID_RED_FLAG)
-	{
-		
-		CTF_RememberFlagPos (mthing);
-		CTF_SpawnFlag(it_redflag);
-	}
-
-
 	// [RH] sound sequence overrides
 	if (mthing->type >= 1400 && mthing->type < 1410)
 	{
@@ -1480,6 +1465,29 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	mobj->AddToHash ();
 
 	SV_SpawnMobj(mobj);
+
+	if (gametype == GM_CTF) {
+		// [Toke - CTF] Setup flag sockets
+		if (mthing->type == ID_BLUE_FLAG)
+		{
+			flagdata *data = &CTFdata[it_blueflag];
+			if (data->flaglocated)
+				return;
+
+			CTF_RememberFlagPos (mthing);
+			CTF_SpawnFlag(it_blueflag);
+		}
+
+		if (mthing->type == ID_RED_FLAG)
+		{
+			flagdata *data = &CTFdata[it_redflag];
+			if (data->flaglocated)
+				return;
+
+			CTF_RememberFlagPos (mthing);
+			CTF_SpawnFlag(it_redflag);
+		}
+	}
 
 	// [RH] Go dormant as needed
 //	if (mthing->flags & MTF_DORMANT)
