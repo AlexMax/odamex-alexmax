@@ -33,7 +33,7 @@ CVAR (friendlyfire,		"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 // (Teamplay/CTF): Game ends when team score is reached
 CVAR (scorelimit,		"5", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
 // (Teamplay): Teams that are enabled
-CVAR (teamsinplay,		"2", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH) // numteams
+CVAR (teamsinplay,		"2", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
 // (CTF) Flag settings
 CVAR (ctf_manualreturn,	"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 CVAR (ctf_flagathometoscore,	"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
@@ -70,6 +70,8 @@ CVAR (timelimit,		"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISAB
 CVAR (speedhackfix,		"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 // Weapons stay
 CVAR (weaponstay,		"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
+// Give double ammo regardless of difficulty
+CVAR (doubleammo,		"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 
 // Misc stuff
 // ----------

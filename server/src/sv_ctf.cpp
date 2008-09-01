@@ -317,6 +317,9 @@ void CTF_RunTics (void)
 
 		if(data->state != flag_dropped)
 			continue;
+		
+		if (!ctf_flagtimeout)
+			continue;
 
 		if(data->timeout--)
 			continue;

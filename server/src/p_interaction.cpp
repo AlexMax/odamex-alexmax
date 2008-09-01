@@ -49,6 +49,7 @@
 EXTERN_CVAR (friendlyfire)
 EXTERN_CVAR (allowexit)
 EXTERN_CVAR (fragexitswitch)              // [ML] 04/4/06: Added comprimise for older exit method
+EXTERN_CVAR (doubleammo)
 
 int shotclock = 0;
 
@@ -89,7 +90,7 @@ BOOL P_GiveAmmo (player_t *player, ammotype_t ammo, int num)
 		num = clipammo[ammo]/2;
 
 	if (skill == sk_baby
-		|| skill == sk_nightmare)
+		|| skill == sk_nightmare || doubleammo)
 	{
 		// give double ammo in trainer mode,
 		// you'll need in nightmare

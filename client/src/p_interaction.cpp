@@ -48,6 +48,8 @@
 
 extern bool predicting;
 
+EXTERN_CVAR (doubleammo)
+
 static void PickupMessage (AActor *toucher, const char *message)
 {
 	// Some maps have multiple items stacked on top of each other.
@@ -94,7 +96,7 @@ BOOL P_GiveAmmo (player_t *player, ammotype_t ammo, int num)
 		num = clipammo[ammo]/2;
 
 	if (skill == sk_baby
-		|| skill == sk_nightmare)
+		|| skill == sk_nightmare || doubleammo)
 	{
 		// give double ammo in trainer mode,
 		// you'll need in nightmare
