@@ -1873,14 +1873,14 @@ void CL_GetServerSettings(void)
 	}
 	else
 	{
-		MSG_ReadByte(); //ctfmode = MSG_ReadByte() ? true : false;
+		usectfcvar = MSG_ReadByte() ? 1 : 0;
 
 		// General server settings
 		maxclients.Set((int)MSG_ReadShort());
 
 		// Game settings
 		allowcheats.Set((BOOL)MSG_ReadByte());
-		MSG_ReadByte(); //deathmatch.Set((BOOL)MSG_ReadByte());
+		deathmatchcvar = MSG_ReadByte() ? 1 : 0;
 		fraglimit.Set((int)MSG_ReadShort());
 		timelimit.Set((int)MSG_ReadShort());
 
@@ -1903,11 +1903,16 @@ void CL_GetServerSettings(void)
 		// Teamplay/CTF
 		scorelimit.Set((int)MSG_ReadShort());
 		friendlyfire.Set((BOOL)MSG_ReadByte());
-		MSG_ReadByte(); //teamplay.Set(MSG_ReadByte());
+		teamplaycvar = MSG_ReadByte() ? 1 : 0;
 	
 		allowtargetnames.Set((BOOL)MSG_ReadByte());
 
 		cvar_t::UnlatchCVars ();
+		
+		if (usectfcvar) gametype = GM_CTF;
+		else if (teamplaycvar) gametype = GM_TEAMDM;
+		else if (deathmatchcvar) gametype = GM_DM;
+		else gametype = GM_COOP;
 	}
 }
 
