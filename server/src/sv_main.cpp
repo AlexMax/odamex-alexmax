@@ -2018,8 +2018,15 @@ void SV_ConnectClient (void)
 	players[n].killcount	= 0;
 	players[n].points		= 0;
 
-	if(!stepmode)
+	if(!stepmode) {
 		players[n].spectator	= true;
+		for (size_t j = 0; j < players.size(); j++)
+		{
+			MSG_WriteMarker (&(players[i].client.reliablebuf), svc_spectate);
+			MSG_WriteByte (&(players[i].client.reliablebuf), players[n].id);
+			MSG_WriteByte (&(players[i].client.reliablebuf), true);
+		}
+	}
 
 	// send a map name
 	MSG_WriteMarker   (&cl->reliablebuf, svc_loadmap);
@@ -3582,10 +3589,10 @@ void SV_TimelimitCheck()
 			
 			if (players.size() > 1) {
 				for (int i = 1; i < players.size(); i++) {
-					if (players[i].fragcount > winplayer[i].fragcount) {
+					if (players[i].fragcount > winplayer->fragcount) {
 						drawgame = false;
 						winplayer = &players[i];
-					} else if (players[i].fragcount == winplayer[i].fragcount)
+					} else if (players[i].fragcount == winplayer->fragcount)
 						drawgame = true;
 				}
 			}
