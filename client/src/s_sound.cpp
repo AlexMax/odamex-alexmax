@@ -581,7 +581,7 @@ static void S_StartSound (fixed_t *pt, fixed_t x, fixed_t y, int channel,
 	S_StopSound (pt, channel);
 
   // try to find a channel
-	if (channel == CHAN_ANNOUNCER &&
+	if ((channel == CHAN_ANNOUNCERF || channel == CHAN_ANNOUNCERE) &&
 		((SERVERMAJ >= 0) &&
 		(((SERVERMIN == 4) && (SERVERREL >= 2)) ||
 		(SERVERMIN > 4))))
@@ -736,7 +736,7 @@ void S_StopSound (fixed_t *pt)
 	for (unsigned int i = 0; i < numChannels; i++)
 		if (Channel[i].sfxinfo && (Channel[i].pt == pt))
 		{
-			if (i == CHAN_ANNOUNCER &&
+			if ((i == CHAN_ANNOUNCERF || i == CHAN_ANNOUNCERE) &&
 				((SERVERMAJ >= 0) &&
 				(((SERVERMIN == 4) && (SERVERREL >= 2)) ||
 				(SERVERMIN > 4))))

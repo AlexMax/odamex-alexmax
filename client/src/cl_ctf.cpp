@@ -116,6 +116,7 @@ void CL_CTFEvent (void)
 
 		case SCORE_GRAB:
 		case SCORE_FIRSTGRAB:
+		case SCORE_MANUALRETURN:
 			if(validplayer(player))
 				CTF_CarryFlag(player, flag);
 			break;

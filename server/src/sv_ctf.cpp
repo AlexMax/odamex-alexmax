@@ -66,7 +66,8 @@ static int ctf_points[NUM_CTF_SCORE] =
 	3, // CARRIERKILL
 	2, // RETURN
 	10, // CAPTURE
-	0 // DROP
+	0, // DROP
+	1 // MANUALRETURN
 };
 
 //
@@ -152,7 +153,7 @@ void SV_FlagGrab (player_t &player, flag_t f, bool firstgrab)
 		}
 	} else {
 		SV_BroadcastPrintf (PRINT_HIGH, "%s is recovering the %s flag\n", player.userinfo.netname, team_names[f]);
-		SV_CTFEvent (f, SCORE_GRAB, player);
+		SV_CTFEvent (f, SCORE_MANUALRETURN, player);
 	}
 }
 
@@ -499,6 +500,7 @@ static const char *flag_sound[NUM_CTF_SCORE][2] =
 	{"ctf/f-flagreturn", "ctf/e-flagreturn"}, // RETURN
 	{"ctf/f-flagscore", "ctf/e-flagscore"}, // CAPTURE
 	{"ctf/f-flagdrop", "ctf/e-flagdrop"}, // DROP
+	{"ctf/f-flagmanualreturn", "ctf/e-flagmanualreturn"}, // MANUALRETURN
 };
 
 //
@@ -511,7 +513,7 @@ void CTF_Sound (flag_t f, flag_score_t event)
 	{
 		const char *snd = flag_sound[event][f == (flag_t)i];
 		if(snd && *snd)
-			SV_SoundTeam (CHAN_ANNOUNCER, snd, ATTN_NONE, i);
+			SV_SoundTeam ((f == (flag_t)i) ? CHAN_ANNOUNCERF : CHAN_ANNOUNCERE, snd, ATTN_NONE, i);
 	}
 }
 
