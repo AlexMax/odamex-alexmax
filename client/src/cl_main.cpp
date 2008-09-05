@@ -1851,9 +1851,11 @@ void CL_GetServerSettings(void)
                                   CVAR_SERVERINFO | CVAR_AUTO | CVAR_UNSETTABLE);
                                   
                 var->Set(CvarValue.c_str());
-                
-				// Nes - Maintain compatability with severs using deathmatch/teamplay/usectf.
-				if (SERVERMIN == 4 && SERVERREL < 2 && strcmp(CvarValue.c_str(), "0") != 0) {
+			}
+			
+			// Nes - Maintain compatability with severs using deathmatch/teamplay/usectf.
+			if (SERVERMIN == 4 && SERVERREL < 2) {
+				if (strcmp(CvarValue.c_str(), "0") != 0) {
 					if (strcmp(CvarName.c_str(), "deathmatch") == 0) {
 						deathmatchcvar = 1;
 					} else if (strcmp(CvarName.c_str(), "teamplay") == 0) {
