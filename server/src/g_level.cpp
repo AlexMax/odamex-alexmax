@@ -237,20 +237,6 @@ BEGIN_COMMAND (map)
 			G_DeferedInitNew (argv[1]);
 		}
 	}
-	
-	if (gametype != GM_COOP)
-	{
-		for (size_t i = 0; i < players.size(); i++)
-		{
-			players[i].spectator = 1;
-			for (size_t j = 0; j < players.size(); j++)
-			{
-				MSG_WriteMarker (&(players[i].client.reliablebuf), svc_spectate);
-				MSG_WriteByte (&(players[i].client.reliablebuf), players[j].id);
-				MSG_WriteByte (&(players[i].client.reliablebuf), false);
-			}
-		}
-	}
 }
 END_COMMAND (map)
 
@@ -667,15 +653,6 @@ void G_ChangeMap (void)
 	// run script at the end of each map
 	if(strlen(endmapscript.cstring()))
 		AddCommandString(endmapscript.cstring(), true);
-
-	if (gametype != GM_COOP) {
-		// make everyone a spectator again
-		for (size_t i = 0; i < players.size(); i++)
-		{
-			players[i].spectator = true;
-			players[i].joinafterspectatortime = -(TICRATE*5);
-		}
-	}
 }
 
 void SV_ClientFullUpdate(player_t &pl);
@@ -756,8 +733,21 @@ void G_InitNew (const char *mapname)
 
 	cvar_t::UnlatchCVars ();
 
-	if(old_gametype != gametype || gametype != GM_COOP)
+	if(old_gametype != gametype || gametype != GM_COOP) {
 		unnatural_level_progression = true;
+		
+		// Nes - Force all players to be spectators when the gametype is not now or previously co-op.
+		for (i = 0; i < players.size(); i++) {
+			for (size_t j = 0; j < players.size(); j++) {
+				MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
+				MSG_WriteByte (&(players[j].client.reliablebuf), players[i].id);
+				MSG_WriteByte (&(players[j].client.reliablebuf), true);
+			}			
+			players[i].spectator = true;
+			players[i].playerstate = PST_LIVE;
+			players[i].joinafterspectatortime = -(TICRATE*5);
+		}
+	}
 
 	SV_ServerSettingChange();
 
