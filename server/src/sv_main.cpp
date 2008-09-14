@@ -2383,7 +2383,7 @@ void SV_DrawScores()
                 if (sortedplayers[i]->spectator)
                         Printf(PRINT_HIGH, "%-15s\n", sortedplayers[i]->userinfo.netname);
             }
-    } else if (multiplayer) {
+    } else {
         std::sort(sortedplayers.begin(), sortedplayers.end(), compare_player_kills);
 
         Printf (PRINT_HIGH, "\n");
