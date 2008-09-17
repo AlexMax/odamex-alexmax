@@ -222,7 +222,6 @@ BEGIN_COMMAND (map)
 			if (W_CheckNumForName (mapname) == -1)
 			{ // Still no luck, oh well.
 				Printf (PRINT_HIGH, "Map %s not found.\n", argv[1]);
-				return;
 			}
 			else
 			{ // Success
@@ -236,6 +235,10 @@ BEGIN_COMMAND (map)
 			unnatural_level_progression = true;
 			G_DeferedInitNew (argv[1]);
 		}
+	}
+	else
+	{
+		Printf (PRINT_HIGH, "The current map is %s: \"%s\"\n", level.mapname, level.level_name);
 	}
 }
 END_COMMAND (map)
