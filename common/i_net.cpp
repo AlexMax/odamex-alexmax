@@ -352,14 +352,24 @@ void SZ_Write (buf_t *b, const byte *data, int startpos, int length)
 	b->WriteChunk((const char *)data, length, startpos);
 }
 
+bool SV_SendPacket(player_t &pl);
+
+
+// TODO: Integrate markers with sizes, ie in a structure of some sort
+
 //
 // MSG_WriteMarker
 //
 // denis - use this function to mark the start of your server message
 // as it allows for better debugging and optimization of network code
-//
-void MSG_WriteMarker (buf_t *b, svc_t c)
+
+void MSG_WriteMarker (player_t &Player, buf_t *b, svc_t c, const size_t Size)
 {
+	if (b->size() + sizeof(c) + Size >= b->maxsize())
+    {        
+        SV_SendPacket(Player);
+    }
+    
 	b->WriteByte((byte)c);
 }
 
@@ -369,8 +379,14 @@ void MSG_WriteMarker (buf_t *b, svc_t c)
 // denis - use this function to mark the start of your client message
 // as it allows for better debugging and optimization of network code
 //
-void MSG_WriteMarker (buf_t *b, clc_t c)
+void MSG_WriteMarker (netadr_t &To, buf_t *b, clc_t c, const size_t Size)
 {
+	if (b->size() + sizeof(c) + Size >= b->maxsize())
+    {
+        NET_SendPacket(*b, To);
+        SZ_Clear(b);
+    }
+    
 	b->WriteByte((byte)c);
 }
 

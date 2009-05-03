@@ -761,7 +761,11 @@ BEGIN_COMMAND (god)
     else
         Printf(PRINT_HIGH, "Degreelessness mode off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_cheat, 
+                    1);
+
 	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 }
 END_COMMAND (god)
@@ -778,7 +782,11 @@ BEGIN_COMMAND (notarget)
     else
         Printf(PRINT_HIGH, "Notarget off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_cheat, 
+                    1);
+                    
 	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 }
 END_COMMAND (notarget)
@@ -795,7 +803,11 @@ BEGIN_COMMAND (fly)
     else
         Printf(PRINT_HIGH, "Fly mode off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_cheat, 
+                    1);
+                    
 	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 }
 END_COMMAND (fly)
@@ -812,7 +824,11 @@ BEGIN_COMMAND (noclip)
     else
         Printf(PRINT_HIGH, "No clipping mode off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_cheat, 
+                    1);
+                    
 	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 }
 END_COMMAND (noclip)
@@ -845,7 +861,11 @@ BEGIN_COMMAND (chase)
 
 		consoleplayer().cheats ^= CF_CHASECAM;
 
-		MSG_WriteMarker(&net_buffer, clc_cheat);
+        MSG_WriteMarker(serveraddr, 
+                        &net_buffer, 
+                        clc_cheat, 
+                        1);
+                    
 		MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 	}
 }

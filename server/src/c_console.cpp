@@ -220,7 +220,8 @@ int VPrintf (int printlevel, const char *format, va_list parms)
 		if(!clients[i].allow_rcon)
 			continue;
 		
-		MSG_WriteMarker (&cl->reliablebuf, svc_print);
+		
+		MSG_WriteMarker (players[i], &cl->reliablebuf, svc_print, 1 + str.size());
 		MSG_WriteByte (&cl->reliablebuf, PRINT_MEDIUM);
 		MSG_WriteString (&cl->reliablebuf, (char *)str.c_str());
 	}
