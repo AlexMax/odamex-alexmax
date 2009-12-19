@@ -851,6 +851,9 @@ AActor *AActor::FindGoal (const AActor *actor, int tid, int kind)
 //
 void AActor::RunThink ()
 {
+//if(type == MT_RCAR || type == MT_RDWN || type == MT_RFLG)
+//	Printf(PRINT_HIGH, "red flag RunThink %d,%d\n",x,y);
+
 	if(!subsector)
 		return;
 

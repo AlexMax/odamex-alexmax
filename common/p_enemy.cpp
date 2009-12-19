@@ -1863,15 +1863,18 @@ void A_BrainAwake (AActor *mo)
 
 void A_BrainPain (AActor *mo)
 {
+Printf(PRINT_HIGH, "A_BrainPain\n");
 	S_Sound (mo, CHAN_VOICE, "brain/pain", 1, ATTN_SURROUND);
 }
 
 
 void A_BrainScream (AActor *mo)
 {
+Printf(PRINT_HIGH, "A_BrainScream\n");
 	if(!clientside)
 		return;
 
+Printf(PRINT_HIGH, "A_BrainScream2\n");
 	int 		x;
 	int 		y;
 	int 		z;
@@ -1898,9 +1901,11 @@ void A_BrainScream (AActor *mo)
 
 void A_BrainExplode (AActor *mo)
 {
+Printf(PRINT_HIGH, "A_BrainExplode\n");
 	if(!clientside)
 		return;
 
+Printf(PRINT_HIGH, "A_BrainExplode2\n");
 	int x = mo->x + (P_Random (mo) - P_Random (mo))*2048;
 	int y = mo->y;
 	int z = 128 + P_Random (mo)*2*FRACUNIT;

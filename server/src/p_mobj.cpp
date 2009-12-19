@@ -848,6 +848,9 @@ EXTERN_CVAR(speedhackfix)
 //
 void AActor::RunThink ()
 {
+if(type == MT_RCAR || type == MT_RDWN || type == MT_RFLG)
+	Printf(PRINT_HIGH, "red flag RunThink %d,%d\n",x,y);
+
 	if (type == MT_PLAYER && health <= 0)
 		deadtic++;
 

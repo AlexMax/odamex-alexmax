@@ -143,6 +143,9 @@ void SV_FlagGrab (player_t &player, flag_t f, bool firstgrab)
 	CTFdata[f].state = flag_carried;
 	CTFdata[f].pickup_time = I_MSTime();
 
+//	if(CTFdata[f].actor)
+//		CTFdata[f].actor->Destroy();
+
 	if (player.userinfo.team != (team_t)f) {
 		if (firstgrab) {
 			SV_BroadcastPrintf (PRINT_HIGH, "%s has taken the %s flag\n", player.userinfo.netname, team_names[f]);

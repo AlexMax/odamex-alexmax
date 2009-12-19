@@ -197,6 +197,7 @@ void CTF_CarryFlag (player_t &player, flag_t flag)
 	// spawn visible flags on other players
 	if(&player != &consoleplayer())
 	{
+Printf(PRINT_HIGH, "spawn flag at 0,0,0\n");
 		AActor *actor = new AActor(0, 0, 0, flag_table[flag][flag_carried]);
 		CTFdata[flag].actor = actor->ptr();
 
@@ -220,6 +221,7 @@ void CTF_MoveFlags ()
 
 			if(!player.mo)
 			{
+Printf(PRINT_HIGH, "flag->UnlinkFromWorld\n");
 				flag->UnlinkFromWorld ();
 				return;
 			}
@@ -241,6 +243,7 @@ void CTF_MoveFlags ()
 			flag->ceilingz = tmceilingz;
 
 			flag->LinkToWorld ();
+Printf(PRINT_HIGH, "move flag to %d, %d\n", x, y);
 		}
 	}
 }

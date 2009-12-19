@@ -420,6 +420,7 @@ static int		startpos;	// [RH] Support for multiple starts per level
 
 void G_ExitLevel (int position, int drawscores)
 {
+Printf(PRINT_HIGH, "G_ExitLevel\n");
     //if (multiplayer && drawscores && interscoredraw)
     //    AddCommandString("displayscores");
     // Never called.
