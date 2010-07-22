@@ -672,7 +672,7 @@ void G_ChangeMap (void)
 void SV_ClientFullUpdate(player_t &pl);
 void SV_CheckTeam(player_t &pl);
 void G_DoReborn(player_t &playernum);
-void SV_SendServerSettings(client_t *cl);
+void SV_SendServerSettings(player_t &pl);
 
 //
 // G_DoNewGame
@@ -689,8 +689,8 @@ void G_DoNewGame (void)
 			continue;
 
 		client_t *cl = &clients[i];
-
-		MSG_WriteMarker   (&cl->reliablebuf, svc_loadmap);
+        
+        MSG_WriteMarker (players[i], &cl->reliablebuf, svc_loadmap, strlen(d_mapname));
 		MSG_WriteString (&cl->reliablebuf, d_mapname);
 	}
 
@@ -751,8 +751,12 @@ void G_InitNew (const char *mapname)
 
 		// Nes - Force all players to be spectators when the sv_gametype is not now or previously co-op.
 		for (i = 0; i < players.size(); i++) {
-			for (size_t j = 0; j < players.size(); j++) {
-				MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
+			for (size_t j = 0; j < players.size(); j++) 
+			{
+                MSG_WriteMarker (players[i], 
+                                 &(players[j].client.reliablebuf), 
+                                 svc_spectate, 
+                                 1 + 1);
 				MSG_WriteByte (&(players[j].client.reliablebuf), players[i].id);
 				MSG_WriteByte (&(players[j].client.reliablebuf), true);
 			}

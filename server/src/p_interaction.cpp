@@ -1022,14 +1022,20 @@ void P_KillMobj (AActor *source, AActor *target, AActor *inflictor, bool joinkil
 			continue;
 
 		// send death location first
-		MSG_WriteMarker (&cl->netbuf, svc_movemobj);
+        MSG_WriteMarker (players[i], 
+                         &cl->netbuf, 
+                         svc_movemobj, 
+                         2 + 1 + 4 + 4 + 4);
 		MSG_WriteShort (&cl->netbuf, target->netid);
 		MSG_WriteByte (&cl->netbuf, target->rndindex);
 		MSG_WriteLong (&cl->netbuf, target->x);
 		MSG_WriteLong (&cl->netbuf, target->y);
 		MSG_WriteLong (&cl->netbuf, target->z);
-		MSG_WriteMarker (&cl->reliablebuf, svc_killmobj);
 
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_killmobj, 
+                         2 + 2 + 2 + 2 + 4 + 1);
 		if (source)
 			MSG_WriteShort (&cl->reliablebuf, source->netid);
 		else
@@ -1364,7 +1370,10 @@ void P_DamageMobj (AActor *target, AActor *inflictor, AActor *source, int damage
 		{
             client_t *cl = &clients[i];
 
-			MSG_WriteMarker (&cl->reliablebuf, svc_damageplayer);
+            MSG_WriteMarker (players[i], 
+                             &cl->reliablebuf, 
+                             svc_damageplayer, 
+                             1 + 1 + 2);
 			MSG_WriteByte (&cl->reliablebuf, player->id);
             MSG_WriteByte (&cl->reliablebuf, player->armorpoints);
             MSG_WriteShort (&cl->reliablebuf, target->health - damage);
@@ -1390,7 +1399,10 @@ void P_DamageMobj (AActor *target, AActor *inflictor, AActor *source, int damage
 			{
 				client_t *cl = &clients[i];
 
-				MSG_WriteMarker (&cl->reliablebuf, svc_damagemobj);
+                MSG_WriteMarker (players[i], 
+                                 &cl->reliablebuf, 
+                                 svc_damagemobj, 
+                                 2 + 2 + 1);
 				MSG_WriteShort (&cl->reliablebuf, target->netid);
 				MSG_WriteShort (&cl->reliablebuf, target->health);
 				MSG_WriteByte (&cl->reliablebuf, pain);

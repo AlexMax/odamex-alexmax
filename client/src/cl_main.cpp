@@ -151,7 +151,7 @@ void CL_QuitNetGame(void)
 {
 	if(connected)
 	{
-		MSG_WriteMarker(&net_buffer, clc_disconnect);
+		MSG_WriteMarker(serveraddr, &net_buffer, clc_disconnect, 0);
 
 		NET_SendPacket(net_buffer, serveraddr);
 		SZ_Clear(&net_buffer);
@@ -184,7 +184,8 @@ void CL_Reconnect(void)
 {
 	if (connected)
 	{
-		MSG_WriteMarker(&net_buffer, clc_disconnect);
+		MSG_WriteMarker(serveraddr, &net_buffer, clc_disconnect, 0);
+
 		NET_SendPacket(net_buffer, serveraddr);
 		SZ_Clear(&net_buffer);
 		connected = false;
@@ -372,7 +373,9 @@ END_COMMAND (playerinfo)
 BEGIN_COMMAND (kill)
 {
     if (sv_allowcheats)
-        MSG_WriteMarker(&net_buffer, clc_kill);
+    {
+        MSG_WriteMarker(serveraddr, &net_buffer, clc_kill, 0);
+    }
     else
         Printf (PRINT_HIGH, "You must run the server with '+set sv_allowcheats 1' to enable this command.\n");
 }
@@ -435,7 +438,7 @@ CVAR_FUNC_IMPL (rate)
 	}
 	else if (connected)
 	{
-		MSG_WriteMarker(&net_buffer, clc_rate);
+        MSG_WriteMarker(serveraddr, &net_buffer, clc_rate, 4);
 		MSG_WriteLong(&net_buffer, (int)var);
 	}
 }
@@ -454,7 +457,7 @@ BEGIN_COMMAND (rcon)
 		if (argc == 4)
 			sprintf(command, "%s %s %s", argv[1], argv[2], argv[3]);
 
-		MSG_WriteMarker(&net_buffer, clc_rcon);
+        MSG_WriteMarker(serveraddr, &net_buffer, clc_rcon, strlen(command));
 		MSG_WriteString(&net_buffer, command);
 	}
 }
@@ -465,9 +468,8 @@ BEGIN_COMMAND (rcon_password)
 {
 	if (connected && argc > 1)
 	{
-		MSG_WriteMarker(&net_buffer, clc_rcon_password);
-
 		std::string password = argv[1];
+        MSG_WriteMarker(serveraddr, &net_buffer, clc_rcon_password, password.size());
 		MSG_WriteString(&net_buffer, MD5SUM(password + digest).c_str());
 	}
 }
@@ -483,7 +485,7 @@ END_COMMAND (playerteam)
 
 BEGIN_COMMAND (spectate)
 {
-	MSG_WriteMarker(&net_buffer, clc_spectate);
+    MSG_WriteMarker(serveraddr, &net_buffer, clc_spectate, 1);
 	MSG_WriteByte(&net_buffer, true);
 }
 END_COMMAND (spectate)
@@ -491,7 +493,7 @@ END_COMMAND (spectate)
 
 BEGIN_COMMAND (join)
 {
-	MSG_WriteMarker(&net_buffer, clc_spectate);
+    MSG_WriteMarker(serveraddr, &net_buffer, clc_spectate, 1);
 	MSG_WriteByte(&net_buffer, false);
 }
 END_COMMAND (join)
@@ -535,7 +537,16 @@ void CL_SendUserInfo(void)
 	coninfo.skin	 = R_FindSkin (cl_skin.cstring());
 	coninfo.gender  = D_GenderByName (cl_gender.cstring());
 
-	MSG_WriteMarker	(&net_buffer, clc_userinfo);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_userinfo, 
+                    strlen(coninfo.netname) + 
+                    1 + 
+                    4 + 
+                    4 + 
+                    strlen(skins[coninfo.skin].name) + 
+                    4);
+
 	MSG_WriteString	(&net_buffer, coninfo.netname);
 	MSG_WriteByte	(&net_buffer, coninfo.team); // [Toke]
 	MSG_WriteLong	(&net_buffer, coninfo.gender);
@@ -890,7 +901,7 @@ bool CL_Connect(void)
 	memset(packetseq, -1, sizeof(packetseq) );
 	packetnum = 0;
 
-	MSG_WriteMarker(&net_buffer, clc_ack);
+    MSG_WriteMarker(serveraddr, &net_buffer, clc_ack, 4);
 	MSG_WriteLong(&net_buffer, 0);
 
 	if(gamestate == GS_DOWNLOAD && missing_file.length())
@@ -1128,7 +1139,7 @@ void CL_ResendSvGametic(void)
 {
 	int svgametic = MSG_ReadLong();
 
-	MSG_WriteMarker (&net_buffer, clc_svgametic);
+    MSG_WriteMarker(serveraddr, &net_buffer, clc_svgametic, 4);
 	MSG_WriteLong (&net_buffer, svgametic);
 }
 
@@ -1824,7 +1835,7 @@ void CL_ReadPacketHeader(void)
 {
 	unsigned int sequence = MSG_ReadLong();
 
-	MSG_WriteMarker(&net_buffer, clc_ack);
+    MSG_WriteMarker(serveraddr, &net_buffer, clc_ack, 4);
 	MSG_WriteLong(&net_buffer, sequence);
 
 	CL_Decompress(sequence);
@@ -2157,7 +2168,12 @@ void CL_RequestDownload(std::string filename, std::string filehash)
     }
 	
 	// denis todo clear previous downloads
-	MSG_WriteMarker(&net_buffer, clc_wantwad);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_wantwad, 
+                    filename.size() +
+                    filehash.size() +
+                    4);
 	MSG_WriteString(&net_buffer, filename.c_str());
 	MSG_WriteString(&net_buffer, filehash.c_str());
 	MSG_WriteLong(&net_buffer, download.got_bytes);
@@ -2256,11 +2272,20 @@ void CL_Download()
 	if(offset < download.got_bytes || offset > download.got_bytes)
 	{
 		DPrintf("Missed a packet after/before %d bytes (got %d), re-requesting\n", download.got_bytes, offset);
-		MSG_WriteMarker(&net_buffer, clc_wantwad);
+
+        MSG_WriteMarker(serveraddr, 
+                        &net_buffer, 
+                        clc_wantwad, 
+                        download.filename.size() +
+                        download.md5.size() +
+                        4);
+
 		MSG_WriteString(&net_buffer, download.filename.c_str());
 		MSG_WriteString(&net_buffer, download.md5.c_str());
 		MSG_WriteLong(&net_buffer, download.got_bytes);
-		NET_SendPacket(net_buffer, serveraddr);
+
+        NET_SendPacket(net_buffer, serveraddr);
+
 		return;
 	}
 
@@ -2484,7 +2509,14 @@ void CL_SendCmd(void)
 	// GhostlyDeath -- If we are spectating, tell the server of our new position
 	if (p->spectator)
 	{
-		MSG_WriteMarker(&net_buffer, clc_spectate);
+        MSG_WriteMarker(serveraddr, 
+                        &net_buffer, 
+                        clc_spectate, 
+                        1 +
+                        4 +
+                        4 +
+                        4);
+
 		MSG_WriteByte(&net_buffer, 5);
 		MSG_WriteLong(&net_buffer, p->mo->x);
 		MSG_WriteLong(&net_buffer, p->mo->y);
@@ -2492,7 +2524,23 @@ void CL_SendCmd(void)
 	}
 	// GhostlyDeath -- We just throw it all away down here since we need those buttons!
 
-	MSG_WriteMarker(&net_buffer, clc_move);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_move, 
+                    4 +
+                    1 +
+                    2 +
+                    2 +
+                    2 +
+                    2 + 
+                    1 +
+                    1 +
+                    2 +
+                    2 +
+                    2 +
+                    2 +
+                    1);
+
 
     MSG_WriteLong(&net_buffer, gametic); // current tic
 
@@ -2553,6 +2601,7 @@ void CL_RunTics (void)
 		CTF_RunTics ();
 }
 
+bool SV_SendPacket (player_t &pl) { return true; }
 void OnChangedSwitchTexture (line_t *line, int useAgain) {}
 void OnActivatedLine (line_t *line, AActor *mo, int side, int activationType) {}
 

@@ -473,7 +473,11 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	// GhostlyDeath -- USE takes us out of spectator mode
 	if ((&consoleplayer())->spectator && Actions[ACTION_USE] && connected)
 	{
-		MSG_WriteMarker(&net_buffer, clc_spectate);
+        MSG_WriteMarker(serveraddr, 
+                        &net_buffer, 
+                        clc_spectate, 
+                        1);
+
 		MSG_WriteByte(&net_buffer, false);
 	}
 
@@ -983,7 +987,10 @@ void G_Ticker (void)
 			else
 			{
 				// we are already connected to this server, quit first
-				MSG_WriteMarker(&net_buffer, clc_disconnect);
+                MSG_WriteMarker(serveraddr, 
+                                &net_buffer, 
+                                clc_disconnect, 
+                                0);
 				NET_SendPacket(net_buffer, serveraddr);
 			}
 		}

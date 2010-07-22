@@ -320,14 +320,22 @@ void P_ExplodeMissile (AActor* mo)
 		if(!SV_IsPlayerAllowedToSee(players[i], mo))
 			continue;
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_movemobj);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_movemobj, 
+                         2 + 1 + 4 + 4 + 4);
+
 		MSG_WriteShort (&cl->reliablebuf, mo->netid);
 		MSG_WriteByte (&cl->reliablebuf, mo->rndindex);
 		MSG_WriteLong (&cl->reliablebuf, mo->x);
 		MSG_WriteLong (&cl->reliablebuf, mo->y);
 		MSG_WriteLong (&cl->reliablebuf, mo->z);
 
-		MSG_WriteMarker(&cl->reliablebuf, svc_explodemissile);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_explodemissile, 
+                         2);
+
 		MSG_WriteShort(&cl->reliablebuf, mo->netid);
 	}
 
@@ -1054,7 +1062,11 @@ void AActor::Destroy ()
 		{
 			client_t *cl = &idplayer(players_aware[i]).client;
 
-			MSG_WriteMarker(&cl->reliablebuf, svc_removemobj); // denis - todo - need a queue for destroyed (lost awareness) objects, as a flood of destroyed things could easily overflow a buffer
+            MSG_WriteMarker (idplayer(players_aware[i]), 
+                             &cl->reliablebuf, 
+                             svc_removemobj, 
+                             2);  // denis - todo - need a queue for destroyed (lost awareness) objects, as a flood of destroyed things could easily overflow a buffer
+
 			MSG_WriteShort(&cl->reliablebuf, netid);
 		}
 	}
@@ -1344,7 +1356,10 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 				size_t j;
 				client_t *cl = &p.client;
 
-				MSG_WriteMarker (&cl->reliablebuf, svc_playerinfo);
+                MSG_WriteMarker (p, 
+                                 &cl->reliablebuf, 
+                                 svc_playerinfo, 
+                                 (NUMWEAPONS * 1) + (NUMAMMO * 4) + 1 + 1 + 1 + 1 + 1);
 
 				for(j = 0; j < NUMWEAPONS; j++)
 					MSG_WriteByte (&cl->reliablebuf, p.weaponowned[j]);

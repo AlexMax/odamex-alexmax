@@ -568,7 +568,11 @@ static void ShoveChatStr (std::string str, byte who)
 	if(str.length() > MESSAGESIZE)
 		str.resize(MESSAGESIZE);
 
-	MSG_WriteMarker (&net_buffer, clc_say);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_say, 
+                    1 + str.size());
+
 	MSG_WriteByte (&net_buffer, who);
 	MSG_WriteString (&net_buffer, str.c_str());
 }

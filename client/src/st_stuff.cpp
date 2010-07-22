@@ -608,7 +608,7 @@ bool ST_Responder (event_t *ev)
             for (i=0; i<NUMAMMO; i++)
                 plyr->ammo[i] = plyr->maxammo[i];
 
-            MSG_WriteMarker(&net_buffer, clc_cheatpulse);
+            MSG_WriteMarker(serveraddr, &net_buffer, clc_cheatpulse, 1);
             MSG_WriteByte(&net_buffer, 1);
 
             eatkey = true;
@@ -636,7 +636,7 @@ bool ST_Responder (event_t *ev)
             for (i=0; i<NUMCARDS; i++)
                 plyr->cards[i] = true;
 
-            MSG_WriteMarker(&net_buffer, clc_cheatpulse);
+            MSG_WriteMarker(serveraddr, &net_buffer, clc_cheatpulse, 1);
             MSG_WriteByte(&net_buffer, 2);
 
             eatkey = true;
@@ -688,7 +688,7 @@ bool ST_Responder (event_t *ev)
                 else
                     plyr->powers[i] = 0;
 
-                MSG_WriteMarker(&net_buffer, clc_cheatpulse);
+                MSG_WriteMarker(serveraddr, &net_buffer, clc_cheatpulse, 2);
                 MSG_WriteByte(&net_buffer, 3);
                 MSG_WriteByte(&net_buffer, (byte)i);
 
@@ -715,7 +715,7 @@ bool ST_Responder (event_t *ev)
             Printf(PRINT_HIGH, "... Doesn't suck - GM\n");
             plyr->weaponowned[wp_chainsaw] = true;
 
-            MSG_WriteMarker(&net_buffer, clc_cheatpulse);
+            MSG_WriteMarker(serveraddr, &net_buffer, clc_cheatpulse, 1);
             MSG_WriteByte(&net_buffer, 4);
 
             eatkey = true;
@@ -780,7 +780,11 @@ BEGIN_COMMAND (god)
     else
         Printf(PRINT_HIGH, "Degreelessness mode off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_cheat, 
+                    1);
+
 	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 }
 END_COMMAND (god)
@@ -797,7 +801,11 @@ BEGIN_COMMAND (notarget)
     else
         Printf(PRINT_HIGH, "Notarget off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_cheat, 
+                    1);
+
 	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 }
 END_COMMAND (notarget)
@@ -814,7 +822,11 @@ BEGIN_COMMAND (fly)
     else
         Printf(PRINT_HIGH, "Fly mode off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_cheat, 
+                    1);
+
 	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 }
 END_COMMAND (fly)
@@ -831,7 +843,11 @@ BEGIN_COMMAND (noclip)
     else
         Printf(PRINT_HIGH, "No clipping mode off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
+    MSG_WriteMarker(serveraddr, 
+                    &net_buffer, 
+                    clc_cheat, 
+                    1);
+
 	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 }
 END_COMMAND (noclip)
@@ -864,7 +880,11 @@ BEGIN_COMMAND (chase)
 
 		consoleplayer().cheats ^= CF_CHASECAM;
 
-		MSG_WriteMarker(&net_buffer, clc_cheat);
+        MSG_WriteMarker(serveraddr, 
+                        &net_buffer, 
+                        clc_cheat, 
+                        1);
+
 		MSG_WriteByte(&net_buffer, consoleplayer().cheats);
 	}
 }

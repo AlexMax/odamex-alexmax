@@ -87,7 +87,11 @@ void SV_CTFEvent (flag_t f, flag_score_t event, player_t &who)
 
 		client_t *cl = &players[i].client;
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_ctfevent);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_ctfevent, 
+                         1 + 1 + 1 + 4 + (NUMFLAGS * 4));
+
 		MSG_WriteByte (&cl->reliablebuf, event);
 		MSG_WriteByte (&cl->reliablebuf, f);
 
@@ -117,7 +121,11 @@ void CTF_Connect(player_t &player)
 {
 	client_t *cl = &player.client;
 
-	MSG_WriteMarker (&cl->reliablebuf, svc_ctfevent);
+    MSG_WriteMarker (player, 
+                     &cl->reliablebuf, 
+                     svc_ctfevent, 
+                     1 + (NUMFLAGS * 2));
+
 	MSG_WriteByte (&cl->reliablebuf, SCORE_NONE);
 
 	for(size_t i = 0; i < NUMFLAGS; i++)

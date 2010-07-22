@@ -191,7 +191,11 @@ void SV_AcknowledgePacket(player_t &player)
 				return;
 			}
 
-			MSG_WriteMarker(&cl->reliablebuf, svc_missedpacket);
+            MSG_WriteMarker (player, 
+                             &cl->reliablebuf, 
+                             svc_missedpacket, 
+                             4 + 2);
+
 			MSG_WriteLong(&cl->reliablebuf, seq);
 			MSG_WriteShort(&cl->reliablebuf, cl->packetsize[n]);
 			if (cl->packetsize[n])

@@ -142,15 +142,27 @@ CVAR_FUNC_IMPL (sv_maxplayers)
 
 			if (normalcount > var)
 			{
-				for (size_t j = 0; j < players.size(); j++) {
-					MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
+				for (size_t j = 0; j < players.size(); j++) 
+				{
+                    MSG_WriteMarker (players[j], 
+                                     &(players[j].client.reliablebuf), 
+                                     svc_spectate, 
+                                     1 + 1);
+
 					MSG_WriteByte (&(players[j].client.reliablebuf), players[i].id);
 					MSG_WriteByte (&(players[j].client.reliablebuf), true);
 				}
 				SV_BroadcastPrintf (PRINT_HIGH, "%s became a spectator.\n", players[i].userinfo.netname);
-				MSG_WriteMarker (&players[i].client.reliablebuf, svc_print);
+
+                const char *str = "Active player limit reduced. You are now a spectator!\n";
+                
+                MSG_WriteMarker (players[i], 
+                                 &(players[i].client.reliablebuf), 
+                                 svc_print, 
+                                 1 + strlen(str));
 				MSG_WriteByte (&players[i].client.reliablebuf, PRINT_CHAT);
-				MSG_WriteString (&players[i].client.reliablebuf, "Active player limit reduced. You are now a spectator!\n");
+				MSG_WriteString (&players[i].client.reliablebuf, str);
+
 				players[i].spectator = true;
 				players[i].playerstate = PST_LIVE;
 				players[i].joinafterspectatortime = level.time;
@@ -226,7 +238,7 @@ void SV_CheckTeam (player_t & playernum);
 team_t SV_GoodTeam (void);
 void SV_ForceSetTeam (player_t &who, int team);
 
-void SV_SendServerSettings (client_t *cl);
+void SV_SendServerSettings(player_t &pl);
 void SV_ServerSettingChange (void);
 
 // some doom functions
@@ -785,7 +797,7 @@ void SV_MidPrint (const char *msg, player_t *p)
 {
     client_t *cl = &p->client;
 
-    MSG_WriteMarker(&cl->reliablebuf, svc_midprint);
+    MSG_WriteMarker(*p, &cl->reliablebuf, svc_midprint, strlen(msg) + 1);
     MSG_WriteString(&cl->reliablebuf, msg);
 }
 
@@ -820,7 +832,11 @@ void SV_Sound (AActor *mo, byte channel, const char *name, byte attenuation)
 			vol = SV_PlayerHearingLoss(players[i], x, y);
 		}
 
-		MSG_WriteMarker (&cl->netbuf, svc_startsound);
+        MSG_WriteMarker (players[i], 
+                         &cl->netbuf, 
+                         svc_startsound, 
+                         2 + 4 + 4 + 1 + 1 + 1 + 1);
+
 		if(mo)
 			MSG_WriteShort (&cl->netbuf, mo->netid);
 		else
@@ -861,7 +877,10 @@ void SV_Sound (player_t &pl, AActor *mo, byte channel, const char *name, byte at
 
 	client_t *cl = &pl.client;
 
-	MSG_WriteMarker (&cl->netbuf, svc_startsound);
+    MSG_WriteMarker (pl, 
+                     &cl->netbuf, 
+                     svc_startsound, 
+                     2 + 4 + 4 + 1 + 1 + 1 + 1);
 	if (mo == NULL)
 		MSG_WriteShort (&cl->netbuf, 0);
 	else
@@ -914,7 +933,10 @@ void UV_SoundAvoidPlayer (AActor *mo, byte channel, const char *name, byte atten
 			vol = SV_PlayerHearingLoss(players[i], x, y);
 		}
 
-		MSG_WriteMarker (&cl->netbuf, svc_startsound);
+        MSG_WriteMarker (players[i], 
+                         &cl->netbuf, 
+                         svc_startsound, 
+                         2 + 4 + 4 + 1 + 1 + 1 + 1);
         if (mo == NULL)
             MSG_WriteShort (&cl->netbuf, 0);
         else
@@ -955,7 +977,11 @@ void SV_SoundTeam (byte channel, const char* name, byte attenuation, int team)
 			{
 				cl = &clients[i];
 
-				MSG_WriteMarker  (&cl->netbuf, svc_startsound );
+                MSG_WriteMarker (players[i], 
+                                 &cl->netbuf, 
+                                 svc_startsound, 
+                                 2 + 4 + 4 + 1 + 1 + 1 + 1);
+
                 if (players[i].mo == NULL)
                     MSG_WriteShort (&cl->netbuf, 0);
                 else
@@ -995,7 +1021,11 @@ void SV_Sound (fixed_t x, fixed_t y, byte channel, const char *name, byte attenu
 
 		if((vol = SV_PlayerHearingLoss(players[i], x, y)))
 		{
-			MSG_WriteMarker (&cl->netbuf, svc_soundorigin);
+            MSG_WriteMarker (players[i], 
+                             &cl->netbuf, 
+                             svc_soundorigin, 
+                             4 + 4 + 1 + 1 + 1 + 1);
+
 			MSG_WriteLong (&cl->netbuf, x);
 			MSG_WriteLong (&cl->netbuf, y);
 			MSG_WriteByte (&cl->netbuf, channel);
@@ -1015,7 +1045,11 @@ void SV_UpdateFrags (player_t &player)
     {
         client_t *cl = &clients[i];
 
-        MSG_WriteMarker (&cl->reliablebuf, svc_updatefrags);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_updatefrags, 
+                         1 + 2 + 2 + 2);
+
         MSG_WriteByte (&cl->reliablebuf, player.id);
         if(sv_gametype != GM_COOP)
             MSG_WriteShort (&cl->reliablebuf, player.fragcount);
@@ -1029,11 +1063,22 @@ void SV_UpdateFrags (player_t &player)
 //
 // SV_SendUserInfo
 //
-void SV_SendUserInfo (player_t &player, client_t* cl)
+void SV_SendUserInfo (player_t &otherplayer, player_t &pl)
 {
-	player_t *p = &player;
+	player_t *p = &otherplayer;
+    client_t *cl = &pl.client;
 
-	MSG_WriteMarker	(&cl->reliablebuf, svc_userinfo);
+    MSG_WriteMarker (pl, 
+                     &cl->reliablebuf, 
+                     svc_userinfo, 
+                     1 + 
+                     strlen(p->userinfo.netname) + 
+                     1 + 
+                     4 + 
+                     4 + 
+                     strlen(skins[p->userinfo.skin].name) +
+                     2);
+
 	MSG_WriteByte	(&cl->reliablebuf, p->id);
 	MSG_WriteString (&cl->reliablebuf, p->userinfo.netname);
 	MSG_WriteByte	(&cl->reliablebuf, p->userinfo.team);
@@ -1110,7 +1155,7 @@ void SV_SetupUserInfo (player_t &player)
 	// inform all players of new player info
 	for (size_t i = 0; i < players.size(); i++ )
 	{
-		SV_SendUserInfo (player, &clients[i]);
+		SV_SendUserInfo (player, players[i]);
 	}
 }
 
@@ -1123,7 +1168,10 @@ void SV_ForceSetTeam (player_t &who, team_t team)
 {
 	client_t *cl = &who.client;
 
-	MSG_WriteMarker (&cl->reliablebuf, svc_forceteam);
+    MSG_WriteMarker (who, 
+                     &cl->reliablebuf, 
+                     svc_forceteam, 
+                     2);
 
 	who.userinfo.team = team;
 	Printf (PRINT_HIGH, "Forcing %s to %s team\n", who.userinfo.netname, team == TEAM_NONE ? "NONE" : team_names[team]);
@@ -1232,9 +1280,21 @@ byte SV_PlayerHearingLoss(player_t &pl, fixed_t &x, fixed_t &y)
 //
 // SV_SendMobjToClient
 //
-void SV_SendMobjToClient(AActor *mo, client_t *cl)
+void SV_SendMobjToClient(AActor *mo, player_t &pl)
 {
-	MSG_WriteMarker(&cl->reliablebuf, svc_spawnmobj);
+    client_t *cl = &pl.client;
+    
+    size_t Size = 4 + 4 + 4 + 4 + 2 + 2 + 1 + 2;
+    
+    // [Russell] - Add up the extra data
+    if (mo->flags & MF_MISSILE || mobjinfo[mo->type].flags & MF_MISSILE)
+        Size += 2 + 2 + 4 + 4 + 4 + 4;
+    
+    MSG_WriteMarker (pl, 
+                     &cl->reliablebuf, 
+                     svc_spawnmobj, 
+                     Size);
+
 	MSG_WriteLong(&cl->reliablebuf, mo->x);
 	MSG_WriteLong(&cl->reliablebuf, mo->y);
 	MSG_WriteLong(&cl->reliablebuf, mo->z);
@@ -1258,7 +1318,11 @@ void SV_SendMobjToClient(AActor *mo, client_t *cl)
 	{
 		if(mo->flags & MF_AMBUSH || mo->flags & MF_DROPPED)
 		{
-			MSG_WriteMarker(&cl->reliablebuf, svc_mobjinfo);
+            MSG_WriteMarker (pl, 
+                             &cl->reliablebuf, 
+                             svc_mobjinfo, 
+                             2 + 4);
+
 			MSG_WriteShort(&cl->reliablebuf, mo->netid);
 			MSG_WriteLong(&cl->reliablebuf, mo->flags);
 		}
@@ -1267,7 +1331,11 @@ void SV_SendMobjToClient(AActor *mo, client_t *cl)
 	// animating corpses
 	if((mo->flags & MF_CORPSE) && mo->state - states != S_GIBS)
 	{
-		MSG_WriteMarker (&cl->reliablebuf, svc_corpse);
+        MSG_WriteMarker (pl, 
+                         &cl->reliablebuf, 
+                         svc_corpse, 
+                         2 + 1 + 1);
+
 		MSG_WriteShort (&cl->reliablebuf, mo->netid);
 		MSG_WriteByte (&cl->reliablebuf, mo->frame);
 		MSG_WriteByte (&cl->reliablebuf, mo->tics);
@@ -1334,7 +1402,11 @@ bool SV_AwarenessUpdate(player_t &player, AActor *mo)
 	{
 		mo->players_aware.erase(a);
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_removemobj);
+        MSG_WriteMarker (player, 
+                         &cl->reliablebuf, 
+                         svc_removemobj, 
+                         2);
+
 		MSG_WriteShort (&cl->reliablebuf, mo->netid);
 
 		return true;
@@ -1345,11 +1417,15 @@ bool SV_AwarenessUpdate(player_t &player, AActor *mo)
 
 		if(!mo->player || mo->player->playerstate != PST_LIVE)
 		{
-			SV_SendMobjToClient(mo, cl);
+			SV_SendMobjToClient(mo, player);
 		}
 		else
 		{
-			MSG_WriteMarker (&cl->reliablebuf, svc_spawnplayer);
+            MSG_WriteMarker (player, 
+                             &cl->reliablebuf, 
+                             svc_spawnplayer, 
+                             1 + 2 + 4 + 4 + 4 + 4);
+
 			MSG_WriteByte (&cl->reliablebuf, mo->player->id);
 			MSG_WriteShort (&cl->reliablebuf, mo->netid);
 			MSG_WriteLong (&cl->reliablebuf, mo->angle);
@@ -1442,15 +1518,20 @@ void SV_UpdateHiddenMobj (void)
 // SV_UpdateSectors
 // Update doors, floors, ceilings etc... that have at some point moved
 //
-void SV_UpdateSectors(client_t* cl)
+void SV_UpdateSectors(player_t &pl)
 {
+    client_t *cl = &pl.client;
 	for (int s=0; s<numsectors; s++)
 	{
 		sector_t* sec = &sectors[s];
 
 		if (sec->moveable)
 		{
-			MSG_WriteMarker (&cl->reliablebuf, svc_sector);
+            MSG_WriteMarker (pl, 
+                             &cl->reliablebuf, 
+                             svc_sector, 
+                             2 + 2 + 2 + 2 + 2);
+
 			MSG_WriteShort (&cl->reliablebuf, s);
 			MSG_WriteShort (&cl->reliablebuf, sec->floorheight>>FRACBITS);
 			MSG_WriteShort (&cl->reliablebuf, sec->ceilingheight>>FRACBITS);
@@ -1489,8 +1570,10 @@ void SV_UpdateSectors(client_t* cl)
 // SV_UpdateMovingSectors
 // Update doors, floors, ceilings etc... that are actively moving
 //
-void SV_UpdateMovingSectors(client_t* cl)
+void SV_UpdateMovingSectors(player_t &pl)
 {
+	client_t *cl = &pl.client;
+
 	for (int s=0; s<numsectors; s++)
 	{
 		sector_t* sec = &sectors[s];
@@ -1499,7 +1582,11 @@ void SV_UpdateMovingSectors(client_t* cl)
 		{
 			if(sec->floordata->IsKindOf(RUNTIME_CLASS(DPlat)))
 			{
-				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
+                MSG_WriteMarker (pl, 
+                                 &cl->netbuf, 
+                                 svc_movingsector, 
+                                 4 + 2 + 4 + 4 + 1 + 4);
+
 				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
 				MSG_WriteShort (&cl->netbuf, s);
 				MSG_WriteLong (&cl->netbuf, sec->floorheight);
@@ -1514,7 +1601,11 @@ void SV_UpdateMovingSectors(client_t* cl)
 			}
 			else if(sec->floordata->IsKindOf(RUNTIME_CLASS(DMovingFloor)))
 			{
-				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
+                MSG_WriteMarker (pl, 
+                                 &cl->netbuf, 
+                                 svc_movingsector, 
+                                 4 + 2 + 4 + 4 + 1 + 4);
+
 				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
 				MSG_WriteShort (&cl->netbuf, s);
 				MSG_WriteLong (&cl->netbuf, sec->floorheight);
@@ -1544,7 +1635,7 @@ void SV_ClientFullUpdate (player_t &pl)
 		if(players[i].mo)
 			SV_AwarenessUpdate(pl, players[i].mo);
 
-		SV_SendUserInfo(players[i], cl);
+		SV_SendUserInfo(players[i], pl);
 
 		if (cl->reliablebuf.cursize >= 600)
 			if(!SV_SendPacket(pl))
@@ -1557,7 +1648,11 @@ void SV_ClientFullUpdate (player_t &pl)
 		if (!players[i].ingame())
 			continue;
 
-		MSG_WriteMarker(&cl->reliablebuf, svc_updatefrags);
+        MSG_WriteMarker (pl, 
+                         &cl->reliablebuf, 
+                         svc_updatefrags, 
+                         1 + 2 + 2 + 2);
+
 		MSG_WriteByte(&cl->reliablebuf, players[i].id);
 		if(sv_gametype != GM_COOP)
 			MSG_WriteShort(&cl->reliablebuf, players[i].fragcount);
@@ -1566,15 +1661,19 @@ void SV_ClientFullUpdate (player_t &pl)
 		MSG_WriteShort(&cl->reliablebuf, players[i].deathcount);
 		MSG_WriteShort(&cl->reliablebuf, players[i].points);
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_spectate);
-		MSG_WriteByte (&cl->reliablebuf, players[i].id);
+        MSG_WriteMarker (pl, &cl->reliablebuf, svc_spectate, 1 + 1);
+        MSG_WriteByte (&cl->reliablebuf, players[i].id);
 		MSG_WriteByte (&cl->reliablebuf, players[i].spectator);
 	}
 
 	// [deathz0r] send team frags/captures if teamplay is enabled
 	if(sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF)
 	{
-		MSG_WriteMarker (&cl->reliablebuf, svc_teampoints);
+        MSG_WriteMarker (pl, 
+                         &cl->reliablebuf, 
+                         svc_teampoints, 
+                         NUMTEAMS * 2);
+
 		for (i = 0; i < NUMTEAMS; i++)
 			MSG_WriteShort (&cl->reliablebuf, TEAMpoints[i]);
 	}
@@ -1586,10 +1685,7 @@ void SV_ClientFullUpdate (player_t &pl)
 		CTF_Connect(pl);
 
 	// update sectors
-	SV_UpdateSectors(cl);
-	if (cl->reliablebuf.cursize >= 600)
-		if(!SV_SendPacket(pl))
-			return;
+	SV_UpdateSectors(pl);
 
 	// update switches
 	for (int l=0; l<numlines; l++)
@@ -1597,7 +1693,10 @@ void SV_ClientFullUpdate (player_t &pl)
 		unsigned state = 0, time = 0;
 		if(P_GetButtonInfo(&lines[l], state, time) || lines[l].wastoggled)
 		{
-			MSG_WriteMarker (&cl->reliablebuf, svc_switch);
+            MSG_WriteMarker (pl, 
+                             &cl->reliablebuf, 
+                             svc_switch, 
+                             4 + 1 + 1 + 4);
 			MSG_WriteLong (&cl->reliablebuf, l);
 			MSG_WriteByte (&cl->reliablebuf, lines[l].wastoggled);
 			MSG_WriteByte (&cl->reliablebuf, state);
@@ -1614,12 +1713,31 @@ void SV_ClientFullUpdate (player_t &pl)
 //	Sends server setting info
 //
 
-void SV_SendServerSettings (client_t *cl)
+void SV_SendServerSettings (player_t &pl)
 {
+	client_t *cl = &pl.client;
+
 	// GhostlyDeath <June 19, 2008> -- Loop through all CVARs and send the CVAR_SERVERINFO stuff only
 	cvar_t *var = GetFirstCvar();
 
-	MSG_WriteMarker(&cl->reliablebuf, svc_serversettings);
+	size_t Size = 0;
+
+	while (var)
+	{
+		if (var->flags() & CVAR_SERVERINFO)
+		{
+            Size += 1 + strlen(var->name()) + strlen(var->cstring());
+		}
+		
+		var = var->GetNext();
+	}
+
+    MSG_WriteMarker (pl, 
+                     &cl->reliablebuf, 
+                     svc_serversettings, 
+                     Size + 1);
+
+	var = GetFirstCvar();
 
 	while (var)
 	{
@@ -1647,7 +1765,7 @@ void SV_ServerSettingChange (void)
 		return;
 
 	for (size_t i = 0; i < players.size(); i++)
-		SV_SendServerSettings (&clients[i]);
+		SV_SendServerSettings (players[i]);
 }
 
 //
@@ -1655,8 +1773,10 @@ void SV_ServerSettingChange (void)
 //
 //  Checks a connecting player against a banlist
 //
-bool SV_BanCheck (client_t *cl, int n)
+bool SV_BanCheck (player_t &pl, int n)
 {
+    client_t *cl = &pl.client;
+
 	for (size_t i = 0; i < BanList.size(); i++)
 	{
 		bool match = false;
@@ -1708,16 +1828,25 @@ bool SV_BanCheck (client_t *cl, int n)
 			//	BanStr += "none given";
 			BanStr += ")\n";
 
-			MSG_WriteMarker   (&cl->reliablebuf, svc_print);
+            MSG_WriteMarker (pl, 
+                             &cl->reliablebuf, 
+                             svc_print, 
+                             1 + BanStr.size());
+
 			MSG_WriteByte   (&cl->reliablebuf, PRINT_HIGH);
 			MSG_WriteString (&cl->reliablebuf, BanStr.c_str());
 
 			// GhostlyDeath -- Do we include the e-mail or no?
 			if (*(sv_email.cstring()) == 0)
 			{
-				MSG_WriteMarker(&cl->reliablebuf, svc_print);
+                const char *str = "If you feel there has been an error, contact the server host. (No e-mail given)\n";
+
+                MSG_WriteMarker (pl, 
+                                 &cl->reliablebuf, 
+                                 svc_print, 
+                                 1 + strlen(str));
 				MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
-				MSG_WriteString(&cl->reliablebuf, "If you feel there has been an error, contact the server host. (No e-mail given)\n");
+				MSG_WriteString(&cl->reliablebuf, str);
 			}
 			else
 			{
@@ -1725,7 +1854,12 @@ bool SV_BanCheck (client_t *cl, int n)
 				ErrorStr += "If you feel there has been an error, contact the server host at ";
 				ErrorStr += sv_email.cstring();
 				ErrorStr += "\n\n";
-				MSG_WriteMarker(&cl->reliablebuf, svc_print);
+
+                MSG_WriteMarker (pl, 
+                                 &cl->reliablebuf, 
+                                 svc_print, 
+                                 1 + ErrorStr.size());
+
 				MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
 				MSG_WriteString(&cl->reliablebuf, ErrorStr.c_str());
 			}
@@ -1746,9 +1880,12 @@ bool SV_BanCheck (client_t *cl, int n)
 			//else
 			//	BanStr += "none given";
 			//BanStr += ")\n\n";
+            MSG_WriteMarker (pl, 
+                             &cl->reliablebuf, 
+                             svc_print, 
+                             1 + BanStr.size());
 
-			MSG_WriteMarker(&cl->reliablebuf, svc_print);
-			MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
+            MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
 			MSG_WriteString(&cl->reliablebuf, BanStr.c_str());
 
 			return false;
@@ -1759,7 +1896,7 @@ bool SV_BanCheck (client_t *cl, int n)
 }
 
 // SV_CheckClientVersion
-bool SV_CheckClientVersion(client_t *cl, int n)
+bool SV_CheckClientVersion(player_t &pl, int n)
 {
 	int GameVer = 0;
 	char VersionStr[20];
@@ -1773,6 +1910,8 @@ bool SV_CheckClientVersion(client_t *cl, int n)
 	int MAJORVER = GAMEVER / 256;
 	int MINORVER = (GAMEVER % 256) / 10;
 	int RELEASEVER = (GAMEVER % 256) % 10;
+
+	client_t *cl = &pl.client;
 
 	if ((GAMEVER % 256) % 10)
 		sprintf(OurVersionStr, "%i.%i.%i", GAMEVER / 256, (GAMEVER % 256) / 10, (GAMEVER % 256) % 10);
@@ -1887,12 +2026,19 @@ bool SV_CheckClientVersion(client_t *cl, int n)
 		// GhostlyDeath -- Now we tell them our built up message and boot em
 		cl->displaydisconnect = false;	// Don't spam the players
 
-		MSG_WriteMarker(&cl->reliablebuf, svc_print);
+        MSG_WriteMarker (pl, 
+                         &cl->reliablebuf, 
+                         svc_print, 
+                         FormattedString.str().length());
+
 		MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
 		MSG_WriteString(&cl->reliablebuf,
                         (const char *)FormattedString.str().c_str());
 
-		MSG_WriteMarker(&cl->reliablebuf, svc_disconnect);
+        MSG_WriteMarker (pl, 
+                         &cl->reliablebuf, 
+                         svc_disconnect, 
+                         0);
 
 		SV_SendPacket (players[n]);
 
@@ -1944,11 +2090,14 @@ void SV_ConnectClient (void)
 	if (n == -1)  // a server is full
 	{
 		static buf_t smallbuf(16);
+		// TODO
+/*
 
 		MSG_WriteLong (&smallbuf, 0);
+
 		MSG_WriteMarker (&smallbuf, svc_full);
 
-		NET_SendPacket (smallbuf, net_from);
+		NET_SendPacket (smallbuf, net_from);*/
 
 		return;
 	}
@@ -1989,20 +2138,24 @@ void SV_ConnectClient (void)
 	cl->version = MSG_ReadShort();
 	byte connection_type = MSG_ReadByte();
 
-	if (!SV_CheckClientVersion(cl, n))
+	if (!SV_CheckClientVersion(players[n], n))
 	{
 		SV_DropClient(players[n]);
 		return;
 	}
 
-	if (SV_BanCheck(cl, n))
+	if (SV_BanCheck(players[n], n))
 	{
 		SV_DropClient(players[n]);
 		return;
 	}
 
 	// send consoleplayer number
-	MSG_WriteMarker (&cl->reliablebuf, svc_consoleplayer);
+    MSG_WriteMarker (players[n], 
+                     &cl->reliablebuf, 
+                     svc_consoleplayer, 
+                     1 + cl->digest.size());
+
 	MSG_WriteByte (&cl->reliablebuf, players[n].id);
 	MSG_WriteString (&cl->reliablebuf, cl->digest.c_str());
 
@@ -2019,10 +2172,15 @@ void SV_ConnectClient (void)
 
     if (strlen(join_password.cstring()) && MD5SUM(join_password.cstring()) != passhash)
     {
-        MSG_WriteMarker(&cl->reliablebuf, svc_print);
+        const char *str = "Server is passworded, no password specified or bad password\n";
+
+        MSG_WriteMarker (players[n], 
+                         &cl->reliablebuf, 
+                         svc_print, 
+                         1 + strlen(str));
+
         MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
-        MSG_WriteString (&cl->reliablebuf,
-                         "Server is passworded, no password specified or bad password\n");
+        MSG_WriteString (&cl->reliablebuf, str);
 
         SV_SendPacket(players[n]);
 
@@ -2032,7 +2190,7 @@ void SV_ConnectClient (void)
     }
 
 	// [Toke] send server settings
-	SV_SendServerSettings (cl);
+	SV_SendServerSettings (players[n]);
 
 	cl->download.name = "";
 	if(connection_type == 1)
@@ -2056,14 +2214,22 @@ void SV_ConnectClient (void)
 		players[n].spectator	= true;
 		for (size_t j = 0; j < players.size(); j++)
 		{
-			MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
+            MSG_WriteMarker (players[j], 
+                             &(players[j].client.reliablebuf), 
+                             svc_spectate, 
+                             1 + 1);
+
 			MSG_WriteByte (&(players[j].client.reliablebuf), players[n].id);
 			MSG_WriteByte (&(players[j].client.reliablebuf), true);
 		}
 	}
 
 	// send a map name
-	MSG_WriteMarker   (&cl->reliablebuf, svc_loadmap);
+    MSG_WriteMarker (players[n], 
+                     &cl->reliablebuf, 
+                     svc_loadmap, 
+                     strlen(level.mapname));
+
 	MSG_WriteString (&cl->reliablebuf, level.mapname);
 	G_DoReborn (players[n]);
 	SV_ClientFullUpdate (players[n]);
@@ -2076,7 +2242,11 @@ void SV_ConnectClient (void)
 	{
 		client_t &cl = clients[i];
 
-		MSG_WriteMarker(&cl.reliablebuf, svc_connectclient);
+        MSG_WriteMarker (players[i], 
+                         &cl.reliablebuf, 
+                         svc_connectclient, 
+                         1);
+
 		MSG_WriteByte(&cl.reliablebuf, players[n].id);
 	}
 	
@@ -2103,7 +2273,11 @@ void SV_DisconnectClient(player_t &who)
 	{
 	   client_t &cl = clients[i];
 
-	   MSG_WriteMarker(&cl.reliablebuf, svc_disconnectclient);
+       MSG_WriteMarker (players[i], 
+                         &cl.reliablebuf, 
+                         svc_disconnectclient, 
+                         1);
+
 	   MSG_WriteByte(&cl.reliablebuf, who.id);
 	}
 
@@ -2179,7 +2353,10 @@ void SV_DropClient(player_t &who)
 {
 	client_t *cl = &who.client;
 
-	MSG_WriteMarker(&cl->reliablebuf, svc_disconnect);
+    MSG_WriteMarker (who, 
+                     &cl->reliablebuf, 
+                     svc_disconnect, 
+                     0);
 
 	SV_SendPacket(who);
 
@@ -2195,7 +2372,11 @@ void SV_SendDisconnectSignal()
     {
 		client_t *cl = &players[i].client;
 
-		MSG_WriteMarker(&cl->reliablebuf, svc_disconnect);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_disconnect, 
+                         0);
+
 		SV_SendPacket(players[i]);
 
 		if(players[i].mo)
@@ -2216,7 +2397,11 @@ void SV_SendReconnectSignal()
 	{
 		client_t *cl = &clients[i];
 
-		MSG_WriteMarker(&cl->reliablebuf, svc_reconnect);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_reconnect, 
+                         0);
+
 		SV_SendPacket(players[i]);
 
 		if(players[i].mo)
@@ -2236,7 +2421,10 @@ void SV_ExitLevel()
 	{
 	   client_t *cl = &clients[i];
 
-	   MSG_WriteMarker(&cl->netbuf, svc_exitlevel);
+        MSG_WriteMarker (players[i], 
+                         &cl->netbuf, 
+                         svc_exitlevel, 
+                         0);
 	}
 }
 
@@ -2509,7 +2697,11 @@ void STACK_ARGS SV_BroadcastPrintf (int level, const char *fmt, ...)
     {
 		cl = &clients[i];
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_print);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_print, 
+                         1 + strlen(string));
+
 		MSG_WriteByte (&cl->reliablebuf, level);
 		MSG_WriteString (&cl->reliablebuf, string);
     }
@@ -2534,7 +2726,11 @@ void STACK_ARGS SV_SpectatorPrintf (int level, const char *fmt, ...)
 
 		if (players[i].spectator)
 		{
-			MSG_WriteMarker (&cl->reliablebuf, svc_print);
+            MSG_WriteMarker (players[i], 
+                             &cl->reliablebuf, 
+                             svc_print, 
+                             1 + strlen(string));
+
 			MSG_WriteByte (&cl->reliablebuf, level);
 			MSG_WriteString (&cl->reliablebuf, string);
 		}
@@ -2563,7 +2759,11 @@ void STACK_ARGS SV_TeamPrintf (int level, int who, const char *fmt, ...)
 
 		cl = &clients[i];
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_print);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_print, 
+                         1 + strlen(string));
+
 		MSG_WriteByte (&cl->reliablebuf, level);
 		MSG_WriteString (&cl->reliablebuf, string);
     }
@@ -2654,36 +2854,47 @@ void SV_UpdateMissiles(player_t &pl)
 		{
 			client_t *cl = &pl.client;
 
-			MSG_WriteMarker (&cl->netbuf, svc_movemobj);
+            MSG_WriteMarker (pl, 
+                             &cl->netbuf, 
+                             svc_movemobj, 
+                             2 + 1 + 4 + 4 + 4);
+
 			MSG_WriteShort (&cl->netbuf, mo->netid);
 			MSG_WriteByte (&cl->netbuf, mo->rndindex);
 			MSG_WriteLong (&cl->netbuf, mo->x);
 			MSG_WriteLong (&cl->netbuf, mo->y);
 			MSG_WriteLong (&cl->netbuf, mo->z);
 
-			MSG_WriteMarker (&cl->netbuf, svc_mobjspeedangle);
+            MSG_WriteMarker (pl, 
+                             &cl->netbuf, 
+                             svc_mobjspeedangle, 
+                             2 + 4 + 4 + 4 + 4);
+
 			MSG_WriteShort(&cl->netbuf, mo->netid);
 			MSG_WriteLong (&cl->netbuf, mo->angle);
 			MSG_WriteLong (&cl->netbuf, mo->momx);
 			MSG_WriteLong (&cl->netbuf, mo->momy);
 			MSG_WriteLong (&cl->netbuf, mo->momz);
 
-			MSG_WriteMarker (&cl->netbuf, svc_actor_movedir);
+            MSG_WriteMarker (pl, 
+                             &cl->netbuf, 
+                             svc_actor_movedir, 
+                             2 + 1 + 4);
+
 			MSG_WriteShort(&cl->netbuf, mo->netid);
 			MSG_WriteByte (&cl->netbuf, mo->movedir);
 			MSG_WriteLong (&cl->netbuf, mo->movecount);
 
-
             if (mo->target)
             {
-                MSG_WriteMarker (&cl->netbuf, svc_actor_target);
+                MSG_WriteMarker (pl, &cl->netbuf, svc_actor_target, 2 + 2);
                 MSG_WriteShort(&cl->netbuf, mo->netid);
                 MSG_WriteShort (&cl->netbuf, mo->target->netid);
             }
             
             if (mo->tracer)
             {
-                MSG_WriteMarker (&cl->netbuf, svc_actor_tracer);
+                MSG_WriteMarker (pl, &cl->netbuf, svc_actor_tracer, 2 + 2);
                 MSG_WriteShort(&cl->netbuf, mo->netid);
                 MSG_WriteShort (&cl->netbuf, mo->tracer->netid);
             }
@@ -2697,15 +2908,15 @@ void SV_UpdateMissiles(player_t &pl)
                 (mobjinfo[mo->type].xdeathstate == (statenum_t)(mo->state - states)) ||
                 (mobjinfo[mo->type].raisestate == (statenum_t)(mo->state - states)))
             {
-                MSG_WriteMarker (&cl->netbuf, svc_mobjstate);
+                MSG_WriteMarker (pl, 
+                                 &cl->netbuf, 
+                                 svc_mobjstate, 
+                                 2 + 2);
+
                 MSG_WriteShort (&cl->netbuf, mo->netid);
                 MSG_WriteShort (&cl->netbuf, (mo->state - states));
             }
-
-            if (cl->netbuf.cursize >= 1024)
-                if(!SV_SendPacket(pl))
-                    return;
-		}
+        }
     }
 }
 
@@ -2733,28 +2944,40 @@ void SV_UpdateMonsters(player_t &pl)
 		{
 			client_t *cl = &pl.client;
 
-			MSG_WriteMarker (&cl->netbuf, svc_movemobj);
+            MSG_WriteMarker (pl, 
+                             &cl->netbuf, 
+                             svc_movemobj, 
+                             2 + 1 + 4 + 4 + 4);
+
 			MSG_WriteShort (&cl->netbuf, mo->netid);
 			MSG_WriteByte (&cl->netbuf, mo->rndindex);
 			MSG_WriteLong (&cl->netbuf, mo->x);
 			MSG_WriteLong (&cl->netbuf, mo->y);
 			MSG_WriteLong (&cl->netbuf, mo->z);
 
-			MSG_WriteMarker (&cl->netbuf, svc_mobjspeedangle);
+            MSG_WriteMarker (pl, 
+                             &cl->netbuf, 
+                             svc_mobjspeedangle, 
+                             2 + 4 + 4 + 4 + 4);
+
 			MSG_WriteShort(&cl->netbuf, mo->netid);
 			MSG_WriteLong (&cl->netbuf, mo->angle);
 			MSG_WriteLong (&cl->netbuf, mo->momx);
 			MSG_WriteLong (&cl->netbuf, mo->momy);
 			MSG_WriteLong (&cl->netbuf, mo->momz);
 
-			MSG_WriteMarker (&cl->netbuf, svc_actor_movedir);
+            MSG_WriteMarker (pl, 
+                             &cl->netbuf, 
+                             svc_actor_movedir, 
+                             2 + 1 + 4);
+
 			MSG_WriteShort (&cl->netbuf, mo->netid);
 			MSG_WriteByte (&cl->netbuf, mo->movedir);
 			MSG_WriteLong (&cl->netbuf, mo->movecount);
 
             if (mo->target)
             {
-                MSG_WriteMarker (&cl->netbuf, svc_actor_target);
+                MSG_WriteMarker (pl, &cl->netbuf, svc_actor_target, 2 + 2);
                 MSG_WriteShort(&cl->netbuf, mo->netid);
                 MSG_WriteShort (&cl->netbuf, mo->target->netid);
             }
@@ -2768,15 +2991,15 @@ void SV_UpdateMonsters(player_t &pl)
                 (mobjinfo[mo->type].xdeathstate == (statenum_t)(mo->state - states)) ||
                 (mobjinfo[mo->type].raisestate == (statenum_t)(mo->state - states)))
             {
-                MSG_WriteMarker (&cl->netbuf, svc_mobjstate);
+                MSG_WriteMarker (pl, 
+                                 &cl->netbuf, 
+                                 svc_mobjstate, 
+                                 2 + 2);
+
                 MSG_WriteShort (&cl->netbuf, mo->netid);
                 MSG_WriteShort (&cl->netbuf, (mo->state - states));
             }
-
-            if (cl->netbuf.cursize >= 1024)
-                if(!SV_SendPacket(pl))
-                    return;
-		}
+        }
     }
 }
 
@@ -2795,7 +3018,11 @@ void SV_ActorTarget(AActor *actor)
 		if(!SV_IsPlayerAllowedToSee(players[i], actor))
 			continue;
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_actor_target);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_actor_target, 
+                         2 + 2);
+
 		MSG_WriteShort (&cl->reliablebuf, actor->netid);
 		MSG_WriteShort (&cl->reliablebuf, actor->target ? actor->target->netid : 0);
 	}
@@ -2813,7 +3040,11 @@ void SV_ActorTracer(AActor *actor)
 
 		client_t *cl = &clients[i];
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_actor_tracer);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_actor_tracer, 
+                         2 + 2);
+
 		MSG_WriteShort (&cl->reliablebuf, actor->netid);
 		MSG_WriteShort (&cl->reliablebuf, actor->tracer ? actor->tracer->netid : 0);
 	}
@@ -2862,12 +3093,18 @@ void SV_RemoveCorpses (void)
 // SV_SendGametic
 // Sends gametic to calculate ping
 //
-void SV_SendGametic(client_t* cl)
+void SV_SendGametic(player_t& pl)
 {
+    client_t *cl = &pl.client;
+
 	if ((gametic%100) != 0)
 		return;
 
-	MSG_WriteMarker (&cl->reliablebuf, svc_svgametic);
+    MSG_WriteMarker (pl, 
+                     &cl->reliablebuf, 
+                     svc_svgametic, 
+                     4);
+
 	MSG_WriteLong (&cl->reliablebuf, I_MSTime());
 }
 
@@ -2897,7 +3134,11 @@ void SV_UpdatePing(client_t* cl)
 		if (!players[j].ingame())
 			continue;
 
-	    MSG_WriteMarker(&cl->reliablebuf, svc_updateping);
+        MSG_WriteMarker (players[j], 
+                         &cl->reliablebuf, 
+                         svc_updateping, 
+                         1 + 4);
+
 	    MSG_WriteByte(&cl->reliablebuf, players[j].id);  // player
 	    MSG_WriteLong(&cl->reliablebuf, players[j].ping);
 	}
@@ -3004,7 +3245,11 @@ void SV_WriteCommands(void)
 				if(!SV_IsPlayerAllowedToSee(players[i], players[j].mo))
 					continue;
 
-				MSG_WriteMarker(&cl->netbuf, svc_moveplayer);
+                MSG_WriteMarker (players[i], 
+                                 &cl->netbuf, 
+                                 svc_moveplayer, 
+                                 1 + 4 + 4 + 4 + 4 + 4 + 1 + 4 + 4 + 4);
+
 				MSG_WriteByte(&cl->netbuf, players[j].id);     // player number
 				MSG_WriteLong(&cl->netbuf, cl->lastclientcmdtic);
 				MSG_WriteLong(&cl->netbuf, players[j].mo->x);
@@ -3030,7 +3275,7 @@ void SV_WriteCommands(void)
 
 		SV_UpdateMonsters(players[i]);
 
-	 	SV_SendGametic(cl); // to calculate a ping value, when
+	 	SV_SendGametic(players[i]); // to calculate a ping value, when
 		                    // a client returns it.
 		SV_UpdatePing(cl);
 	}
@@ -3168,7 +3413,11 @@ void SV_UpdateConsolePlayer(player_t &player)
 	client_t *cl = &player.client;
 
 	// client player will update his position if packets were missed
-	MSG_WriteMarker (&cl->netbuf, svc_updatelocalplayer);
+    MSG_WriteMarker (player, 
+                     &cl->netbuf, 
+                     svc_updatelocalplayer, 
+                     4 + 4 + 4 + 4 + 4 + 4 + 4);
+
 	MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
 
 	MSG_WriteLong (&cl->netbuf, mo->x);
@@ -3179,7 +3428,7 @@ void SV_UpdateConsolePlayer(player_t &player)
 	MSG_WriteLong (&cl->netbuf, mo->momy);
 	MSG_WriteLong (&cl->netbuf, mo->momz);
 
-	SV_UpdateMovingSectors(cl); // denis - fixme - todo - only info about the sector player is standing on info should be sent. note that this is not player->mo->subsector->sector
+	SV_UpdateMovingSectors(player); // denis - fixme - todo - only info about the sector player is standing on info should be sent. note that this is not player->mo->subsector->sector
 
 //	MSG_WriteShort (&cl->netbuf, mo->momx >> FRACBITS);
 //	MSG_WriteShort (&cl->netbuf, mo->momy >> FRACBITS);
@@ -3268,8 +3517,13 @@ void SV_Spectate (player_t &player)
 				if ((multiplayer && level.time > player.joinafterspectatortime + TICRATE*3) ||
 					level.time > player.joinafterspectatortime + TICRATE*5) {
 					player.spectator = false;
-					for (size_t j = 0; j < players.size(); j++) {
-						MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
+					for (size_t j = 0; j < players.size(); j++) 
+					{
+                        MSG_WriteMarker (players[j], 
+                                         &(players[j].client.reliablebuf), 
+                                         svc_spectate, 
+                                         1 + 1);
+
 						MSG_WriteByte (&(players[j].client.reliablebuf), player.id);
 						MSG_WriteByte (&(players[j].client.reliablebuf), false);
 					}
@@ -3290,8 +3544,13 @@ void SV_Spectate (player_t &player)
 		}
 	} else if (gamestate != GS_INTERMISSION) {
 		if (!player.spectator) {
-			for (size_t j = 0; j < players.size(); j++) {
-				MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
+			for (size_t j = 0; j < players.size(); j++) 
+			{
+                MSG_WriteMarker (players[j], 
+                                 &(players[j].client.reliablebuf), 
+                                 svc_spectate, 
+                                 1 + 1);
+
 				MSG_WriteByte (&(players[j].client.reliablebuf), player.id);
 				MSG_WriteByte (&(players[j].client.reliablebuf), true);
 			}
@@ -3325,9 +3584,15 @@ void SV_RConPassword (player_t &player)
 	}
 	else
 	{
-		MSG_WriteMarker (&cl->reliablebuf, svc_print);
+	    const char *str = "Bad password\n";
+	    
+        MSG_WriteMarker (player, 
+                         &cl->reliablebuf, 
+                         svc_print, 
+                         1 + strlen(str));
+
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
-		MSG_WriteString (&cl->reliablebuf, "Bad password\n");
+		MSG_WriteString (&cl->reliablebuf, str);
 	}
 }
 
@@ -3438,9 +3703,15 @@ void SV_WantWad(player_t &player)
 
 	if(!sv_waddownload)
 	{
-		MSG_WriteMarker (&cl->reliablebuf, svc_print);
+        const char *str = "Server: Downloading is disabled\n";
+        
+        MSG_WriteMarker (player, 
+                         &cl->reliablebuf, 
+                         svc_print, 
+                         1 + strlen(str));
+
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
-		MSG_WriteString (&cl->reliablebuf, "Server: Downloading is disabled\n");
+		MSG_WriteString (&cl->reliablebuf, str);
 		SV_DropClient(player);
 		return;
 	}
@@ -3463,9 +3734,15 @@ void SV_WantWad(player_t &player)
 
 	if(i == wadnames.size())
 	{
-		MSG_WriteMarker (&cl->reliablebuf, svc_print);
+        const char *str = "Server: Bad wad request\n";
+        
+        MSG_WriteMarker (player, 
+                         &cl->reliablebuf, 
+                         svc_print, 
+                         1 + strlen(str));
+
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
-		MSG_WriteString (&cl->reliablebuf, "Server: Bad wad request\n");
+		MSG_WriteString (&cl->reliablebuf, str);
 		SV_DropClient(player);
 		return;
 	}
@@ -3473,9 +3750,15 @@ void SV_WantWad(player_t &player)
 	// denis - do not download commercial wads
 	if(W_IsIWAD(wadnames[i], wadhashes[i]))
 	{
-		MSG_WriteMarker (&cl->reliablebuf, svc_print);
+        const char *str = "Server: This is a commercial wad and will not be downloaded\n";
+        
+        MSG_WriteMarker (player, 
+                         &cl->reliablebuf, 
+                         svc_print, 
+                         1 + strlen(str));
+
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
-		MSG_WriteString (&cl->reliablebuf, "Server: This is a commercial wad and will not be downloaded\n");
+		MSG_WriteString (&cl->reliablebuf, str);
 
 		SV_DropClient(player);
 		return;
@@ -3660,21 +3943,23 @@ void SV_WadDownloads (void)
 
 		read = W_ReadChunk(cl->download.name.c_str(), cl->download.next_offset, sizeof(buff), buff, filelen);
 
-        // [Russell] - We take into account the maximum packet limit so we don't
-        // go over it and end up with a mangled package, the numeric values here
-        // represent the size of each written data type that follows
-        if ((cl->netbuf.cursize + 1 + 4 + 1 + 4 + 2 + read) >= 8192)
-            SV_SendPacket(players[i]);
-
-		if(read)
+        if(read)
 		{
 			if(!cl->download.next_offset)
 			{
-				MSG_WriteMarker (&cl->netbuf, svc_wadinfo);
-				MSG_WriteLong (&cl->netbuf, filelen);
+                MSG_WriteMarker (players[i], 
+                                 &cl->reliablebuf, 
+                                 svc_wadinfo, 
+                                 4);
+
+				MSG_WriteLong (&cl->reliablebuf, filelen);
 			}
 
-			MSG_WriteMarker (&cl->netbuf, svc_wadchunk);
+            MSG_WriteMarker (players[i], 
+                             &cl->netbuf, 
+                             svc_wadchunk, 
+                             4 + 2 + read);
+
 			MSG_WriteLong (&cl->netbuf, cl->download.next_offset);
 			MSG_WriteShort (&cl->netbuf, read);
 			MSG_WriteChunk (&cl->netbuf, buff, read);
@@ -3796,7 +4081,7 @@ void SV_TouchSpecial(AActor *special, player_t *player)
     if (cl == NULL || special == NULL)
         return;
         
-    MSG_WriteMarker(&cl->reliablebuf, svc_touchspecial);
+    MSG_WriteMarker(*player, &cl->reliablebuf, svc_touchspecial, 2);
     MSG_WriteShort(&cl->reliablebuf, special->netid);
 }
 
@@ -3953,7 +4238,11 @@ void OnChangedSwitchTexture (line_t *line, int useAgain)
 	{
 		client_t *cl = &clients[i];
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_switch);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_switch, 
+                         4 + 1 + 1 + 4);
+
 		MSG_WriteLong (&cl->reliablebuf, l);
 		MSG_WriteByte (&cl->reliablebuf, line->wastoggled);
 		MSG_WriteByte (&cl->reliablebuf, state);
@@ -3977,7 +4266,11 @@ void OnActivatedLine (line_t *line, AActor *mo, int side, int activationType)
 
 		client_t *cl = &clients[i];
 
-		MSG_WriteMarker (&cl->reliablebuf, svc_activateline);
+        MSG_WriteMarker (players[i], 
+                         &cl->reliablebuf, 
+                         svc_activateline, 
+                         4 + 2 + 1 + 1);
+
 		MSG_WriteLong (&cl->reliablebuf, l);
 		MSG_WriteShort (&cl->reliablebuf, mo->netid);
 		MSG_WriteByte (&cl->reliablebuf, side);

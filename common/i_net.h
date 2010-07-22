@@ -53,6 +53,8 @@ struct msg_info_t
 	const char *getName() { return msgName ? msgName : ""; }
 };
 
+typedef class player_s player_t;
+
 // network messages
 enum svc_t
 {
@@ -445,8 +447,8 @@ void SZ_Write (buf_t *b, const void *data, int length);
 void SZ_Write (buf_t *b, const byte *data, int startpos, int length);
 
 void MSG_WriteByte (buf_t *b, byte c);
-void MSG_WriteMarker (buf_t *b, svc_t c);
-void MSG_WriteMarker (buf_t *b, clc_t c);
+void MSG_WriteMarker (player_t &Player, buf_t *b, svc_t c, const size_t Size);
+void MSG_WriteMarker (netadr_t &To, buf_t *b, clc_t c, const size_t Size);
 void MSG_WriteShort (buf_t *b, short c);
 void MSG_WriteLong (buf_t *b, int c);
 void MSG_WriteBool(buf_t *b, bool);
