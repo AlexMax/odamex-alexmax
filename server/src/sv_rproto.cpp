@@ -31,11 +31,35 @@
 #include "sv_main.h"
 #include "huffman.h"
 #include "i_net.h"
+#include "i_system.h"
 
 EXTERN_CVAR (sv_networkcompression)
 
 buf_t plain(MAX_UDP_PACKET); // denis - todo - call_terms destroys these statics on quit
 buf_t sendd(MAX_UDP_PACKET);
+
+// Special writer for headers and whatnot
+void MSG_WriteHMarker(player_t &Player, buf_t *b, svc_t c, const size_t Size)
+{
+    // Check if the size of the marker and its payload goes over the buffers
+	// boundary, die a horrible death if it does
+	if (sizeof(c) + Size > b->allocsize)
+	{
+	    I_FatalError("HMarker %s (size %lu) would overflow buffer (size %lu)\n", 
+            svc_info[c].getName(), (sizeof(c) + Size), b->allocsize);
+	}
+
+    // Now check the buffers current position/size, marker size, size of payload
+    // if its greater, send the current buffer, clear the contents and write out 
+    // the new marker 
+	if (b->cursize + sizeof(c) + Size > b->allocsize)
+    {        
+        // this function already clears the packet
+        SV_SendPacket(Player);
+    }
+
+	b->WriteByte((byte)c);
+}
 
 //
 // SV_CompressPacket
@@ -191,10 +215,10 @@ void SV_AcknowledgePacket(player_t &player)
 				return;
 			}
 
-            MSG_WriteMarker (player, 
+            MSG_WriteHMarker (player, 
                              &cl->reliablebuf, 
                              svc_missedpacket, 
-                             4 + 2);
+                             4 + 2 + (cl->packetsize[n]));
 
 			MSG_WriteLong(&cl->reliablebuf, seq);
 			MSG_WriteShort(&cl->reliablebuf, cl->packetsize[n]);
@@ -209,10 +233,6 @@ void SV_AcknowledgePacket(player_t &player)
 				cl->last_sequence = sequence;
 				return;
 			}
-
-			if (cl->reliablebuf.cursize > 600)
-				SV_SendPacket(player);
-
 		}
 	}
 

@@ -294,10 +294,9 @@ public:
 			lastcmdtic = 0;
 			lastclientcmdtic = 0;
 			
-			// GhostlyDeath -- done with the {}
-			netbuf = MAX_UDP_PACKET;
-			reliablebuf = MAX_UDP_PACKET;
-			relpackets = MAX_UDP_PACKET*50;
+			netbuf.resize((MAX_UDP_PACKET / 2));
+			reliablebuf.resize((MAX_UDP_PACKET / 2));
+			relpackets.resize((MAX_UDP_PACKET / 2) * 50);
 			digest = "";
 			allow_rcon = false;
 			displaydisconnect = true;

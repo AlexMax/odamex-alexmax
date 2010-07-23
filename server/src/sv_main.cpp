@@ -159,7 +159,7 @@ CVAR_FUNC_IMPL (sv_maxplayers)
                 MSG_WriteMarker (players[i], 
                                  &(players[i].client.reliablebuf), 
                                  svc_print, 
-                                 1 + strlen(str));
+                                 1 + strlen(str) + 1);
 				MSG_WriteByte (&players[i].client.reliablebuf, PRINT_CHAT);
 				MSG_WriteString (&players[i].client.reliablebuf, str);
 
@@ -1072,11 +1072,11 @@ void SV_SendUserInfo (player_t &otherplayer, player_t &pl)
                      &cl->reliablebuf, 
                      svc_userinfo, 
                      1 + 
-                     strlen(p->userinfo.netname) + 
+                     (strlen(p->userinfo.netname) + 1) + 
                      1 + 
                      4 + 
                      4 + 
-                     strlen(skins[p->userinfo.skin].name) +
+                     (strlen(skins[p->userinfo.skin].name) + 1) +
                      2);
 
 	MSG_WriteByte	(&cl->reliablebuf, p->id);
@@ -1720,38 +1720,21 @@ void SV_SendServerSettings (player_t &pl)
 	// GhostlyDeath <June 19, 2008> -- Loop through all CVARs and send the CVAR_SERVERINFO stuff only
 	cvar_t *var = GetFirstCvar();
 
-	size_t Size = 0;
-
 	while (var)
 	{
 		if (var->flags() & CVAR_SERVERINFO)
 		{
-            Size += 1 + strlen(var->name()) + strlen(var->cstring());
-		}
-		
-		var = var->GetNext();
-	}
+            size_t Size;
 
-    MSG_WriteMarker (pl, 
-                     &cl->reliablebuf, 
-                     svc_serversettings, 
-                     Size + 1);
+            Size = (strlen(var->name()) + 1) + (strlen(var->cstring()) + 1);
 
-	var = GetFirstCvar();
-
-	while (var)
-	{
-		if (var->flags() & CVAR_SERVERINFO)
-		{
-			MSG_WriteByte(&cl->reliablebuf, 1);
+            MSG_WriteMarker (pl, &cl->reliablebuf, svc_serversettings, Size);
 			MSG_WriteString(&cl->reliablebuf, var->name());
 			MSG_WriteString(&cl->reliablebuf, var->cstring());
 		}
 
 		var = var->GetNext();
 	}
-
-	MSG_WriteByte(&cl->reliablebuf, 2);
 }
 
 //
@@ -1844,7 +1827,7 @@ bool SV_BanCheck (player_t &pl, int n)
                 MSG_WriteMarker (pl, 
                                  &cl->reliablebuf, 
                                  svc_print, 
-                                 1 + strlen(str));
+                                 1 + (strlen(str) + 1));
 				MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
 				MSG_WriteString(&cl->reliablebuf, str);
 			}
@@ -2177,7 +2160,7 @@ void SV_ConnectClient (void)
         MSG_WriteMarker (players[n], 
                          &cl->reliablebuf, 
                          svc_print, 
-                         1 + strlen(str));
+                         1 + (strlen(str) + 1));
 
         MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
         MSG_WriteString (&cl->reliablebuf, str);
@@ -2228,7 +2211,7 @@ void SV_ConnectClient (void)
     MSG_WriteMarker (players[n], 
                      &cl->reliablebuf, 
                      svc_loadmap, 
-                     strlen(level.mapname));
+                     (strlen(level.mapname) + 1));
 
 	MSG_WriteString (&cl->reliablebuf, level.mapname);
 	G_DoReborn (players[n]);
@@ -2700,7 +2683,7 @@ void STACK_ARGS SV_BroadcastPrintf (int level, const char *fmt, ...)
         MSG_WriteMarker (players[i], 
                          &cl->reliablebuf, 
                          svc_print, 
-                         1 + strlen(string));
+                         1 + (strlen(string) + 1));
 
 		MSG_WriteByte (&cl->reliablebuf, level);
 		MSG_WriteString (&cl->reliablebuf, string);
@@ -2729,7 +2712,7 @@ void STACK_ARGS SV_SpectatorPrintf (int level, const char *fmt, ...)
             MSG_WriteMarker (players[i], 
                              &cl->reliablebuf, 
                              svc_print, 
-                             1 + strlen(string));
+                             1 + (strlen(string) + 1));
 
 			MSG_WriteByte (&cl->reliablebuf, level);
 			MSG_WriteString (&cl->reliablebuf, string);
@@ -2762,7 +2745,7 @@ void STACK_ARGS SV_TeamPrintf (int level, int who, const char *fmt, ...)
         MSG_WriteMarker (players[i], 
                          &cl->reliablebuf, 
                          svc_print, 
-                         1 + strlen(string));
+                         1 + (strlen(string) + 1));
 
 		MSG_WriteByte (&cl->reliablebuf, level);
 		MSG_WriteString (&cl->reliablebuf, string);
@@ -3589,7 +3572,7 @@ void SV_RConPassword (player_t &player)
         MSG_WriteMarker (player, 
                          &cl->reliablebuf, 
                          svc_print, 
-                         1 + strlen(str));
+                         1 + (strlen(str) + 1));
 
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
 		MSG_WriteString (&cl->reliablebuf, str);
@@ -3708,7 +3691,7 @@ void SV_WantWad(player_t &player)
         MSG_WriteMarker (player, 
                          &cl->reliablebuf, 
                          svc_print, 
-                         1 + strlen(str));
+                         1 + (strlen(str) + 1));
 
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
 		MSG_WriteString (&cl->reliablebuf, str);
@@ -3739,7 +3722,7 @@ void SV_WantWad(player_t &player)
         MSG_WriteMarker (player, 
                          &cl->reliablebuf, 
                          svc_print, 
-                         1 + strlen(str));
+                         1 + (strlen(str) + 1));
 
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
 		MSG_WriteString (&cl->reliablebuf, str);
@@ -3755,7 +3738,7 @@ void SV_WantWad(player_t &player)
         MSG_WriteMarker (player, 
                          &cl->reliablebuf, 
                          svc_print, 
-                         1 + strlen(str));
+                         1 + (strlen(str) + 1));
 
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
 		MSG_WriteString (&cl->reliablebuf, str);

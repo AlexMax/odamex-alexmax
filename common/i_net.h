@@ -30,6 +30,8 @@
 #include <string>
 
 #define	MAX_UDP_PACKET	1400
+// A special reserved value for extra data (headers and such)
+#define MAX_UDP_RESERVED 20
 
 #define SERVERPORT  10666
 #define CLIENTPORT  10667

@@ -690,7 +690,8 @@ void G_DoNewGame (void)
 
 		client_t *cl = &clients[i];
         
-        MSG_WriteMarker (players[i], &cl->reliablebuf, svc_loadmap, strlen(d_mapname));
+        MSG_WriteMarker (players[i], &cl->reliablebuf, svc_loadmap, 
+            strlen(d_mapname) + 1);
 		MSG_WriteString (&cl->reliablebuf, d_mapname);
 	}
 

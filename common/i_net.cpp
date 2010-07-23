@@ -368,16 +368,17 @@ void MSG_WriteMarker (player_t &Player, buf_t *b, svc_t c, const size_t Size)
 {
     // Check if the size of the marker and its payload goes over the buffers
 	// boundary, die a horrible death if it does
-	if (sizeof(c) + Size > b->allocsize)
+	if (sizeof(c) + Size > (b->allocsize - MAX_UDP_RESERVED))
 	{
 	    I_FatalError("Marker %s (size %lu) would overflow buffer (size %lu)\n", 
-            svc_info[c].getName(), (sizeof(c) + Size), b->allocsize);
+            svc_info[c].getName(), (sizeof(c) + Size), 
+            (b->allocsize - MAX_UDP_RESERVED));
 	}
 
     // Now check the buffers current position/size, marker size, size of payload
     // if its greater, send the current buffer, clear the contents and write out 
     // the new marker 
-	if (b->cursize + sizeof(c) + Size > b->allocsize)
+	if (b->cursize + sizeof(c) + Size > (b->allocsize - MAX_UDP_RESERVED))
     {        
         // this function already clears the packet
         SV_SendPacket(Player);
@@ -397,16 +398,17 @@ void MSG_WriteMarker (netadr_t &To, buf_t *b, clc_t c, const size_t Size)
 {
 	// Check if the size of the marker and its payload goes over the buffers
 	// boundary, die a horrible death if it does
-	if (sizeof(c) + Size > b->allocsize)
+	if (sizeof(c) + Size > (b->allocsize - MAX_UDP_RESERVED))
 	{
 	    I_FatalError("Marker %s (size %lu) would overflow buffer (size %lu)\n", 
-            clc_info[c].getName(), (sizeof(c) + Size), b->allocsize);
+            clc_info[c].getName(), (sizeof(c) + Size), 
+            (b->allocsize - MAX_UDP_RESERVED));
 	}
 
 	// Now check the buffers current position/size, marker size, size of payload
     // if its greater, send the current buffer, clear the contents and write out 
     // the new marker 
-	if (b->cursize + sizeof(c) + Size > b->allocsize)
+	if (b->cursize + sizeof(c) + Size > (b->allocsize - MAX_UDP_RESERVED))
     {
         NET_SendPacket(*b, To);
         SZ_Clear(b);

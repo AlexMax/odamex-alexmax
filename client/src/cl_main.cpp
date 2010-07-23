@@ -1848,29 +1848,25 @@ void CL_GetServerSettings(void)
 {
 	cvar_t *var = NULL, *prev = NULL;
 		
-	while (MSG_ReadByte() != 2)
+	std::string CvarName = MSG_ReadString();
+	std::string CvarValue = MSG_ReadString();
+			
+	var = cvar_t::FindCVar (CvarName.c_str(), &prev);
+			
+	// GhostlyDeath <June 19, 2008> -- Read CVAR or dump it               
+	if (var)
 	{
-		std::string CvarName = MSG_ReadString();
-		std::string CvarValue = MSG_ReadString();
-			
-		var = cvar_t::FindCVar (CvarName.c_str(), &prev);
-			
-		// GhostlyDeath <June 19, 2008> -- Read CVAR or dump it               
-		if (var)
-		{
-			if (var->flags() & CVAR_SERVERINFO)
-                var->Set(CvarValue.c_str());
-        }
-        else
-        {
-            // [Russell] - create a new "temporary" cvar, CVAR_AUTO marks it
-            // for cleanup on program termination
-            var = new cvar_t (CvarName.c_str(), NULL,
-                CVAR_SERVERINFO | CVAR_AUTO | CVAR_UNSETTABLE);
+		if (var->flags() & CVAR_SERVERINFO)
+               var->Set(CvarValue.c_str());
+    }
+    else
+    {
+        // [Russell] - create a new "temporary" cvar, CVAR_AUTO marks it
+        // for cleanup on program termination
+        var = new cvar_t (CvarName.c_str(), NULL, 
+            CVAR_SERVERINFO | CVAR_AUTO | CVAR_UNSETTABLE);
                                   
-            var->Set(CvarValue.c_str());
-        }
-			
+        var->Set(CvarValue.c_str());
     }
     
 	// Nes - update the skies in case sv_freelook is changed.
