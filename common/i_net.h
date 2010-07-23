@@ -29,7 +29,7 @@
 
 #include <string>
 
-#define	MAX_UDP_PACKET	8192
+#define	MAX_UDP_PACKET	1400
 
 #define SERVERPORT  10666
 #define CLIENTPORT  10667
