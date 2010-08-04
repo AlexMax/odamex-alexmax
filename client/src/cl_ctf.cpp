@@ -110,35 +110,86 @@ void CL_CTFEvent (void)
 		case SCORE_KILL:
 		case SCORE_BETRAYAL:
 		case SCORE_CARRIERKILL:
-			break;
+		{
+
+		}
+        break;
 
 		case SCORE_GRAB:
-		case SCORE_FIRSTGRAB:
-		case SCORE_MANUALRETURN:
+		{
 			if(validplayer(player))
 				CTF_CarryFlag(player, flag);
-			break;
+
+			Printf (PRINT_HIGH, "%s picked up the %s flag\n", 
+                player.userinfo.netname, team_names[flag]);
+		}
+		break;
+		
+		case SCORE_FIRSTGRAB:
+		{
+            if(validplayer(player))
+				CTF_CarryFlag(player, flag);
+
+            Printf(PRINT_HIGH, "%s has taken the %s flag\n", 
+                player.userinfo.netname, team_names[flag]);
+		}
+		break;
+
+		case SCORE_MANUALRETURN:
+		{
+			if(validplayer(player))
+				CTF_CarryFlag(player, flag);
+			
+            Printf (PRINT_HIGH, "%s is recovering the %s flag\n", 
+                player.userinfo.netname, team_names[flag]);
+		}
+        break;
 
 		case SCORE_RETURN:
-		case SCORE_CAPTURE:
+		{
 			if(validplayer(player))
 				CTF_CheckFlags(player);
 			else
 				CTFdata[flag].flagger = 0;
+
 			CTFdata[flag].state = flag_home;
+
 			if(CTFdata[flag].actor)
 				CTFdata[flag].actor->Destroy();
-			break;
+
+            Printf (PRINT_HIGH, "%s has returned the %s flag\n", 
+                player.userinfo.netname, team_names[flag]);
+		}
+		break;
+
+		case SCORE_CAPTURE:
+		{
+			if(validplayer(player))
+				CTF_CheckFlags(player);
+			else
+				CTFdata[flag].flagger = 0;
+
+			CTFdata[flag].state = flag_home;
+
+			if(CTFdata[flag].actor)
+				CTFdata[flag].actor->Destroy();
+			
+		}
+        break;
 
 		case SCORE_DROP:
+		{
 			if(validplayer(player))
 				CTF_CheckFlags(player);
 			else
 				CTFdata[flag].flagger = 0;
+
 			CTFdata[flag].state = flag_dropped;
+
 			if(CTFdata[flag].actor)
 				CTFdata[flag].actor->Destroy();
-			break;
+		}
+        break;
 	}
 }
 

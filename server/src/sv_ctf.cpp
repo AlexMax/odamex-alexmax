@@ -151,14 +151,11 @@ void SV_FlagGrab (player_t &player, flag_t f, bool firstgrab)
 
 	if (player.userinfo.team != (team_t)f) {
 		if (firstgrab) {
-			SV_BroadcastPrintf (PRINT_HIGH, "%s has taken the %s flag\n", player.userinfo.netname, team_names[f]);
 			SV_CTFEvent (f, SCORE_FIRSTGRAB, player);
 		} else {
-			SV_BroadcastPrintf (PRINT_HIGH, "%s picked up the %s flag\n", player.userinfo.netname, team_names[f]);
 			SV_CTFEvent (f, SCORE_GRAB, player);
 		}
 	} else {
-		SV_BroadcastPrintf (PRINT_HIGH, "%s is recovering the %s flag\n", player.userinfo.netname, team_names[f]);
 		SV_CTFEvent (f, SCORE_MANUALRETURN, player);
 	}
 }
@@ -172,8 +169,6 @@ void SV_FlagReturn (player_t &player, flag_t f)
 	SV_CTFEvent (f, SCORE_RETURN, player);
 
 	CTF_SpawnFlag (f);
-
-	SV_BroadcastPrintf (PRINT_HIGH, "%s has returned the %s flag\n", player.userinfo.netname, team_names[f]);
 }
 
 //
@@ -335,8 +330,6 @@ void CTF_RunTics (void)
 			data->actor->Destroy();
 
 		SV_CTFEvent ((flag_t)i, SCORE_RETURN, idplayer(0));
-
-		SV_BroadcastPrintf (PRINT_HIGH, "%s flag returned.\n", team_names[i]);
 
 		CTF_SpawnFlag((flag_t)i);
 	}
