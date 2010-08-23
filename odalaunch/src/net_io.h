@@ -45,7 +45,7 @@
     #include <netdb.h>
 #endif
 
-#define MAX_PAYLOAD 8192
+#define MAX_PAYLOAD 1400
 
 // Used for platforms such as windows (where you must initialize WSA before
 // using the sockets api)
