@@ -68,7 +68,7 @@ bool clientside = false, serverside = true;
 bool predicting = false;
 baseapp_t baseapp = server;
 
-bool stepmode = false;
+bool step_mode = false;
 
 #define IPADDRSIZE 4	// GhostlyDeath -- Someone might want to do IPv6 junk
 
@@ -454,6 +454,17 @@ void SV_IPListClear (std::vector<BanEntry_t> *list, std::string listname)
 	}
 }
 
+BEGIN_COMMAND (stepmode)
+{
+    if (step_mode)
+        step_mode = false;
+    else
+        step_mode = true;
+        
+    return;
+}
+END_COMMAND (stepmode)
+
 BEGIN_COMMAND(addban)
 {
 	std::string reason;
@@ -584,25 +595,6 @@ BEGIN_COMMAND(kickban)
 }
 END_COMMAND(kickban)
 
-// denis - list connected clients
-BEGIN_COMMAND (who)
-{
-	bool anybody = false;
-
-	for(int i = players.size()-1; i >= 0 ; i--)
-	{
-		Printf(PRINT_HIGH, "(%02d): %s - %s - frags:%d ping:%d\n", players[i].id, players[i].userinfo.netname, NET_AdrToString(clients[i].address), players[i].fragcount, players[i].ping);
-		anybody = true;
-	}
-
-	if(!anybody)
-	{
-		Printf(PRINT_HIGH, "There are no players on the server\n");
-		return;
-	}
-}
-END_COMMAND (who)
-
 BEGIN_COMMAND (say)
 {
 	if (argc > 1)
@@ -662,7 +654,7 @@ void SV_InitNetwork (void)
 		sv_maxclients.Set(w); // denis - todo
 	}
 
-	stepmode = Args.CheckParm ("-stepmode");
+	step_mode = Args.CheckParm ("-stepmode");
 
 	gametime = I_GetTime ();
 	
@@ -2193,7 +2185,7 @@ void SV_ConnectClient (void)
 	players[n].killcount	= 0;
 	players[n].points		= 0;
 
-	if(!stepmode) {
+	if(!step_mode) {
 		players[n].spectator	= true;
 		for (size_t j = 0; j < players.size(); j++)
 		{
@@ -3341,7 +3333,7 @@ void SV_GetPlayerCmd(player_t &player)
 	cmd->ucmd.buttons = MSG_ReadByte();
 	if (gamestate != GS_INTERMISSION && player.playerstate != PST_DEAD)
 	{
-		if(stepmode)cmd->ucmd.yaw = MSG_ReadShort();
+		if(step_mode)cmd->ucmd.yaw = MSG_ReadShort();
 		else player.mo->angle = MSG_ReadShort() << 16;
 
 		if (!sv_freelook)
@@ -4122,7 +4114,7 @@ void SV_RunTics (void)
 		}
 	}
 
-	if(newtics > 0 && !stepmode)
+	if(newtics > 0 && !step_mode)
 	{
 		SV_StepTics(newtics);
 		gametime = nowtime;
@@ -4197,8 +4189,19 @@ END_COMMAND (playerinfo)
 
 BEGIN_COMMAND (playerlist)
 {
-	
-	
+	bool anybody = false;
+
+	for(int i = players.size()-1; i >= 0 ; i--)
+	{
+		Printf(PRINT_HIGH, "(%02d): %s - %s - frags:%d ping:%d\n", players[i].id, players[i].userinfo.netname, NET_AdrToString(clients[i].address), players[i].fragcount, players[i].ping);
+		anybody = true;
+	}
+
+	if(!anybody)
+	{
+		Printf(PRINT_HIGH, "There are no players on the server\n");
+		return;
+	}
 }
 END_COMMAND (playerlist)
 
@@ -4260,7 +4263,6 @@ void OnActivatedLine (line_t *line, AActor *mo, int side, int activationType)
 		MSG_WriteByte (&cl->reliablebuf, activationType);
 	}
 }
-
 
 VERSION_CONTROL (sv_main_cpp, "$Id$")
 

@@ -54,7 +54,7 @@
 bool clientside = true, serverside = false;
 baseapp_t baseapp = client;
 
-extern bool stepmode;
+extern bool step_mode;
 
 // denis - client version (VERSION or other supported)
 short version = 0;
@@ -113,6 +113,7 @@ EXTERN_CVAR(cl_mouselook)
 EXTERN_CVAR(sv_freelook)
 EXTERN_CVAR (interscoredraw)
 EXTERN_CVAR(cl_connectalert)
+EXTERN_CVAR(cl_disconnectalert)
 
 void CL_RunTics (void);
 void CL_PlayerTimes (void);
@@ -240,7 +241,7 @@ void CL_DisconnectClient(void)
 		{
 			// GhostlyDeath <August 1, 2008> -- Play disconnect sound
 			// GhostlyDeath <August 6, 2008> -- Only if they really are inside
-			if (cl_connectalert && &player != &consoleplayer())
+			if (cl_disconnectalert && &player != &consoleplayer())
 				S_Sound (CHAN_VOICE, "misc/plpart", 1, ATTN_NONE);
 			players.erase(players.begin() + i);
 			break;
@@ -256,6 +257,17 @@ void CL_DisconnectClient(void)
 }
 
 /////// CONSOLE COMMANDS ///////
+
+BEGIN_COMMAND (stepmode)
+{
+    if (step_mode)
+        step_mode = false;
+    else
+        step_mode = true;
+        
+    return;
+}
+END_COMMAND (stepmode)
 
 BEGIN_COMMAND (connect)
 {
@@ -426,17 +438,10 @@ BEGIN_COMMAND (serverinfo)
 }
 END_COMMAND (serverinfo)
 
+// rate: takes a bps value
 CVAR_FUNC_IMPL (rate)
 {
-	if (var < 100)
-	{
-		var.Set (100);
-	}
-	else if (var > 100000)
-	{
-		var.Set (100000);
-	}
-	else if (connected)
+	if (connected)
 	{
         MSG_WriteMarker(serveraddr, &net_buffer, clc_rate, 4);
 		MSG_WriteLong(&net_buffer, (int)var);
@@ -1960,9 +1965,9 @@ void CL_Switch()
 
 	if(!P_SetButtonInfo(&lines[l], state, time)) // denis - fixme - security
 		if(wastoggled)
-			P_ChangeSwitchTexture(&lines[l], lines[l].flags & ML_SPECIAL_REPEAT);  // denis - fixme - security
+			P_ChangeSwitchTexture(&lines[l], lines[l].flags & ML_REPEAT_SPECIAL);  // denis - fixme - security
 
-	if(wastoggled && !(lines[l].flags & ML_SPECIAL_REPEAT)) // non repeat special
+	if(wastoggled && !(lines[l].flags & ML_REPEAT_SPECIAL)) // non repeat special
 		lines[l].special = 0;
 }
 
@@ -2555,7 +2560,7 @@ void CL_SendCmd(void)
     cmd = &consoleplayer().cmd;
 
 	MSG_WriteByte(&net_buffer, cmd->ucmd.buttons);
-	if(stepmode) MSG_WriteShort(&net_buffer, cmd->ucmd.yaw);
+	if(step_mode) MSG_WriteShort(&net_buffer, cmd->ucmd.yaw);
 	else MSG_WriteShort(&net_buffer, (p->mo->angle + (cmd->ucmd.yaw << 16)) >> 16);
 	MSG_WriteShort(&net_buffer, (p->mo->pitch + (cmd->ucmd.pitch << 16)) >> 16);
 	MSG_WriteShort(&net_buffer, cmd->ucmd.forwardmove);

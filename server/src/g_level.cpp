@@ -366,7 +366,7 @@ void G_GenerateRandomMaps(void)
 	bool* Used = NULL;
 	size_t Count = 0;
 	maplist_s* Rover = NULL;
-	size_t i, j;
+	size_t i, j, random_seed;
 	std::vector<maplist_s*> Ptrs;
 
 	// Clear old map list
@@ -396,11 +396,14 @@ void G_GenerateRandomMaps(void)
 
 	for (i = 0; i < Count; i++)
 		Used[i] = 0;
+		
+    srand((unsigned)time(0)); 
 
 	// Now populate the list
 	for (i = 0; i < Count; i++)
 	{
-		j = (M_Random() + M_Random()) % Count;
+	    random_seed = rand();
+		j = random_seed % Count;
 
 		// Move forward if j is used
 		while (Used[j])
@@ -675,8 +678,11 @@ void G_ChangeMap (void)
 	}
 
 	// run script at the end of each map
+	// [ML] 8/22/2010: There are examples in the wiki that outright don't work
+	// when onlcvars (addcommandstring's second param) is true.  Is there a 
+	// reason why the mapscripts ahve to be safe mode?	
 	if(strlen(sv_endmapscript.cstring()))
-		AddCommandString(sv_endmapscript.cstring(), true);
+		AddCommandString(sv_endmapscript.cstring()/*, true*/);
 }
 
 void SV_ClientFullUpdate(player_t &pl);
@@ -711,8 +717,11 @@ void G_DoNewGame (void)
 	gameaction = ga_nothing;
 
 	// run script at the start of each map
+	// [ML] 8/22/2010: There are examples in the wiki that outright don't work
+	// when onlcvars (addcommandstring's second param) is true.  Is there a 
+	// reason why the mapscripts ahve to be safe mode?
 	if(strlen(sv_startmapscript.cstring()))
-		AddCommandString(sv_startmapscript.cstring(), true);
+		AddCommandString(sv_startmapscript.cstring()/*,true*/);
 
 	for(i = 0; i < players.size(); i++)
 	{

@@ -45,6 +45,7 @@
 #include "cl_ctf.h"
 #include "r_sky.h"
 #include "cl_main.h"
+#include "c_bind.h"
 
 #include "gi.h"
 
@@ -174,7 +175,6 @@ bool M_DemoNoPlay;
 static DCanvas *FireScreen;
 
 EXTERN_CVAR (hud_targetnames)
-EXTERN_CVAR(cl_connectalert)
 
 //
 // DOOM MENU
@@ -1168,13 +1168,25 @@ static void M_PlayerSetupTicker (void)
 
 static void M_PlayerSetupDrawer (void)
 {
+	int x1,x2,y1,y2;
+	
+	x1 = (screen->width / 2)-(160*CleanXfac);
+	y1 = (screen->height / 2)-(100*CleanYfac);
+	
+    x2 = (screen->width / 2)+(160*CleanXfac);
+	y2 = (screen->height / 2)+(100*CleanYfac);
+	
+	// Background effect
+	OdamexEffect(x1,y1,x2,y2);
+	    
 	// Draw title
 	{
 		patch_t *patch = W_CachePatch ("M_PSTTL");
-
-		screen->DrawPatchClean (patch,
+        screen->DrawPatchClean (patch, 160-patch->width()/2, 10);
+        
+		/*screen->DrawPatchClean (patch,
 			160 - (patch->width() >> 1),
-			PSetupDef.y - (patch->height() * 3));
+			PSetupDef.y - (patch->height() * 3));*/
 	}
 
 	// Draw player name box
@@ -1672,6 +1684,7 @@ bool M_Responder (event_t* ev)
 {
 	int ch, ch2;
 	int i;
+	const char *cmd;
 
 	ch = ch2 = -1;
 
@@ -1693,6 +1706,8 @@ bool M_Responder (event_t* ev)
 		M_OptResponder (ev);
 		return true;
 	}
+
+	cmd = C_GetBinding (ch);
 
 	// Save Game string input
 	// [RH] and Player Name string input
@@ -1769,16 +1784,24 @@ bool M_Responder (event_t* ev)
 	// Pop-up menu?
 	if (!menuactive)
 	{
+		// [ML] This is a regular binding now too!
 		if (ch == KEY_ESCAPE)
 		{
-			M_StartControlPanel ();
-			M_SetupNextMenu (&MainDef);
-			S_Sound (CHAN_VOICE, "switches/normbutn", 1, ATTN_NONE);
+			AddCommandString("menu_main");
 			return true;
 		}
 		return false;
 	}
-
+	
+	if(cmd)
+	{
+		// Respond to the main menu binding
+		if(!strcmp(cmd, "menu_main"))
+		{
+			M_ClearMenus();
+			return true;
+		}
+	}
 
 	// Keys usable within menu
 	switch (ch)

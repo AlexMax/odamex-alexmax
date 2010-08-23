@@ -63,6 +63,10 @@
 // Data.
 #include "m_menu.h"
 
+#define MENUBOXWIDTH	236
+#define MENUBOXHEIGHT	200
+#define TEAMPLAYBORDER	4
+
 //
 // defaulted values
 //
@@ -90,15 +94,19 @@ EXTERN_CVAR (cl_run)
 EXTERN_CVAR (invertmouse)
 EXTERN_CVAR (lookspring)
 EXTERN_CVAR (lookstrafe)
-EXTERN_CVAR (crosshair)
+EXTERN_CVAR (hud_crosshair)
 EXTERN_CVAR (cl_mouselook)
 EXTERN_CVAR (cl_autoaim)
 
 // [Ralphis - Menu] Compatibility Menu
 EXTERN_CVAR (co_level8soundfeature)
 EXTERN_CVAR (hud_targetcount)
+EXTERN_CVAR (hud_scale)
+EXTERN_CVAR (hud_transparency)
 EXTERN_CVAR (revealsecrets)
-EXTERN_CVAR (show_endoom)
+EXTERN_CVAR (r_showendoom)
+EXTERN_CVAR (co_allowdropoff)
+EXTERN_CVAR(co_realactorheight)
 
 // [Toke - Menu] New Menu Stuff.
 void MouseSetup (void);
@@ -113,6 +121,7 @@ EXTERN_CVAR (mouse_threshold)
 EXTERN_CVAR (snd_musicvolume)
 EXTERN_CVAR (snd_sfxvolume)
 EXTERN_CVAR (cl_connectalert)
+EXTERN_CVAR (cl_disconnectalert)
 
 void M_ChangeMessages(void);
 void M_SizeDisplay(float diff);
@@ -226,9 +235,9 @@ static menuitem_t ControlsItems[] = {
 	{ bricktext,"Actions",		        {NULL},	{0.0}, {0.0}, {0.0}, {NULL} },
 	{ control,	"Fire",					{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"+attack"} },
 	{ control,	"Use / Open",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"+use"} },
+	{ control,	"Toggle Automap",		{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"togglemap"} },
 	{ control,	"Next weapon",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"weapnext"} },
 	{ control,	"Previous weapon",		{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"weapprev"} },
-	{ control,	"Toggle Automap",		{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"togglemap"} },
 	{ redtext,	" ",					{NULL},	{0.0}, {0.0}, {0.0}, {NULL} },
 	{ bricktext,"Advanced Movement",    {NULL},	{0.0}, {0.0}, {0.0}, {NULL} },
 	{ control,	"Fly / Swim up",		{NULL},	{0.0}, {0.0}, {0.0}, {(value_t *)"+moveup"} },
@@ -245,13 +254,27 @@ static menuitem_t ControlsItems[] = {
 	{ control,	"Team say",				{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"messagemode2"} },
 	{ control,	"Spectate",				{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"spectate"} },
 	{ control,	"Coop Spy",				{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"spynext"} },
-	{ control,	"Show Scoreboard",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"+showscores"} },
+	{ control,	"Show Scoreboard",		{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"+showscores"} },
+	{ redtext,	" ",					{NULL},	{0.0}, {0.0}, {0.0}, {NULL} },
+	{ bricktext,"Menus",				{NULL},	{0.0}, {0.0}, {0.0}, {NULL} },
+	{ control,  "Main menu",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_main"} },
+	{ control,	"Help menu",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_help"} },
+	{ control,	"Save menu",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_save"} },
+	{ control,	"Load menu",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_load"} },
+	{ control,	"Options menu",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_options"} },
+	{ control,	"Display options",	    {NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_display"} },	
+	{ control,	"Player setup menu",	{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_player"} },
+	{ control,	"Configure controls",	{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_keys"} },
+	{ control,	"Change resolution",	{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_video"} },
 	{ redtext,	" ",					{NULL},	{0.0}, {0.0}, {0.0}, {NULL} },
 	{ bricktext,"Other",				{NULL},	{0.0}, {0.0}, {0.0}, {NULL} },
+    { control,	"Increase screen size",	{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"sizeup"} },		
+	{ control,	"Reduce screen size",	{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"sizedown"} },	
 	{ control,	"Chasecam",				{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"chase"} },
 	{ control,	"Screenshot",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"screenshot"} },
 	{ control,  "Open console",			{NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"toggleconsole"} },
-	{ control,  "Quit",			        {NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"quit"} }
+	{ control,  "End current game",     {NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_endgame"} },
+	{ control,  "Quit Odamex",	        {NULL}, {0.0}, {0.0}, {0.0}, {(value_t *)"menu_quit"} }
 };
 
 menu_t ControlsMenu = {
@@ -284,8 +307,6 @@ static menuitem_t MouseItems[] =
 	{ slider	,	"Horizontal Sensitivity" 				, {&mouse_sensitivity},	{0.0},		{77.0},		{1.0},		{NULL}						},
 	{ slider	,	"Vertical Sensitivity"					, {&m_pitch},			{0.0},		{1.85},		{0.025},	{NULL}						},
 	{ redtext	,	" "										, {NULL},				{0.0},		{0.0},		{0.0},		{NULL}						},
-	/*{ discrete,	"Use Dynamic Resolution"				, {&dynres_state},		{2.0},		{0.0},		{0.0},		{OnOff}						},*/
-	/*{ slider	,	"Dynamic Resolution"					, {&dynresval},			{1.001},	{1.232},	{0.003},	{NULL}						},*/
 	{ discrete	,	"Horizontal Movement"					, {&lookstrafe},		{2.0},		{0.0},		{0.0},		{OnOff}						},
 	{ discrete	,	"Vertical Movement"						, {&novert},			{2.0},		{0.0},		{0.0},		{OffOn}						},
 	{ slider	,	"Horizontal Movement Speed"				, {&m_side},			{0.0},		{15},		{0.5},		{NULL}						},
@@ -312,17 +333,19 @@ menu_t MouseMenu = {
   *=======================================*/
 
 static menuitem_t SoundItems[] = {
-	{ whitetext ,   "Sound Levels"                          , {NULL},	            {0.0},      {0.0},      {0.0},      {NULL} },
+    { redtext,	" ",					{NULL},	{0.0}, {0.0}, {0.0}, {NULL} },    
+	{ bricktext ,   "Sound Levels"                          , {NULL},	            {0.0},      {0.0},      {0.0},      {NULL} },
 	{ slider    ,	"Music Volume"                          , {&snd_musicvolume},	{0.0},      {1.0},	    {0.1},      {NULL} },
 	{ slider    ,	"Sound Volume"                          , {&snd_sfxvolume},		{0.0},      {1.0},	    {0.1},      {NULL} },
 	{ redtext   ,	" "                                     , {NULL},	            {0.0},      {0.0},      {0.0},      {NULL} },
-	{ whitetext ,   "Other Options"                         , {NULL},	            {0.0},      {0.0},      {0.0},      {NULL} },
+	{ bricktext ,   "Multiplayer Options"                   , {NULL},	            {0.0},      {0.0},      {0.0},      {NULL} },
 	{ discrete  ,   "Player Connect Alert"                  , {&cl_connectalert},	{2.0},		{0.0},		{0.0},		{OnOff} },
+	{ discrete  ,   "Player Disconnect Alert"               , {&cl_disconnectalert},{2.0},		{0.0},		{0.0},		{OnOff} }	
  };
 
 menu_t SoundMenu = {
 	"M_SOUND",
-	1,
+	2,
 	STACKARRAY_LENGTH(SoundItems),
 	177,
 	SoundItems,
@@ -335,14 +358,15 @@ menu_t SoundMenu = {
   *=======================================*/
 
 static menuitem_t CompatItems[] = {
-	{ discrete  ,   "Full Volume on MAP08"                  , {&co_level8soundfeature},	{2.0},	{0.0},		{0.0},		{OnOff} },
-	{ discrete  ,	"Reveal Secrets Alert"                  , {&revealsecrets},	    {2.0},      {0.0},	    {0.0},      {OnOff} },
-	{ discrete  ,	"Show DOS Ending Screen"                , {&show_endoom},		{2.0},      {0.0},	    {0.0},      {OnOff} },
+    { redtext,	" ",					{NULL},	{0.0}, {0.0}, {0.0}, {NULL} },    
+	{ bricktext ,   "Enhanced Interaction"                  , {NULL},	            {0.0},      {0.0},      {0.0},      {NULL} },
+	{ discrete  ,	"Items drop off ledges"                 , {&co_allowdropoff},	{2.0},      {0.0},	    {0.0},      {OnOff} },
+	{ discrete  ,	"Things are actual height"              , {&co_realactorheight},{2.0},      {0.0},	    {0.0},      {OnOff} },	
  };
 
 menu_t CompatMenu = {
 	"M_COMPAT",
-	0,
+	2,
 	STACKARRAY_LENGTH(CompatItems),
 	177,
 	CompatItems,
@@ -354,18 +378,24 @@ menu_t CompatMenu = {
  *
  *=======================================*/
 static void StartMessagesMenu (void);
+static void StartAutomapMenu (void);
 void ResetCustomColors (void);
 
 EXTERN_CVAR (am_rotate)
 EXTERN_CVAR (am_overlay)
-EXTERN_CVAR (st_scale)
+EXTERN_CVAR (am_ovshare)
+EXTERN_CVAR (am_showmonsters)
+EXTERN_CVAR (am_showsecrets)
+EXTERN_CVAR (am_showtime)
+EXTERN_CVAR (am_classicmapstring)
 EXTERN_CVAR (am_usecustomcolors)
+EXTERN_CVAR (st_scale)
 EXTERN_CVAR (r_stretchsky)
 EXTERN_CVAR (wipetype)
 EXTERN_CVAR (screenblocks)
-EXTERN_CVAR (dimamount)
-EXTERN_CVAR (usehighresboard)
-EXTERN_CVAR (show_endoom)
+EXTERN_CVAR (ui_dimamount)
+EXTERN_CVAR (hud_usehighresboard)
+EXTERN_CVAR (r_showendoom)
 
 static value_t Crosshairs[] =
 {
@@ -435,27 +465,26 @@ CVAR_FUNC_IMPL (ui_transblue)
 }
 
 static menuitem_t VideoItems[] = {
-	{ more,		"Messages",				{NULL},					{0.0}, {0.0},	{0.0}, {(value_t *)StartMessagesMenu} },
-	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
-	{ slider,	"Screen size",			{&screenblocks},	   	{3.0}, {12.0},	{1.0}, {NULL} },
-	{ slider,	"Brightness",			{&gammalevel},			{1.0}, {5.0},	{1.0}, {NULL} },
-	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
-	{ slider,   "UI Transparency",      {&dimamount},           {0.0}, {1.0},   {0.1}, {NULL} },
-	{ slider,   "UI Trans Red",         {&ui_transred},         {0.0}, {255.0}, {16.0}, {NULL} },
-	{ slider,   "UI Trans Green",       {&ui_transgreen},       {0.0}, {255.0}, {16.0}, {NULL} },
-	{ slider,   "UI Trans Blue",        {&ui_transblue},        {0.0}, {255.0}, {16.0}, {NULL} },
-	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
-	{ discrete,	"Crosshair",			{&crosshair},		   	{9.0}, {0.0},	{0.0}, {Crosshairs} },
-	{ discrete, "Stretch short skies",	{&r_stretchsky},	   	{3.0}, {0.0},	{0.0}, {OnOffAuto} },
-	{ discrete, "Stretch status bar",	{&st_scale},			{2.0}, {0.0},	{0.0}, {OnOff} },
-	{ discrete, "Screen wipe style",	{&wipetype},			{4.0}, {0.0},	{0.0}, {Wipes} },
-	{ discrete, "Use high-res scoreboard",	{&usehighresboard},			{2.0}, {0.0},	{0.0}, {OnOff} },
-	{ discrete,	"Show player target names",	{&hud_targetcount},		{2.0}, {0.0}, {0.0},	{OnOff} },
-	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
-	{ discrete, "Rotate automap",		{&am_rotate},		   	{2.0}, {0.0},	{0.0}, {OnOff} },
-	{ discrete, "Overlay automap",		{&am_overlay},			{4.0}, {0.0},	{0.0}, {Overlays} },
-	{ discrete, "Standard map colors",	{&am_usecustomcolors},	{2.0}, {0.0},	{0.0}, {NoYes} },
-	{ more,     "Reset custom map colors", {NULL},              {0.0}, {0.0},   {0.0}, {(value_t *)ResetCustomColors} }
+	{ more,		"Messages",				    {NULL},					{0.0}, {0.0},	{0.0},  {(value_t *)StartMessagesMenu} },
+	{ more,		"Automap",				    {NULL},					{0.0}, {0.0},	{0.0},  {(value_t *)StartAutomapMenu} },
+	{ redtext,	" ",					    {NULL},					{0.0}, {0.0},	{0.0},  {NULL} },
+	{ slider,	"Screen size",			    {&screenblocks},	   	{3.0}, {12.0},	{1.0},  {NULL} },
+	{ slider,	"Brightness",			    {&gammalevel},			{1.0}, {5.0},	{1.0},  {NULL} },
+	{ redtext,	" ",					    {NULL},					{0.0}, {0.0},	{0.0},  {NULL} },	
+	{ discrete, "Scale status bar",	        {&st_scale},			{2.0}, {0.0},	{0.0},  {OnOff} },
+	{ discrete, "Scale HUD",	            {&hud_scale},			{2.0}, {0.0},	{0.0},  {OnOff} },
+	{ slider,   "HUD Visibility",           {&hud_transparency},    {0.0}, {1.0},   {0.1},  {NULL} },	
+	{ discrete,	"Crosshair",			    {&hud_crosshair},		{9.0}, {0.0},	{0.0},  {Crosshairs} },
+	{ discrete, "High-res scoreboard",  {&hud_usehighresboard}, {2.0}, {0.0},	{0.0},  {OnOff} },
+	{ redtext,	" ",					    {NULL},				    {0.0}, {0.0},	{0.0},  {NULL} },
+	{ slider,   "UI Background Red",        {&ui_transred},         {0.0}, {255.0}, {16.0}, {NULL} },
+	{ slider,   "UI Background Green",      {&ui_transgreen},       {0.0}, {255.0}, {16.0}, {NULL} },
+	{ slider,   "UI Background Blue",       {&ui_transblue},        {0.0}, {255.0}, {16.0}, {NULL} },
+	{ slider,   "UI Background Visibility", {&ui_dimamount},        {0.0}, {1.0},   {0.1},  {NULL} },	
+	{ redtext,	" ",					    {NULL},					{0.0}, {0.0},	{0.0},  {NULL} },
+	{ discrete, "Stretch short skies",	    {&r_stretchsky},	   	{3.0}, {0.0},	{0.0},  {OnOffAuto} },
+	{ discrete, "Screen wipe style",	    {&wipetype},			{4.0}, {0.0},	{0.0},  {Wipes} },
+    { discrete,	"Show DOS ending screen" ,  {&r_showendoom},		{2.0}, {0.0},	{0.0},  {OnOff} },
 };
 
 menu_t VideoMenu = {
@@ -464,6 +493,7 @@ menu_t VideoMenu = {
 	STACKARRAY_LENGTH(VideoItems),
 	0,
 	VideoItems,
+	3,
 };
 
 /*=======================================
@@ -502,12 +532,12 @@ static value_t MessageLevels[] = {
 };
 
 static menuitem_t MessagesItems[] = {
-	{ discrete,	"Scale text in high res", {&con_scaletext},		{2.0}, {0.0}, 	{0.0}, {OnOff} },
 	{ discrete, "Minimum message level", {&msglevel},		   	{3.0}, {0.0},   {0.0}, {MessageLevels} },
+	{ discrete,	"Scale message text",    {&con_scaletext},		{2.0}, {0.0}, 	{0.0}, {OnOff} },	
+    { discrete,	"Show player target names",	{&hud_targetcount},	{2.0}, {0.0},   {0.0},	{OnOff} },
 	{ discrete, "Reveal Secrets",       {&revealsecrets},       {2.0}, {0.0},   {0.0}, {OnOff} },
 	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
-	{ whitetext, "Message Colors",		{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
-	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
+	{ bricktext, "Message Colors",		{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
 	{ cdiscrete, "Item Pickup",			{&msg0color},		   	{8.0}, {0.0},	{0.0}, {TextColors} },
 	{ cdiscrete, "Obituaries",			{&msg1color},		   	{8.0}, {0.0},	{0.0}, {TextColors} },
 	{ cdiscrete, "Critical Messages",	{&msg2color},		   	{8.0}, {0.0},	{0.0}, {TextColors} },
@@ -522,6 +552,40 @@ menu_t MessagesMenu = {
 	STACKARRAY_LENGTH(MessagesItems),
 	0,
 	MessagesItems,
+};
+
+/*=======================================
+ *
+ * Automap Menu
+ *
+ *=======================================*/
+ 
+static value_t ClassicMapStringTypes[] = {
+	{ 0.0, "Odamex" },
+	{ 1.0, "Classic" }
+};
+
+static menuitem_t AutomapItems[] = {
+	{ discrete, "Rotate automap",		{&am_rotate},		   	{2.0}, {0.0},	{0.0},  {OnOff} },
+	{ discrete, "Overlay automap",		{&am_overlay},			{4.0}, {0.0},	{0.0},  {Overlays} },
+	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
+    { discrete, "Show monster count",	{&am_showmonsters},	   	{2.0}, {0.0},	{0.0},  {OnOff} },
+    { discrete, "Show secrets count",	{&am_showsecrets},	   	{2.0}, {0.0},	{0.0},  {OnOff} },
+    { discrete, "Show map timer", 	    {&am_showtime}, 	   	{2.0}, {0.0},	{0.0},  {OnOff} },
+    { discrete, "Map name style",       {&am_classicmapstring},	{2.0}, {0.0},	{0.0},  {ClassicMapStringTypes} },
+        
+	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
+	{ bricktext, "Automap Colors",		{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },	
+	{ discrete, "Custom map colors",	{&am_usecustomcolors},	{2.0}, {0.0},	{0.0},  {OnOff} },
+	{ more,     "Reset custom map colors",  {NULL},             {0.0}, {0.0},   {0.0},  {(value_t *)ResetCustomColors} },
+};
+
+menu_t AutomapMenu = {
+	"M_MESS",
+	0,
+	STACKARRAY_LENGTH(AutomapItems),
+	0,
+	AutomapItems,
 };
 
 
@@ -558,7 +622,7 @@ static char VMTestText[] = "Press T to test mode for 5 seconds";
 static menuitem_t ModesItems[] = {
 	{ discrete, "Screen mode",			{&DummyDepthCvar},		{0.0}, {0.0},	{0.0}, {Depths} },
 	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
-	{ discrete, "Fullscreen",			{&vid_fullscreen},			{2.0}, {0.0},	{0.0}, {YesNo} },
+	{ discrete, "Fullscreen",			{&vid_fullscreen},		{2.0}, {0.0},	{0.0}, {YesNo} },
 	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
 	{ screenres, NULL,					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
 	{ screenres, NULL,					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
@@ -591,20 +655,20 @@ menu_t ModesMenu = {
 
 static cvar_t *flagsvar;
 
-EXTERN_CVAR(dimcolor)
+EXTERN_CVAR(ui_dimcolor)
 
 // [Russell] - Modified to send new colours
 static void M_SendUINewColor (int red, int green, int blue)
 {
 	char command[24];
 
-	sprintf (command, "dimcolor \"%02x %02x %02x\"", red, green, blue);
+	sprintf (command, "ui_dimcolor \"%02x %02x %02x\"", red, green, blue);
 	AddCommandString (command);
 }
 
 static void M_SlideUIRed (int val)
 {
-	int color = V_GetColorFromString(NULL, dimcolor.cstring());
+	int color = V_GetColorFromString(NULL, ui_dimcolor.cstring());
 	int red = val;
 
 	M_SendUINewColor (red, GPART(color), BPART(color));
@@ -612,7 +676,7 @@ static void M_SlideUIRed (int val)
 
 static void M_SlideUIGreen (int val)
 {
-    int color = V_GetColorFromString(NULL, dimcolor.cstring());
+    int color = V_GetColorFromString(NULL, ui_dimcolor.cstring());
 	int green = val;
 
 	M_SendUINewColor (RPART(color), green, BPART(color));
@@ -620,7 +684,7 @@ static void M_SlideUIGreen (int val)
 
 static void M_SlideUIBlue (int val)
 {
-    int color = V_GetColorFromString(NULL, dimcolor.cstring());
+    int color = V_GetColorFromString(NULL, ui_dimcolor.cstring());
 	int blue = val;
 
 	M_SendUINewColor (RPART(color), GPART(color), blue);
@@ -801,10 +865,20 @@ void M_OptDrawer (void)
 {
 	int color;
 	int y, width, i, x, ytop;
+	int x1,y1,x2,y2;
 	int valx = 0, valy = 0;
 	int theight = 0;
 	menuitem_t *item;
 	patch_t *title;
+	
+	x1 = (screen->width / 2)-(160*CleanXfac);
+	y1 = (screen->height / 2)-(100*CleanYfac);
+	
+    x2 = (screen->width / 2)+(160*CleanXfac);
+	y2 = (screen->height / 2)+(100*CleanYfac);
+	
+	// Background effect
+	OdamexEffect(x1,y1,x2,y2);
 
 	title = W_CachePatch (CurrentMenu->title);
 	screen->DrawPatchClean (title, 160-title->width()/2, 10);
@@ -982,6 +1056,7 @@ void M_OptResponder (event_t *ev)
 {
 	menuitem_t *item;
 	int ch = ev->data1;
+	const char *cmd = C_GetBinding(ch);
 
 	item = CurrentMenu->items + CurrentItem;
 
@@ -1008,6 +1083,16 @@ void M_OptResponder (event_t *ev)
 			sprintf (val, "%d", newflags);
 			flagsvar->Set (val);
 			return;
+	}
+
+	if(cmd)
+	{
+		// Respond to the main menu binding
+		if(!strcmp(cmd, "menu_main"))
+		{
+			M_ClearMenus();
+			return;
+		}
 	}
 
 	switch (ch)
@@ -1405,6 +1490,11 @@ void Reset2Saved (void)
 static void StartMessagesMenu (void)
 {
 	M_SwitchMenu (&MessagesMenu);
+}
+
+static void StartAutomapMenu (void)
+{
+	M_SwitchMenu (&AutomapMenu);
 }
 
 void ResetCustomColors (void)
