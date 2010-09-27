@@ -99,14 +99,18 @@ public:
 	bool ingame()
 	{
 		return playerstate == PST_LIVE ||
-		playerstate == PST_DEAD ||
-		playerstate == PST_REBORN;
+				playerstate == PST_DEAD ||
+				playerstate == PST_REBORN;
 	}
+
+	// player identifier on server
+	byte		id;
+	
+	// current player state, see playerstate_t
+	byte		playerstate;
 
 	AActor::AActorPtr	mo;
 
-	byte		id;
-	BYTE		playerstate;
 	struct ticcmd_t	cmd;
 
 	// [RH] who is this?
@@ -122,7 +126,7 @@ public:
 	fixed_t		deltaviewheight;
     // bounded/scaled total momentum.
 	fixed_t		bob;
-	
+
     // This is only used between levels,
     // mo->health is used during levels.
 	int			health;
@@ -178,15 +182,18 @@ public:
 
 	// Overlay view sprites (gun, etc).
 	pspdef_t	psprites[NUMPSPRITES];
+	
+	int			jumpTics;				// delay the next jump for a moment
 
 	int			respawn_time;			// [RH] delay respawning until this tic
 	fixed_t		oldvelocity[3];			// [RH] Used for falling damage
+	
 	AActor::AActorPtr camera;			// [RH] Whose eyes this player sees through
 
 	int			air_finished;			// [RH] Time when you start drowning
 
 	int			GameTime;				// [Dash|RD] Length of time that this client has been in the game.
-    int         ping;					// [csDoom] guess what :)
+    int         ping;                   // [Fly] guess what :)
 	int         last_received;
 
 	fixed_t     real_origin[3];       // coordinates and velocity which
@@ -200,6 +207,7 @@ public:
 	player_s()
 	{
 		size_t i;
+
 		// GhostlyDeath -- Initialize EVERYTHING
 		mo = AActor::AActorPtr();
 		id = 0;
@@ -214,7 +222,7 @@ public:
 		armortype = 0;
 		for (i = 0; i < NUMPOWERS; i++)
 			powers[i] = 0;
-		for ( i = 0; i < NUMCARDS; i++)
+		for (i = 0; i < NUMCARDS; i++)
 			cards[i] = false;
 		backpack = false;
 		points = 0;
@@ -242,6 +250,7 @@ public:
 		extralight = 0;
 		fixedcolormap = 0;
 		memset(psprites, 0, sizeof(pspdef_t) * NUMPSPRITES);
+		jumpTics = 0;
 		respawn_time = 0;
 		for (i = 0; i < 3; i++)
 		{
@@ -317,7 +326,9 @@ public:
 
 		for(i = 0; i < NUMPSPRITES; i++)
 			psprites[i] = other.psprites[i];
-	
+        
+        jumpTics = other.jumpTics;
+		
 		respawn_time = other.respawn_time;
 
 		oldvelocity[0] = other.oldvelocity[0];

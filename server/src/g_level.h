@@ -29,6 +29,9 @@
 #include "doomdef.h"
 #include "m_fixed.h"
 
+#define NUM_MAPVARS				32
+#define NUM_WORLDVARS			64
+
 #define LEVEL_NOINTERMISSION	0x00000001
 #define	LEVEL_DOUBLESKY			0x00000004
 #define LEVEL_NOSOUNDCLIPPING	0x00000008
@@ -56,12 +59,12 @@
 #define LEVEL_CHANGEMAPCHEAT	0x40000000		// Don't display cluster messages
 #define LEVEL_VISITED			0x80000000		// Used for intermission map
 
-
+struct acsdefered_s;
 
 struct level_info_s {
 	char		mapname[9];
 	int			levelnum;
-	char		*level_name;
+	const char	*level_name;
 	char		pname[9];
 	char		nextmap[9];
 	char		secretmap[9];
@@ -71,24 +74,26 @@ struct level_info_s {
 	DWORD		flags;
 	int			cluster;
 	FLZOMemFile	*snapshot;
+	struct acsdefered_s *defered;
 };
 typedef struct level_info_s level_info_t;
 
 struct level_pwad_info_s
 {
 	// level_info_s
-	char		mapname[8];
+	char		mapname[9];
 	int			levelnum;
-	char		*level_name;
-	char		pname[8];
-	char		nextmap[8];
-	char		secretmap[8];
+	const char	*level_name;
+	char		pname[9];
+	char		nextmap[9];
+	char		secretmap[9];
 	int			partime;
-	char		skypic[8];
-	char		music[8];
+	char		skypic[9];
+	char		music[9];
 	DWORD		flags;
 	int			cluster;
 	FLZOMemFile	*snapshot;
+	struct acsdefered_s *defered;
 
 	// level_pwad_info_s				[ML] 5/11/06 Removed sky scrolling/sky2
 	DWORD		fadeto;
@@ -127,6 +132,12 @@ struct level_locals_s {
 
 	int			total_monsters;
 	int			killed_monsters;
+	
+	// The following are all used for ACS scripting
+	byte		*behavior;
+	int			*scripts;
+	int			*strings;
+	SDWORD		vars[NUM_MAPVARS];	
 };
 typedef struct level_locals_s level_locals_t;
 
@@ -135,17 +146,23 @@ struct cluster_info_s {
 	char		messagemusic[9];
 	// [Russell] - Naturally, this should have an extra byte for the null terminator
 	char		finaleflat[9];
-	char		*exittext;
-	char		*entertext;
+	const char		*exittext;
+	const char		*entertext;
 	int			flags;
 };
 typedef struct cluster_info_s cluster_info_t;
+
+// Only one cluster flag right now
+#define CLUSTER_HUB		0x00000001
 
 extern level_locals_t level;
 extern level_info_t LevelInfos[];
 extern cluster_info_t ClusterInfos[];
 
+extern int WorldVars[NUM_WORLDVARS];
+
 extern BOOL savegamerestore;
+extern BOOL HexenHack;		// Semi-Hexen-compatibility mode
 
 void G_InitNew (const char *mapname);
 void G_ChangeMap (void);
@@ -169,6 +186,8 @@ level_info_t *FindLevelInfo (char *mapname);
 level_info_t *FindLevelByNum (int num);
 
 char *CalcMapName (int episode, int level);
+
+void G_ParseMapInfo (void);
 
 void G_ClearSnapshots (void);
 void G_SnapshotLevel (void);

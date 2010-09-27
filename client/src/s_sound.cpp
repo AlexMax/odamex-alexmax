@@ -53,11 +53,6 @@
 #define S_PITCH_PERTURB 		1
 #define S_STEREO_SWING			(96<<FRACBITS)
 
-//joek - choco goodness below
-// when to clip out sounds
-// Does not fit the large outdoor areas.
-#define S_CLIPPING_DIST		(1200*0x10000)
-
 // Distance tp origin when sounds should be maxed out.
 // This should relate to movement clipping resolution
 // (see BLOCKMAP handling).
@@ -331,6 +326,10 @@ int
 	{
 		if (!Channel[i].sfxinfo)	// No sfx playing here (sfxinfo == NULL)
 		{
+			if ((i == CHAN_ANNOUNCERF || i == CHAN_ANNOUNCERE) &&
+				sv_gametype == GM_CTF)
+				continue;
+			
 			cnum = i;
 			break;
 		}
@@ -343,6 +342,10 @@ int
 		for (i=0 ; i < (int)numChannels ; i++)
 			if (Channel[i].priority <= priority)
 			{
+				if ((i == CHAN_ANNOUNCERF || i == CHAN_ANNOUNCERE) &&
+					sv_gametype == GM_CTF)
+					continue;
+				
 				cnum = i;
 				break;
 			}
@@ -532,12 +535,6 @@ static void S_StartSound (fixed_t *pt, fixed_t x, fixed_t y, int channel,
 	{
 		basepriority = -1000;
 	}
-	else if ((channel == CHAN_ANNOUNCERF || channel == CHAN_ANNOUNCERE) &&
-			(SERVERMAJ >= 0 && ((SERVERMIN == 4 && SERVERREL >= 2) || SERVERMIN > 4))
-			&& sv_gametype == GM_CTF)
-	{
-		basepriority = 300;
-	}
 	else if (attenuation <= 0)
 	{
 		basepriority = 200;
@@ -593,8 +590,7 @@ static void S_StartSound (fixed_t *pt, fixed_t x, fixed_t y, int channel,
 
   // try to find a channel
 	if ((channel == CHAN_ANNOUNCERF || channel == CHAN_ANNOUNCERE) &&
-		(SERVERMAJ >= 0 && ((SERVERMIN == 4 && SERVERREL >= 2) || SERVERMIN > 4))
-		&& sv_gametype == GM_CTF)
+		 sv_gametype == GM_CTF)
 		cnum = channel;
 	else
 		cnum = S_getChannel(pt, sfx, priority);
@@ -747,8 +743,7 @@ void S_StopSound (fixed_t *pt)
 		if (Channel[i].sfxinfo && (Channel[i].pt == pt))
 		{
 			if ((i == CHAN_ANNOUNCERF || i == CHAN_ANNOUNCERE) &&
-				(SERVERMAJ >= 0 && ((SERVERMIN == 4 && SERVERREL >= 2) || SERVERMIN > 4))
-				&& sv_gametype == GM_CTF)
+				 sv_gametype == GM_CTF)
 				return;
 			S_StopChannel (i);
 		}
@@ -1398,8 +1393,19 @@ BEGIN_COMMAND (changemus)
 }
 END_COMMAND (changemus)
 
+static void SetTicker (int *tics, struct AmbientSound *ambient)
+{
+
+}
+
 void A_Ambient (AActor *actor)
 {
+
+}
+
+void S_ActivateAmbient (AActor *origin, int ambient)
+{
+
 }
 
 //

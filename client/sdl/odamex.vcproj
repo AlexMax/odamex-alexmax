@@ -622,6 +622,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\common\doomkeys.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\common\doomstat.cpp"
 				>
 			</File>
@@ -923,6 +927,14 @@
 			</File>
 			<File
 				RelativePath="..\..\common\r_things.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\common\sc_man.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\common\sc_man.h"
 				>
 			</File>
 			<File

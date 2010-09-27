@@ -84,7 +84,6 @@ extern void M_RestoreMode (void);
 extern void R_ExecuteSetViewSize (void);
 void C_DoCommand (const char *cmd);
 
-void D_CheckNetGame (void);
 void D_ProcessEvents (void);
 void G_BuildTiccmd (ticcmd_t* cmd);
 void D_DoAdvanceDemo (void);
@@ -447,8 +446,8 @@ std::string BaseFileSearchDir(std::string dir, std::string file, std::string ext
 {
 	std::string found;
 
-	if(dir[dir.length() - 1] != '/')
-		dir += "/";
+	if(dir[dir.length() - 1] != PATHSEPCHAR)
+		dir += PATHSEP;
 
 	std::transform(hash.begin(), hash.end(), hash.begin(), toupper);
 	std::string dothash = ".";
@@ -499,8 +498,8 @@ std::string BaseFileSearchDir(std::string dir, std::string file, std::string ext
 
 	M_Free(namelist);
 #else
-	if(dir[dir.length() - 1] != '/')
-		dir += "/";
+	if(dir[dir.length() - 1] != PATHSEPCHAR)
+		dir += PATHSEP;
 
 	std::string all_ext = dir + "*";
 	//all_ext += ext;
@@ -582,8 +581,8 @@ void AddSearchDir(std::vector<std::string> &dirs, const char *dir, const char se
 		FixPathSeparator(segment);
 		I_ExpandHomeDir(segment);
 
-		if(segment[segment.length() - 1] != '/')
-			segment += "/";
+		if(segment[segment.length() - 1] != PATHSEPCHAR)
+			segment += PATHSEP;
 
 		dirs.push_back(segment);
 	}
@@ -603,7 +602,7 @@ std::string BaseFileSearch (std::string file, std::string ext, std::string hashd
 		const char separator = ';';
 	#else
 		// absolute path?
-		if(file[0] == '/' || file[0] == '~')
+		if(file[0] == PATHSEPCHAR || file[0] == '~')
 			return file;
 
 		const char separator = ':';
@@ -638,8 +637,8 @@ std::string BaseFileSearch (std::string file, std::string ext, std::string hashd
 		{
 			std::string &dir = dirs[i];
 
-			if(dir[dir.length() - 1] != '/')
-				dir += "/";
+			if(dir[dir.length() - 1] != PATHSEPCHAR)
+				dir += PATHSEP;
 
 			return dir + found;
 		}
@@ -685,14 +684,14 @@ void D_AddDefWads (std::string iwad)
 			int stuffstart;
 
 			std::string pd = progdir;
-			if(pd[pd.length() - 1] != '/')
-				pd += '/';
+			if(pd[pd.length() - 1] != PATHSEPCHAR)
+				pd += PATHSEPCHAR;
 
 			stuffstart = sprintf (skindir, "%sskins", pd.c_str());
 
 			if (!chdir (skindir))
 			{
-				skindir[stuffstart++] = '/';
+				skindir[stuffstart++] = PATHSEPCHAR;
 				if ((handle = I_FindFirst ("*.wad", &findstate)) != -1)
 				{
 					do
@@ -712,10 +711,10 @@ void D_AddDefWads (std::string iwad)
 			if (home)
 			{
 				stuffstart = sprintf (skindir, "%s%s.odamex/skins", home,
-									  home[strlen(home)-1] == '/' ? "" : "/");
+									  home[strlen(home)-1] == PATHSEPCHAR ? "" : PATHSEP);
 				if (!chdir (skindir))
 				{
-					skindir[stuffstart++] = '/';
+					skindir[stuffstart++] = PATHSEPCHAR;
 					if ((handle = I_FindFirst ("*.wad", &findstate)) != -1)
 					{
 						do
@@ -867,7 +866,7 @@ void SV_InitMultipleFiles (std::vector<std::string> filenames)
 		std::string name = filenames[i];
 		M_AppendExtension (filenames[i], ".wad");
 
-		size_t slash = name.find_last_of('/');
+		size_t slash = name.find_last_of(PATHSEPCHAR);
 
 		if(slash != std::string::npos)
 			name = name.substr(slash + 1, name.length() - slash);
@@ -898,7 +897,21 @@ std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> &wadnames,
 
 	// Close all open WAD files
 	W_Close();
-
+	
+	// [ML] 9/11/10: Reset custom wad level information from MAPINFO et al.
+    // I have never used memset, I hope I am not invoking satan by doing this :(
+	if (wadlevelinfos)
+    {
+        memset(wadlevelinfos,0,sizeof(wadlevelinfos));        
+        numwadlevelinfos = 0;
+    }
+    
+    if (wadclusterinfos)
+    {
+        memset(wadclusterinfos,0,sizeof(wadclusterinfos));
+        numwadclusterinfos = 0;	        
+    }
+    
 	// Restart the memory manager
 	Z_Init();
 	
@@ -942,6 +955,7 @@ std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> &wadnames,
 	D_DoDefDehackedPatch(patch_files);
 
 	G_SetLevelStrings ();
+	G_ParseMapInfo ();
 	S_ParseSndInfo();
 
 	R_Init();
@@ -1038,7 +1052,8 @@ void D_DoomMain (void)
 	// [RH] Now that all text strings are set up,
 	// insert them into the level and cluster data.
 	G_SetLevelStrings ();
-
+	// [RH] Parse through all loaded mapinfo lumps
+	G_ParseMapInfo ();	
 	// [RH] Parse any SNDINFO lumps
 	S_ParseSndInfo();
 
@@ -1052,8 +1067,8 @@ void D_DoomMain (void)
 	Printf (PRINT_HIGH, "P_Init: Init Playloop state.\n");
 	P_Init ();
 		
-	Printf (PRINT_HIGH, "D_CheckNetGame: Checking network game status.\n");
-	D_CheckNetGame ();
+	Printf (PRINT_HIGH, "SV_InitNetwork: Checking network game status.\n");
+    SV_InitNetwork();
 		
 	// [RH] Initialize items. Still only used for the give command. :-(
 	InitItems ();

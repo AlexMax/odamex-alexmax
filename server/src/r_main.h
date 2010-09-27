@@ -28,7 +28,10 @@
 #include "d_player.h"
 #include "r_data.h"
 
+// killough 10/98: special mask indicates sky flat comes from sidedef
+#define PL_SKYFLAT (0x80000000)
 
+BOOL R_AlignFlat (int linenum, int side, int fc);
 
 //
 // POV related.
@@ -118,47 +121,52 @@ extern void (*hcolfunc_post2) (int hx, int sx, int yl, int yh);
 extern void (*hcolfunc_post4) (int sx, int yl, int yh);
 
 
- 
- //
- // Utility functions.
- int
- R_PointOnSide
- ( fixed_t	x,
-   fixed_t	y,
-   node_t*	node );
- 
- int
- R_PointOnSegSide
- ( fixed_t	x,
-   fixed_t	y,
-   seg_t*	line );
- 
- angle_t
- R_PointToAngle
- ( fixed_t	x,
-   fixed_t	y );
- 
- angle_t
- R_PointToAngle2
- ( fixed_t	x1,
-   fixed_t	y1,
-   fixed_t	x2,
-   fixed_t	y2 );
- 
- fixed_t
- R_PointToDist
- ( fixed_t	x,
-   fixed_t	y );
- 
- 
- fixed_t R_ScaleFromGlobalAngle (angle_t visangle);
- 
- subsector_t*
- R_PointInSubsector
+
+//
+// Utility functions.
+
+int
+R_PointOnSide
+( fixed_t	x,
+  fixed_t	y,
+  node_t*	node );
+
+int
+R_PointOnSegSide
+( fixed_t	x,
+  fixed_t	y,
+  seg_t*	line );
+
+angle_t
+R_PointToAngle
 ( fixed_t	x,
   fixed_t	y );
-  
+
+// 2/1/10: Updated (from EE) to restore vanilla style, with tweak for overflow tolerance
+angle_t R_PointToAngle2(fixed_t viewx, fixed_t viewy, fixed_t x, fixed_t y);
+
+fixed_t
+R_PointToDist
+( fixed_t	x,
+  fixed_t	y );
+
+
+fixed_t R_ScaleFromGlobalAngle (angle_t visangle);
+
+subsector_t*
+R_PointInSubsector
+( fixed_t	x,
+  fixed_t	y );
+
+void
+R_AddPointToBox
+( int		x,
+  int		y,
+  fixed_t*	box );
+
+fixed_t R_PointToDist2 (fixed_t dx, fixed_t dy);
 void R_SetFOV (float fov);
+float R_GetFOV (void);
 
 //
 // REFRESH - the actual rendering functions.
@@ -170,6 +178,9 @@ void R_RenderPlayerView (player_t *player);
 // Called by startup code.
 void R_Init (void);
 
+// Called by exit code.
+void R_Shutdown (void);
+
 // Called by M_Responder.
 void R_SetViewSize (int blocks);
 
@@ -177,5 +188,3 @@ void R_SetViewSize (int blocks);
 void R_MultiresInit (void);
 
 #endif // __R_MAIN_H__
-
-
