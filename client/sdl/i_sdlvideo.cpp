@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -23,18 +23,28 @@
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <algorithm>
+#include <string>
 
 // [Russell] - Just for windows, display the icon in the system menu and
 // alt-tab display
 #if WIN32
+#ifndef _XBOX
 #include <windows.h>
+#endif // !_XBOX
 #include "SDL_syswm.h"
 #include "resource.h"
-#endif
+#endif // WIN32
 
 #include "v_palette.h"
 #include "i_sdlvideo.h"
 #include "i_system.h"
+#include "m_argv.h"
+#include "m_memio.h"
+
+#ifdef _XBOX
+#include "i_xbox.h"
+#endif
 
 SDLVideo::SDLVideo(int parm)
 {
@@ -64,7 +74,7 @@ SDLVideo::SDLVideo(int parm)
 
     // [Russell] - Just for windows, display the icon in the system menu and
     // alt-tab display
-    #if WIN32
+    #if WIN32 && !_XBOX
     HICON Icon = LoadIcon(GetModuleHandle(NULL), MAKEINTRESOURCE(IDI_ICON1));
 
     if (Icon != 0)
@@ -103,15 +113,14 @@ SDLVideo::SDLVideo(int parm)
 
    SDL_Rect **sdllist = SDL_ListModes(NULL, SDL_FULLSCREEN|SDL_SWSURFACE);
 
-   vidModeList = NULL;
-   vidModeCount = 0;
+   vidModeIterator = 0;
+   vidModeIteratorBits = 8;
+   vidModeList.clear();
 
    if(!sdllist)
    {
 	  // no fullscreen modes, but we could still try windowed
 	  Printf(PRINT_HIGH, "SDL_ListModes returned NULL. No fullscreen video modes are available.\n");
-      vidModeList = NULL; 
-	  vidModeCount = 0;
 	  return;
    }
    else if(sdllist == (SDL_Rect **)-1)
@@ -121,19 +130,33 @@ SDLVideo::SDLVideo(int parm)
    }
    else
    {
-      int i;
-      for(i = 0; sdllist[i]; i++)
-         ;
-
-      vidModeList = new vidMode[i];
-      vidModeCount = i;
-
-      for(i = 0; sdllist[i]; i++)
+      vidMode_t CustomVidModes[] = 
       {
-         vidModeList[i].width = sdllist[i]->w;
-         vidModeList[i].height = sdllist[i]->h;
-         vidModeList[i].bits = 8;
+         { 640, 480, 8 }
+        ,{ 640, 400, 8 }
+        ,{ 320, 240, 8 }
+        ,{ 320, 200, 8 }
+      }; 
+      
+      // Add in generic video modes reported by SDL
+      for(int i = 0; sdllist[i]; ++i)
+      {
+        vidMode_t vm;
+        
+        vm.width = sdllist[i]->w;
+        vm.height = sdllist[i]->h;
+        vm.bits = 8;
+
+        vidModeList.push_back(vm);
       }
+
+      // Now custom video modes to be added
+      for (size_t i = 0; i < STACKARRAY_LENGTH(CustomVidModes); ++i)
+        vidModeList.push_back(CustomVidModes[i]);
+
+      // Get rid of any duplicates (SDL some times reports duplicates as well)
+      vidModeList.erase(std::unique(vidModeList.begin(), vidModeList.end(), 
+            bp_vm_uni_cmp), vidModeList.end());
    }
 }
 
@@ -149,15 +172,25 @@ SDLVideo::~SDLVideo(void)
    }
 
    delete chainHead;
-
-   if(vidModeList)
-   {
-      delete [] vidModeList;
-      vidModeList = NULL;
-   }
 }
 
 
+std::string SDLVideo::GetVideoDriverName()
+{
+  char driver[128];
+
+  if((SDL_VideoDriverName(driver, 128)) == NULL)
+  {
+    char *pdrv; // Don't modify or free this
+
+    if((pdrv = getenv("SDL_VIDEODRIVER")) == NULL)
+      return ""; // Can't determine driver
+
+    return std::string(pdrv); // Return the environment variable
+  }
+
+  return std::string(driver); // Return the name as provided by SDL
+}
 
 
 bool SDLVideo::FullscreenChanged (bool fs)
@@ -176,16 +209,35 @@ void SDLVideo::SetWindowedScale (float scale)
    /// HAHA FIXME
 }
 
+bool SDLVideo::SetOverscan (float scale)
+{
+	int   ret = 0;
 
+	if(scale > 1.0)
+		return false;
+
+#ifdef _XBOX
+	if(xbox_SetScreenStretch( -(screenw - (screenw * scale)), -(screenh - (screenh * scale))) )
+		ret = -1;
+	if(xbox_SetScreenPosition( (screenw - (screenw * scale)) / 2, (screenh - (screenh * scale)) / 2) )
+		ret = -1;
+#endif
+
+	if(ret)
+		return false;
+
+	return true;
+}
 
 bool SDLVideo::SetMode (int width, int height, int bits, bool fs)
 {
    Uint32 flags = SDL_RESIZABLE;
+   int sbits = bits;
 
    // SoM: I'm not sure if we should request a software or hardware surface yet... So I'm
    // just ganna let SDL decide.
 
-   if(fs && vidModeCount)
+   if(fs && !vidModeList.empty())
    {
       flags = 0;
        
@@ -195,7 +247,11 @@ bool SDLVideo::SetMode (int width, int height, int bits, bool fs)
          flags |= SDL_HWPALETTE;
    }
 
-   if(!(sdlScreen = SDL_SetVideoMode(width, height, bits, flags)))
+   // fullscreen directx requires a 32-bit mode to fix broken palette
+   if (I_CheckVideoDriver("directx") && fs)
+      sbits = 32;
+
+   if(!(sdlScreen = SDL_SetVideoMode(width, height, sbits, flags)))
       return false;
 
    screenw = width;
@@ -235,9 +291,14 @@ void SDLVideo::UpdateScreen (DCanvas *canvas)
 {
    if(palettechanged)
    {
-      SDL_SetPalette(sdlScreen, SDL_LOGPAL|SDL_PHYSPAL, newPalette, 0, 256);
-	  palettechanged = false;
+      // m_Private may or may not be the primary surface (sdlScreen)
+      SDL_SetPalette((SDL_Surface*)canvas->m_Private, SDL_LOGPAL|SDL_PHYSPAL, newPalette, 0, 256);
+      palettechanged = false;
    }
+
+   // If not writing directly to the screen blit to the primary surface
+   if(canvas->m_Private != sdlScreen)
+      SDL_BlitSurface((SDL_Surface*)canvas->m_Private, NULL, sdlScreen, NULL);
    
    SDL_Flip(sdlScreen);
 }
@@ -275,7 +336,7 @@ void SDLVideo::ReadScreen (byte *block)
 
 int SDLVideo::GetModeCount ()
 {
-   return vidModeCount;
+   return vidModeList.size();
 }
 
 
@@ -288,17 +349,25 @@ void SDLVideo::StartModeIterator (int bits)
 
 bool SDLVideo::NextMode (int *width, int *height)
 {
-   while(vidModeIterator < vidModeCount)
+   std::vector<vidMode_t>::iterator it;
+
+   it = vidModeList.begin() + vidModeIterator;
+
+   while(it != vidModeList.end())
    {
-      if(vidModeList[vidModeIterator].bits == vidModeIteratorBits)
+      vidMode_t vm = *it;
+
+      if(vm.bits == vidModeIteratorBits)
       {
-         *width = vidModeList[vidModeIterator].width;
-         *height = vidModeList[vidModeIterator].height;
+         *width = vm.width;
+         *height = vm.height;
          vidModeIterator++;
          return true;
       }
 
       vidModeIterator++;
+
+      ++it;
    }
    return false;
 }

@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -62,6 +62,10 @@
 #include "cl_main.h"
 #include "gi.h"
 
+#ifdef _XBOX
+#include "i_xbox.h"
+#endif
+
 #include <math.h> // for pow()
 
 #include <sstream>
@@ -74,7 +78,6 @@ BOOL	G_CheckDemoStatus (void);
 void	G_ReadDemoTiccmd ();
 void	G_WriteDemoTiccmd ();
 void	G_PlayerReborn (player_t &player);
-void	G_DoReborn (player_t &playernum);
 
 void	G_DoNewGame (void);
 void	G_DoLoadGame (void);
@@ -143,6 +146,7 @@ EXTERN_CVAR(sv_fastmonsters)
 EXTERN_CVAR(sv_freelook)
 EXTERN_CVAR(sv_allowjump)
 EXTERN_CVAR(co_realactorheight)
+EXTERN_CVAR(co_zdoomphys)
 EXTERN_CVAR (dynresval) // [Toke - Mouse] Dynamic Resolution Value
 EXTERN_CVAR (dynres_state) // [Toke - Mouse] Dynamic Resolution on/off
 EXTERN_CVAR (mouse_type) // [Toke - Mouse] Zdoom or standard mouse code
@@ -160,6 +164,7 @@ CVAR_FUNC_IMPL(cl_mouselook)
 byte			consoleplayer_id;			// player taking events and displaying
 byte			displayplayer_id;			// view being displayed
 int 			gametic;
+bool			singleplayerjustdied = false;
 
 char			demoname[256];
 BOOL 			demorecording;
@@ -218,12 +223,20 @@ int	mousey;
 float			zdoomsens;
 
 
-// joystick values are repeated
-// [RH] now, if the joystick is enabled, it will generate an event every tick
-//		so the values here are reset to zero after each tic build (in case
-//		use_joystick gets set to 0 when the joystick is off center)
-int 			joyxmove;
-int 			joyymove;
+// Joystick values are repeated
+// Store a value for each of the analog axis controls -- Hyper_Eye
+int				joyforward;
+int				joystrafe;
+int				joyturn;
+int				joylook;
+
+EXTERN_CVAR (joy_forwardaxis)
+EXTERN_CVAR (joy_strafeaxis)
+EXTERN_CVAR (joy_turnaxis)
+EXTERN_CVAR (joy_lookaxis)
+EXTERN_CVAR (joy_sensitivity)
+EXTERN_CVAR (joy_invert)
+EXTERN_CVAR (joy_freelook)
 
 int 			savegameslot;
 char			savedescription[32];
@@ -510,6 +523,9 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 			cmd->ucmd.yaw += angleturn[tspeed];
 	}
 
+	// Joystick analog strafing -- Hyper_Eye
+	side += (int)(((float)joystrafe / (float)SHRT_MAX) * sidemove[speed]);
+
 	if (Actions[ACTION_LOOKUP])
 		look += lookspeed[speed];
 	if (Actions[ACTION_LOOKDOWN])
@@ -535,6 +551,15 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 			forward -= forwardmove[speed];
 	}
 
+	// Joystick analog look -- Hyper_Eye
+	if(joy_freelook && sv_freelook)
+	{
+		if (joy_invert)
+			look += (int)(((float)joylook / (float)SHRT_MAX) * lookspeed[speed]);
+		else
+			look -= (int)(((float)joylook / (float)SHRT_MAX) * lookspeed[speed]);
+	}
+
 	if (Actions[ACTION_MOVERIGHT])
 		side += sidemove[speed];
 	if (Actions[ACTION_MOVELEFT])
@@ -552,7 +577,7 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 
 	// [RH] Handle impulses. If they are between 1 and 7,
 	//		they get sent as weapon change events.
-	if (Impulse >= 1 && Impulse <= 7)
+	if (Impulse >= 1 && Impulse <= 8)
 	{
 		cmd->ucmd.buttons |= BT_CHANGE;
 		cmd->ucmd.buttons |= (Impulse - 1) << BT_WEAPONSHIFT;
@@ -563,23 +588,21 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	}
 	Impulse = 0;
 
-	// [RH] Scale joystick moves to full range of allowed speeds
 	if (strafe || lookstrafe)
-		side += (MAXPLMOVE * joyxmove) / 256;
+		side += (int)(((float)joyturn / (float)SHRT_MAX) * sidemove[speed]);
 	else
-		cmd->ucmd.yaw -= (angleturn[1] * joyxmove) / 256;
+		cmd->ucmd.yaw -= (short)((((float)joyturn / (float)SHRT_MAX) * angleturn[1]) * (joy_sensitivity / 10));
 
-	// [RH] Scale joystick moves over full range
 	if (Actions[ACTION_MLOOK])
 	{
-		if (invertmouse)
-			look -= (joyymove * 32767) / 256;
+		if (joy_invert)
+			look += (int)(((float)joyforward / (float)SHRT_MAX) * lookspeed[speed]);
 		else
-			look += (joyymove * 32767) / 256;
+			look -= (int)(((float)joyforward / (float)SHRT_MAX) * lookspeed[speed]);
 	}
 	else
 	{
-		forward += (MAXPLMOVE * joyymove) / 256;
+		forward -= (int)(((float)joyforward / (float)SHRT_MAX) * forwardmove[speed]);
 	}
 
 	if ((Actions[ACTION_MLOOK]) || (cl_mouselook && sv_freelook))
@@ -616,7 +639,7 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	if (strafe || lookstrafe)
 		side += (int)((float)mousex * m_side);
 	else
-		cmd->ucmd.yaw -= (int)((float)(mousex*0x8) * m_yaw);
+		cmd->ucmd.yaw -= (int)((float)(mousex*0x8) * m_yaw) / ticdup;
 
 	mousex = mousey = 0;
 
@@ -655,9 +678,6 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 		turntick--;
 		cmd->ucmd.yaw = (ANG180 / TURN180_TICKS) >> 16;
 	}
-
-	joyxmove = 0;
-	joyymove = 0;
 }
 
 
@@ -698,7 +718,9 @@ BOOL G_Responder (event_t *ev)
 				stricmp (cmd, "chase") &&
 				stricmp (cmd, "+showscores") &&
 				stricmp (cmd, "bumpgamma") &&
-				stricmp (cmd, "screenshot")))
+				stricmp (cmd, "screenshot") &&
+                stricmp (cmd, "stepmode") &&
+                stricmp (cmd, "step")))
 			{
 				S_Sound (CHAN_VOICE, "switches/normbutn", 1, ATTN_NONE);
 				M_StartControlPanel ();
@@ -750,28 +772,28 @@ BOOL G_Responder (event_t *ev)
 		{
 			if (dynres_state == 0)
 			{
-				mousex = ev->data2 * (mouse_sensitivity + 5) / 10; // [Toke - Mouse] Marriage of origonal and zdoom mouse code, functions like doom2.exe code
-				mousey = ev->data3 * (mouse_sensitivity + 5) / 10;
+				mousex = (int)(ev->data2 * (mouse_sensitivity + 5) / 10); // [Toke - Mouse] Marriage of origonal and zdoom mouse code, functions like doom2.exe code
+				mousey = (int)(ev->data3 * (mouse_sensitivity + 5) / 10);
 			}
 			else if (dynres_state == 1)
 			{
 				mousexleft = ev->data2;
 				mousexleft = -mousexleft;
-				mousex = pow((ev->data2 * (mouse_sensitivity + 5) / 10), dynresval);
+				mousex = (int) pow((ev->data2 * (mouse_sensitivity + 5) / 10), dynresval);
 
 				if (ev->data2 < 0)
 				{
-					mousexleft = pow((mousexleft * (mouse_sensitivity + 5) / 10), dynresval);
+					mousexleft = (int) pow((mousexleft * (mouse_sensitivity + 5) / 10), dynresval);
 					mousex = -mousexleft;
 				}
 
 				mouseydown = ev->data3;
 				mouseydown = -mouseydown;
-				mousey = pow((ev->data3 * (mouse_sensitivity + 5) / 10), dynresval);
+				mousey = (int) pow((ev->data3 * (mouse_sensitivity + 5) / 10), dynresval);
 
 				if (ev->data3 < 0)
 				{
-					mouseydown = pow((mouseydown * (mouse_sensitivity + 5) / 10), dynresval);
+					mouseydown = (int) pow((mouseydown * (mouse_sensitivity + 5) / 10), dynresval);
 					mousey = -mouseydown;
 				}
 			}
@@ -780,28 +802,28 @@ BOOL G_Responder (event_t *ev)
 		{
 			if (dynres_state == 0)
 			{
-				mousex = ev->data2 * (zdoomsens); // [Toke - Mouse] Zdoom mouse code
-				mousey = ev->data3 * (zdoomsens);
+				mousex = (int)(ev->data2 * (zdoomsens)); // [Toke - Mouse] Zdoom mouse code
+				mousey = (int)(ev->data3 * (zdoomsens));
 			}
 			else if (dynres_state == 1)
 			{
 				mousexleft = ev->data2;
 				mousexleft = -mousexleft;
-				mousex = pow((ev->data2 * (zdoomsens)), dynresval);
+				mousex = (int) pow((ev->data2 * (zdoomsens)), dynresval);
 
 				if (ev->data2 < 0)
 				{
-					mousexleft = pow((mousexleft * (zdoomsens)), dynresval);
+					mousexleft = (int) pow((mousexleft * (zdoomsens)), dynresval);
 					mousex = -mousexleft;
 				}
 
 				mouseydown = ev->data3;
 				mouseydown = -mouseydown;
-				mousey = pow((ev->data3 * (zdoomsens)), dynresval);
+				mousey = (int) pow((ev->data3 * (zdoomsens)), dynresval);
 
 				if (ev->data3 < 0)
 				{
-					mouseydown = pow((mouseydown * (zdoomsens)), dynresval);
+					mouseydown = (int) pow((mouseydown * (zdoomsens)), dynresval);
 					mousey = -mouseydown;
 				}
 			}
@@ -813,8 +835,20 @@ BOOL G_Responder (event_t *ev)
 		break;
 
 	  case ev_joystick:
-		joyxmove = ev->data2;
-		joyymove = ev->data3;
+	  	if(ev->data1 == 0) // Axis Movement
+		{
+			if(ev->data2 == joy_strafeaxis) // Strafe
+				joystrafe = ev->data3;
+			else if(ev->data2 == joy_forwardaxis) // Move
+				joyforward = ev->data3;
+			else if(ev->data2 == joy_turnaxis) // Turn
+				joyturn = ev->data3;
+			else if(ev->data2 == joy_lookaxis) // Look
+				joylook = ev->data3;
+			else
+				break; // The default case will be to treat the analog control as a button -- Hyper_Eye
+		}
+
 		break;
 
 	}
@@ -1563,7 +1597,11 @@ void G_BuildSaveName (std::string &name, int slot)
 {
     std::stringstream ssName;
 
+#ifdef _XBOX
+	std::string path = xbox_GetSavePath(name, slot);
+#else
 	std::string path = I_GetUserFileName ((const char *)name.c_str());
+#endif
 
 	ssName << path;
     ssName << SAVEGAMENAME;
@@ -1589,6 +1627,10 @@ void G_DoSaveGame (void)
 	{
         return;
 	}
+
+#ifdef _XBOX
+	xbox_WriteSaveMeta(name.substr(0, name.rfind(PATHSEPCHAR)), description);
+#endif
 
 	Printf (PRINT_HIGH, "Saving game to '%s'...\n", name.c_str());
 
@@ -2190,6 +2232,7 @@ void G_DoPlayDemo (bool justStreamInput)
 		sv_freelook = "0";
 		sv_allowjump = "0";
 		co_realactorheight = "0";
+		co_zdoomphys = "0";
 
 		return;
 	} else {
@@ -2331,7 +2374,7 @@ BOOL CheckIfExitIsGood (AActor *self)
     unsigned int i;
 
     for(i = 0; i < players.size(); i++)
-        if(players[i].fragcount == sv_fraglimit)
+        if(players[i].fragcount >= sv_fraglimit)
             break;
 
     if (sv_gametype != GM_COOP && self)

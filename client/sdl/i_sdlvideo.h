@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -35,11 +35,14 @@ class SDLVideo : public IVideo
    SDLVideo(int parm);
 	virtual ~SDLVideo (void);
 
+	virtual std::string GetVideoDriverName();
+
 	virtual bool CanBlit (void) {return false;}
 	virtual EDisplayType GetDisplayType (void) {return DISPLAY_Both;}
 
 	virtual bool FullscreenChanged (bool fs);
 	virtual void SetWindowedScale (float scale);
+	virtual bool SetOverscan (float scale);
 
 	virtual bool SetMode (int width, int height, int bits, bool fs);
 	virtual void SetPalette (DWORD *palette);
@@ -80,13 +83,21 @@ class SDLVideo : public IVideo
       cChain *next, *prev;
    };
 
+    typedef struct   
+    {      
+        int width, height, bits;
+    } vidMode_t;
 
-   struct vidMode
-   {
-      int width, height, bits;
-   } *vidModeList;
-   int vidModeCount;
-   int vidModeIterator;
+    // binary predicate for video mode comparison
+    static bool bp_vm_uni_cmp (vidMode_t first, vidMode_t second)
+    { 
+        return (first.width == second.width && 
+            first.height == second.height &&
+            first.bits == second.bits);
+    }
+
+   std::vector<vidMode_t> vidModeList;
+   size_t vidModeIterator;
    int vidModeIteratorBits;
 
    SDL_Surface *sdlScreen;

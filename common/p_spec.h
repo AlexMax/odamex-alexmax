@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -162,11 +163,12 @@ void	P_SpawnSpecials (void);
 void	P_UpdateSpecials (void);
 
 // when needed
-void P_CrossSpecialLine (int linenum, int side, AActor*	thing, bool FromServer = false);
-void P_ShootSpecialLine (AActor* thing, line_t*	line, bool FromServer = false);
-bool P_UseSpecialLine (AActor* thing, line_t* line, int	side, bool FromServer = false);
+void    P_CrossSpecialLine (int linenum, int side, AActor*	thing, bool FromServer = false);
+void    P_ShootSpecialLine (AActor* thing, line_t*	line, bool FromServer = false);
+bool    P_UseSpecialLine (AActor* thing, line_t* line, int	side, bool FromServer = false);
+bool    P_PushSpecialLine (AActor* thing, line_t* line, int	side, bool FromServer = false);
 
-void P_PlayerInSpecialSector (player_t *player);
+void    P_PlayerInSpecialSector (player_t *player);
 
 //
 // getSide()
@@ -351,6 +353,23 @@ private:
 	DGlow2 ();
 };
 
+// [RH] Phased light thinker
+class DPhased : public DLighting
+{
+	DECLARE_SERIAL (DPhased, DLighting)
+public:
+	DPhased (sector_t *sector);
+	DPhased (sector_t *sector, int baselevel, int phase);
+	void		RunThink ();
+protected:
+	byte		m_BaseLevel;
+	byte		m_Phase;
+private:
+	DPhased ();
+	DPhased (sector_t *sector, int baselevel);
+	int PhaseHelper (sector_t *sector, int index, int light, sector_t *prev);
+};
+
 #define GLOWSPEED				8
 #define STROBEBRIGHT			5
 #define FASTDARK				15
@@ -362,6 +381,7 @@ void	EV_StartLightStrobing (int tag, int utics, int ltics);
 void	EV_TurnTagLightsOff (int tag);
 void	EV_LightTurnOn (int tag, int bright);
 void	EV_LightChange (int tag, int value);
+int     EV_LightTurnOnPartway(int tag, int level);
 
 void	P_SpawnGlowingLight (sector_t *sector);
 
@@ -426,7 +446,6 @@ public:
 	void SetState(byte state, int count) { m_Status = (EPlatState)state; m_Count = count; }
 	void GetState(byte &state, int &count) { state = (byte)m_Status; count = m_Count; }
 
-protected:
 	DPlat (sector_t *sector);
 
 	fixed_t 	m_Speed;
@@ -440,6 +459,7 @@ protected:
 	int 		m_Tag;
 	EPlatType	m_Type;
 	bool		m_PostWait;
+protected:
 
 	void PlayPlatSound (const char *sound);
 	void Reactivate ();
@@ -487,12 +507,13 @@ public:
 
 	};
 
+	DPillar ();
+
 	DPillar (sector_t *sector, EPillar type, fixed_t speed, fixed_t height,
 			 fixed_t height2, bool crush);
 
 	void RunThink ();
 
-protected:
 	EPillar		m_Type;
 	fixed_t		m_FloorSpeed;
 	fixed_t		m_CeilingSpeed;
@@ -500,8 +521,6 @@ protected:
 	fixed_t		m_CeilingTarget;
 	bool		m_Crush;
 
-private:
-	DPillar ();
 };
 
 inline FArchive &operator<< (FArchive &arc, DPillar::EPillar type)
@@ -535,10 +554,11 @@ public:
 	};
 
 	DDoor (sector_t *sector);
-	DDoor (sector_t *sec, EVlDoor type, fixed_t speed, int delay);
+	// DDoor (sector_t *sec, EVlDoor type, fixed_t speed, int delay);
+    DDoor (sector_t *sec, line_t *ln, EVlDoor type, fixed_t speed, int delay);
 
 	void RunThink ();
-protected:
+
 	EVlDoor		m_Type;
 	fixed_t 	m_TopHeight;
 	fixed_t 	m_Speed;
@@ -552,6 +572,8 @@ protected:
 	// when it reaches 0, start going down
 	int 		m_TopCountdown;
 
+    line_t      *m_Line;
+protected:
 	void DoorSound (bool raise) const;
 
 	friend BOOL	EV_DoDoor (DDoor::EVlDoor type, line_t *line, AActor *thing,
@@ -617,7 +639,6 @@ public:
 
 	void RunThink ();
 
-protected:
 	ECeiling	m_Type;
 	fixed_t 	m_BottomHeight;
 	fixed_t 	m_TopHeight;
@@ -635,6 +656,7 @@ protected:
 	// ID
 	int 		m_Tag;
 	int 		m_OldDirection;
+protected:
 
 	void PlayCeilingSound ();
 
@@ -715,7 +737,6 @@ public:
 
 	void RunThink ();
 
-protected:
 	EFloor	 	m_Type;
 	bool 		m_Crush;
 	int 		m_Direction;
@@ -731,6 +752,8 @@ protected:
 	int			m_PauseTime;
 	int			m_StepTime;
 	int			m_PerStepTime;
+
+protected:
 
 	void StartFloorSound ();
 
@@ -771,13 +794,13 @@ public:
 
 	void RunThink ();
 
-protected:
 	EElevator	m_Type;
 	int			m_Direction;
 	fixed_t		m_FloorDestHeight;
 	fixed_t		m_CeilingDestHeight;
 	fixed_t		m_Speed;
 
+protected:
 	void StartFloorSound ();
 
 	friend BOOL EV_DoElevator (line_t *line, DElevator::EElevator type, fixed_t speed,
@@ -809,10 +832,27 @@ BOOL EV_DoChange (line_t *line, EChange changetype, int tag);
 //
 // P_TELEPT
 //
-BOOL EV_Teleport (int tid, AActor *thing);
-BOOL EV_SilentTeleport (int tid, line_t *line, AActor *thing);
-BOOL EV_SilentLineTeleport (line_t *line, AActor *thing, int id,
+BOOL EV_Teleport (int tid, int side, AActor *thing);
+BOOL EV_SilentTeleport (int tid, line_t *line, int side, AActor *thing);
+BOOL EV_SilentLineTeleport (line_t *line, int side, AActor *thing, int id,
 							BOOL reverse);
+
+//
+// [RH] ACS (see also p_acs.h)
+//
+
+BOOL P_StartScript (AActor *who, line_t *where, int script, char *map, int lineSide,
+					int arg0, int arg1, int arg2, int always);
+void P_SuspendScript (int script, char *map);
+void P_TerminateScript (int script, char *map);
+void P_StartOpenScripts (void);
+void P_DoDeferedScripts (void);
+
+
+//
+// [RH] p_quake.c
+//
+BOOL P_StartQuake (int tid, int intensity, int duration, int damrad, int tremrad);
 
 #endif
 

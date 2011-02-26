@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -38,6 +38,17 @@
 #include <wx/artprov.h>
 #include <wx/iconbndl.h>
 #include <wx/regex.h>
+
+#ifdef __WXMSW__
+    #include <windows.h>
+    #include <winsock.h>
+#else
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <arpa/inet.h>
+    #include <sys/wait.h>
+    #include <netdb.h>
+#endif
 
 // Control ID assignments for events
 // application icon
@@ -98,6 +109,7 @@ dlgMain::dlgMain(wxWindow* parent, wxWindowID id)
 {
     wxFileConfig ConfigInfo;   
     wxInt32 WindowPosX, WindowPosY, WindowWidth, WindowHeight;
+    bool WindowMaximized;
     wxString Version;
 
     // Loads the frame from the xml resource file
@@ -113,13 +125,14 @@ dlgMain::dlgMain(wxWindow* parent, wxWindowID id)
     // Sets the window size
     ConfigInfo.Read(wxT("MainWindowWidth"), 
                     &WindowWidth, 
-                    GetClientSize().GetWidth());
+                    0);
                     
     ConfigInfo.Read(wxT("MainWindowHeight"), 
                     &WindowHeight, 
-                    GetClientSize().GetHeight());
+                    0);
     
-    SetClientSize(WindowWidth, WindowHeight);
+    if (WindowWidth >= 0 && WindowHeight >= 0)
+        SetClientSize(WindowWidth, WindowHeight);
     
     // Set Window position
     ConfigInfo.Read(wxT("MainWindowPosX"), 
@@ -130,8 +143,14 @@ dlgMain::dlgMain(wxWindow* parent, wxWindowID id)
                     &WindowPosY, 
                     0);
     
-    Move(WindowPosX, WindowPosY);
+    if (WindowPosX >= 0 && WindowPosY >= 0)
+        Move(WindowPosX, WindowPosY);
     
+    // Set whether this window is maximized or not
+    ConfigInfo.Read(wxT("MainWindowMaximized"), &WindowMaximized, false);
+
+    Maximize(WindowMaximized);
+
     launchercfg_s.get_list_on_start = 1;
     launchercfg_s.show_blocked_servers = 1;
     launchercfg_s.wad_paths = wxGetCwd();
@@ -219,6 +238,9 @@ void dlgMain::OnClose(wxCloseEvent &event)
     ConfigInfo.Write(wxT("MainWindowHeight"), GetClientSize().GetHeight());
     ConfigInfo.Write(wxT("MainWindowPosX"), GetPosition().x);
     ConfigInfo.Write(wxT("MainWindowPosY"), GetPosition().y);
+    ConfigInfo.Write(wxT("MainWindowMaximized"), IsMaximized());
+
+    ConfigInfo.Flush();
 
     event.Skip();
 }
@@ -232,38 +254,133 @@ void dlgMain::OnShow(wxShowEvent &event)
 // manually connect to a server
 void dlgMain::OnManualConnect(wxCommandEvent &event)
 {
+    wxFileConfig ConfigInfo;
+    wxInt32 ServerTimeout;
+    Server tmp_server;
+    wxString server_hash;
+    wxString ped_hash;
     wxString ped_result;
     wxString ted_result;
+    wxString IPHost;
+    long Port;
     
-    wxTextEntryDialog ted(this, wxT("Please enter IP Address and Port"), 
-        wxT("Please enter IP Address and Port"), wxT("0.0.0.0:0"));
+    const wxString HelpText = wxT("Please enter an IP Address or Hostname. \n\nAn "
+                            "optional port number can exist for IPs or Hosts\n"
+                            "by putting a : after the address.");
 
-    wxPasswordEntryDialog ped(this, wxT("Enter an optional password"), 
-        wxT("Enter an optional password"), wxT(""));
+    wxTextEntryDialog ted(this, HelpText, wxT("Manual Connect"), 
+        wxT("0.0.0.0:0"));
+
+    wxPasswordEntryDialog ped(this, wxT("Server is password-protected. \n\n" 
+        "Please enter the password"), wxT("Manual Connect"), wxT(""));
+
+    ConfigInfo.Read(wxT(SERVERTIMEOUT), &ServerTimeout, 500);
 
     // Keep asking for a valid ip/port number
     while (1)
     {
+        bool good = false;
+
         if (ted.ShowModal() == wxID_CANCEL)
             return;
     
         ted_result = ted.GetValue();
 
-        if (IsAddressValid(ted_result) == false)
+        switch (IsAddressValid(ted_result, IPHost, Port))
         {
-            wxMessageBox(wxT("Invalid IP address/Port number"));
-            continue;
+            // Correct address
+            case _oda_iav_SUCCESS:
+            {
+                good = true;
+            }
+            break;
+
+            // Empty string
+            case _oda_iav_emptystr:
+            {
+                continue;
+            }
+
+            // Colon syntax bad
+            case _oda_iav_colerr:
+            {
+                wxMessageBox(wxT("A number > 0 must exist after the :"));
+                continue;
+            }
+
+            // Internal error
+            case _oda_iav_interr:
+            {
+                wxMessageBox(wxT("Regex compiler failure, please report this"));
+                return;
+            }
+
+            // Unknown error (usually bad regex match)
+            case _oda_iav_FAILURE:
+            {
+                wxMessageBox(wxT("Invalid IP address/hostname format"));
+                continue;
+            }
         }
-        else
+        
+        // Address is good to use
+        if (good == true)
             break;
     }
 
-    // Show password entry dialog
-    if (ped.ShowModal() == wxID_CANCEL)
+    // Query the server and try to acquire its password hash
+    tmp_server.SetAddress(IPHost, Port);
+    tmp_server.Query(ServerTimeout);
+
+    if (tmp_server.GotResponse() == false)
+    {
+        // Server is unreachable
+        wxMessageDialog Message(this, wxT("No response from server"), 
+            wxT("Manual Connect"), wxOK | wxICON_HAND);
+
+        Message.ShowModal();
+
         return;
+    }
+
+    server_hash = tmp_server.Info.PasswordHash;
+
+    // Uppercase both hashes for easier comparison
+    server_hash.MakeUpper();
+
+    // Show password entry dialog only if the server has a password
+    if (!server_hash.IsEmpty())
+    {
+        while(1)
+        {
+            if (ped.ShowModal() == wxID_CANCEL)
+                return;
+
+            ped_result = ped.GetValue();
+               
+            ped_hash = MD5SUM(ped_result);
+
+            ped_hash.MakeUpper();
+
+            if (ped_hash != server_hash)
+            {
+                wxMessageDialog Message(this, wxT("Incorrect password"), 
+                    wxT("Manual Connect"), wxOK | wxICON_HAND);
+
+                Message.ShowModal();
+
+                ped.SetValue(wxT(""));
+
+                continue;
+            }
+            else
+                break;
+        }
+    }
+
     
     LaunchGame(ted_result, launchercfg_s.odamex_directory, 
-        launchercfg_s.wad_paths, ped.GetValue());
+        launchercfg_s.wad_paths, ped_result);
 }
 
 // Posts a message from the main thread to the monitor thread
@@ -762,7 +879,7 @@ void dlgMain::LaunchGame(const wxString &Address, const wxString &ODX_Path,
     }
     
     #ifdef __WXMSW__
-      wxString binname = ODX_Path + wxT('\\') + _T("odamex");
+      wxString binname = ODX_Path + wxT('\\') + wxT("odamex");
     #elif __WXMAC__
       wxString binname = ODX_Path + wxT("/odamex.app/Contents/MacOS/odamex");
     #else
@@ -792,13 +909,17 @@ void dlgMain::LaunchGame(const wxString &Address, const wxString &ODX_Path,
     ConfigInfo.Read(wxT(EXTRACMDLINEARGS), &ExtraCmdLineArgs, wxT(""));
     
     if (!ExtraCmdLineArgs.IsEmpty())
-        cmdline += wxString::Format(_T(" %s"), 
+        cmdline += wxString::Format(wxT(" %s"), 
                                     ExtraCmdLineArgs.c_str());
 
-	if (wxExecute(cmdline, wxEXEC_ASYNC, NULL) == -1)
+    // wxWidgets likes to spit out its own message box on msw after our one
+    #ifndef __WXMSW__
+	if (wxExecute(cmdline, wxEXEC_ASYNC, NULL) <= 0)
         wxMessageBox(wxString::Format(wxT("Could not start %s!"), 
                                         binname.c_str()));
-	
+    #else
+    wxExecute(cmdline, wxEXEC_ASYNC, NULL);
+    #endif
 }
 
 
@@ -867,6 +988,9 @@ wxInt32 dlgMain::GetSelectedServerArrayIndex()
 
     i = GetSelectedServerListIndex();
 
+    if (i == -1)
+        return -1;
+
     item.SetId(i);
     item.SetColumn(7);
     item.SetMask(wxLIST_MASK_TEXT);
@@ -878,21 +1002,26 @@ wxInt32 dlgMain::GetSelectedServerArrayIndex()
     return i;
 }
 
-// Checks whether an odamex-style address format is valid
-bool dlgMain::IsAddressValid(wxString Address)
+// Checks whether an odamex-style address format is valid, also gives the
+// separated ip/hostname and port number back to the caller
+_oda_iav_err_t dlgMain::IsAddressValid(wxString Address, wxString &OutIPHost, 
+    long &OutPort)
 {
     wxInt32 Colon;
     wxString RegEx;
     wxRegEx ReValIP;
     wxString IPHost;
-    wxUint16 Port;
+    long Port = DEF_SERVERPORT;
 
     // Get rid of any whitespace on either side of the string
     Address.Trim(false);
     Address.Trim(true);
 
+    // Don't accept nothing
     if (Address.IsEmpty() == true)
-        return false;
+    {
+        return _oda_iav_emptystr;
+    }
 
     // Set the regular expression and load it in
     RegEx = wxT("^(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.(25[0-5]|2[0-4]"
@@ -903,29 +1032,59 @@ bool dlgMain::IsAddressValid(wxString Address)
 
     if (ReValIP.IsValid() == false)
     {
-        wxMessageBox(wxT("RegEx invalid"));
-        return false;
+        return _oda_iav_interr;
     }
 
-    // Find the colon that separates the ip address and the port number
+    // Find the colon that separates the address and the port number
     Colon = Address.Find(wxT(':'), true);
 
-    if (Colon == wxNOT_FOUND)
-        return false;
+    if (Colon != wxNOT_FOUND)
+    {
+        wxString PortStr;
+        bool IsGood;
 
-    // Check if there is something after the colon
-    if (Colon + 1 >= Address.Len())
-        return false;
+        // Try to convert the substring after the : to a port number
+        PortStr = Address.Mid(Colon + 1);
 
-    // Acquire the ip address and port number
-    Port = wxAtoi(Address.Mid(Colon + 1));
+        IsGood = PortStr.ToLong(&Port);
+
+        // Check if there is something after the colon and if its actually a 
+        // numeric value
+        if ((Colon + 1 >= Address.Len()) || (IsGood == false) || (Port <= 0))
+        {
+            return _oda_iav_colerr;
+        }
+
+    }
+
+    // Finally get the address portion from the main string
     IPHost = Address.Mid(0, Colon);
 
     // Finally do the comparison
-    if ((Port > 0) && (ReValIP.Matches(IPHost) == true))
-        return true;
+    if (ReValIP.Matches(IPHost) == true)
+    {
+        OutIPHost = IPHost;
+        OutPort = Port;
+
+        return _oda_iav_SUCCESS;
+    }
     else
-        return false;
+    {
+        struct hostent *he;
+
+        // Check to see if its a hostname rather than an IP address
+        he = gethostbyname((const char *)IPHost.char_str());
+
+        if (he != NULL)
+        {
+            OutIPHost = IPHost;
+            OutPort = Port;
+
+            return _oda_iav_SUCCESS;
+        }
+        else
+            return _oda_iav_FAILURE;
+    }
 }
 
 // About information

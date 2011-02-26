@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -49,6 +50,7 @@
 #include "g_game.h"
 
 #include "s_sound.h"
+#include "sc_man.h"
 
 // State.
 #include "r_state.h"
@@ -59,6 +61,7 @@
 #include "r_sky.h"
 
 EXTERN_CVAR (sv_allowexit)
+extern bool	HasBehavior;
 
 IMPLEMENT_SERIAL (DScroller, DThinker)
 IMPLEMENT_SERIAL (DPusher, DThinker)
@@ -169,6 +172,150 @@ static void P_SpawnPushers(void);		// phares 3/20/98
 //
 //		Animating line specials
 //
+//#define MAXLINEANIMS			64
+
+//extern	short	numlinespecials;
+//extern	line_t* linespeciallist[MAXLINEANIMS];
+
+//
+// [RH] P_InitAnimDefs
+//
+// This uses a Hexen ANIMDEFS lump to define the animation sequences
+//
+static void P_InitAnimDefs (void)
+{
+	int lump = W_CheckNumForName ("ANIMDEFS");
+	enum {
+		limbo,
+		newflat,
+		readingflat,
+		newtexture,
+		readingtexture,
+		warp
+	} state = limbo, newstate = limbo;
+	int frame, min, max;
+	char name[9];
+
+	if (lump >= 0)
+	{
+		SC_OpenLumpNum (lump, "ANIMDEFS");
+
+		while (SC_GetString ())
+		{
+			if (SC_Compare ("flat"))
+			{
+				newstate = newflat;
+			}
+			else if (SC_Compare ("texture"))
+			{
+				newstate = newtexture;
+			}
+			else if (SC_Compare ("warp"))
+			{
+				newstate = warp;
+				SC_MustGetString ();
+				if (SC_Compare ("flat"))
+				{
+					SC_MustGetString ();
+					flatwarp[R_FlatNumForName (sc_String)] = true;
+				}
+				else if (SC_Compare ("texture"))
+				{
+					// TODO: Make texture warping work with wall textures
+					SC_MustGetString ();
+					R_TextureNumForName (sc_String);
+				}
+				else
+				{
+					SC_ScriptError (NULL, NULL);
+				}
+			}
+			else if (SC_Compare ("pic"))
+			{
+				SC_MustGetNumber ();
+				frame = sc_Number;
+				SC_MustGetString ();
+				if (SC_Compare ("tics"))
+				{
+					SC_MustGetNumber ();
+					min = max = sc_Number;
+				}
+				else if (SC_Compare ("rand"))
+				{
+					SC_MustGetNumber ();
+					min = sc_Number;
+					SC_MustGetNumber ();
+					max = sc_Number;
+				}
+				else
+				{
+					SC_ScriptError (NULL);
+				}
+			}
+
+			if (newstate == newtexture || newstate == newflat || newstate == warp)
+			{
+				if (state != limbo)
+				{
+					if (lastanim->numframes < 2)
+						I_FatalError ("P_InitAnimDefs: %s needs at least 2 frames", name);
+
+					lastanim->countdown = lastanim->speedmin[0];
+					lastanim++;
+				}
+
+				if (newstate != warp)
+				{
+					// 1/11/98 killough -- removed limit by array-doubling
+					if (lastanim >= anims + maxanims)
+					{
+						size_t newmax = maxanims ? maxanims*2 : MAXANIMS;
+						anims = (anim_t *)Realloc(anims, newmax*sizeof(*anims));   // killough
+						lastanim = anims + maxanims;
+						maxanims = newmax;
+					}
+
+					lastanim->uniqueframes = 1;
+					lastanim->curframe = 0;
+					lastanim->numframes = 0;
+					lastanim->istexture = (newstate == newtexture);
+					memset (lastanim->speedmin, 1, MAX_ANIM_FRAMES * sizeof(*lastanim->speedmin));
+					memset (lastanim->speedmax, 1, MAX_ANIM_FRAMES * sizeof(*lastanim->speedmax));
+
+					SC_MustGetString ();
+
+					if (lastanim->istexture)
+						lastanim->basepic = R_TextureNumForName (sc_String);
+					else
+						lastanim->basepic = R_FlatNumForName (sc_String);
+
+					strncpy (name, sc_String, 8);
+					name[8] = 0;
+				}
+
+				state = (newstate == newflat) ? readingflat : 
+						(newstate == newtexture) ? readingtexture : limbo;
+				newstate = limbo;
+			}
+			else if (state == readingflat || state == readingtexture)
+			{
+				if (lastanim->numframes < MAX_ANIM_FRAMES)
+				{
+					lastanim->speedmin[lastanim->numframes] = min;
+					lastanim->speedmax[lastanim->numframes] = max;
+					lastanim->framepic[lastanim->numframes] = frame + lastanim->basepic - 1;
+					lastanim->numframes++;
+				}
+			}
+		}
+		if (state == readingflat || state == readingtexture)
+		{
+			lastanim->countdown = lastanim->speedmin[0];
+			lastanim++;
+		}
+		SC_Close ();
+	}
+}
 
 /*
  *P_InitPicAnims
@@ -206,7 +353,10 @@ void P_InitPicAnims (void)
 		lastanim = 0;
 		maxanims = 0;
 	}
-
+	
+	// [RH] Load an ANIMDEFS lump first
+	P_InitAnimDefs ();
+	
 	if (W_CheckNumForName ("ANIMATED") == -1)
 		return;
 
@@ -790,10 +940,6 @@ BOOL P_CheckKeys (player_t *p, card_t lock, BOOL remote)
 	if (!p)
 		return false;
     
-    // [Spleen] Clients in network games don't know about keys
-    if (clientside && network_game)
-        return true;
-
 	const char *msg = NULL;
 	BOOL bc, rc, yc, bs, rs, ys;
 	BOOL equiv = lock & 0x80;
@@ -907,19 +1053,17 @@ P_CrossSpecialLine
   AActor*	thing,
   bool      FromServer)
 {
-    if (clientside && network_game && !FromServer)
-        return;
-
     line_t*	line = &lines[linenum];
 
 	if(thing)
 	{
-		if (!(line->flags & ML_SPECIAL_CROSS))
-			return;
-
 		//	Triggers that other things can activate
 		if (!thing->player)
 		{
+		    if (!(GET_SPAC(line->flags) == SPAC_CROSS)
+                && !(GET_SPAC(line->flags) == SPAC_MCROSS))
+                return;
+			
 			// Things that should NOT trigger specials...
 			switch(thing->type)
 			{
@@ -934,14 +1078,31 @@ P_CrossSpecialLine
 
 				default: break;
 			}
+            
+            // This breaks the ability for the eyes to activate the silent teleporter lines
+            // in boomedit.wad, but without it vanilla demos break.
+            switch (line->special)
+            {
+				case Teleport:
+				case Teleport_NoFog:
+				case Teleport_Line:
+				break;
+				                
+                default:
+                    if(!(line->flags & ML_MONSTERSCANACTIVATE))
+                        return;                
+                break;
+            }
 
-			if(!(line->flags & ML_SPECIAL_MONSTER))
-				return;
 		}
 		else
 		{
+		    if (!(GET_SPAC(line->flags) == SPAC_CROSS) && 
+                !(GET_SPAC(line->flags) == SPAC_CROSSTHROUGH))
+                return;
+                
 			// Likewise, player should not trigger monster lines
-			if(line->flags & ML_SPECIAL_MONSTER_ONLY)
+			if(GET_SPAC(line->flags) == SPAC_MCROSS)
 				return;
 
 			// And spectators should only trigger teleporters
@@ -978,9 +1139,13 @@ P_CrossSpecialLine
 			}
 		}
 	}
+	
+	TeleportSide = side;
 
-	LineSpecials[line->special] (line, thing);
-	line->special = line->flags & ML_SPECIAL_REPEAT ? line->special : 0;
+	LineSpecials[line->special] (line, thing, line->args[0],
+					line->args[1], line->args[2],
+					line->args[3], line->args[4]);
+	line->special = line->flags & ML_REPEAT_SPECIAL ? line->special : 0;
 
 	OnActivatedLine(line, thing, side, 0);
 }
@@ -995,30 +1160,31 @@ P_ShootSpecialLine
   line_t*	line,
   bool      FromServer)
 {
-    if (clientside && network_game && !FromServer)
-        return;
-
 	if(thing)
 	{
-		if (!(line->flags & ML_SPECIAL_SHOOT))
+		if (!(GET_SPAC(line->flags) == SPAC_IMPACT))
 			return;
 
 		if (thing->flags & MF_MISSILE)
 			return;
 
-		if (!thing->player && !(line->flags & ML_SPECIAL_MONSTER))
+		if (!thing->player && !(line->flags & ML_MONSTERSCANACTIVATE))
 			return;
 	}
+	
+	//TeleportSide = side;
 
-	LineSpecials[line->special] (line, thing);
+	LineSpecials[line->special] (line, thing, line->args[0],
+					line->args[1], line->args[2],
+					line->args[3], line->args[4]);
 
-	line->special = line->flags & ML_SPECIAL_REPEAT ? line->special : 0;
+	line->special = line->flags & ML_REPEAT_SPECIAL ? line->special : 0;
 	OnActivatedLine(line, thing, 0, 2);
 
 	if(serverside)
 	{
-		P_ChangeSwitchTexture (line, line->flags & ML_SPECIAL_REPEAT);
-		OnChangedSwitchTexture (line, line->flags & ML_SPECIAL_REPEAT);
+		P_ChangeSwitchTexture (line, line->flags & ML_REPEAT_SPECIAL);
+		OnChangedSwitchTexture (line, line->flags & ML_REPEAT_SPECIAL);
 	}
 }
 
@@ -1035,9 +1201,6 @@ P_UseSpecialLine
   int		side,
   bool      FromServer)
 {
-    if (clientside && network_game && !FromServer)
-        return false;
-
 	// Err...
 	// Use the back sides of VERY SPECIAL lines...
 	if (side)
@@ -1057,14 +1220,16 @@ P_UseSpecialLine
 
 	if(thing)
 	{
-		if (!(line->flags & ML_SPECIAL_USE))
+		if ((GET_SPAC(line->flags) != SPAC_USE) &&
+			(GET_SPAC(line->flags) != SPAC_PUSH) &&
+            (GET_SPAC(line->flags) != SPAC_USETHROUGH))
 			return false;
 
 		// Switches that other things can activate.
 		if (!thing->player)
 		{
 			// not for monsters?
-			if (!(line->flags & ML_SPECIAL_MONSTER))
+			if (!(line->flags & ML_MONSTERSCANACTIVATE))
 				return false;
 
 			// never open secret doors
@@ -1079,21 +1244,89 @@ P_UseSpecialLine
 				return false;
 		}
 	}
+	
+    TeleportSide = side;
 
-	if(LineSpecials[line->special] (line, thing))
+	if(LineSpecials[line->special] (line, thing, line->args[0],
+					line->args[1], line->args[2],
+					line->args[3], line->args[4]))
 	{
-		line->special = line->flags & ML_SPECIAL_REPEAT ? line->special : 0;
+		line->special = line->flags & ML_REPEAT_SPECIAL ? line->special : 0;
 		OnActivatedLine(line, thing, side, 1);
 
-		if(serverside)
+		if(serverside && GET_SPAC(line->flags) != SPAC_PUSH)
 		{
-			P_ChangeSwitchTexture (line, line->flags & ML_SPECIAL_REPEAT);
-			OnChangedSwitchTexture (line, line->flags & ML_SPECIAL_REPEAT);
+			P_ChangeSwitchTexture (line, line->flags & ML_REPEAT_SPECIAL);
+			OnChangedSwitchTexture (line, line->flags & ML_REPEAT_SPECIAL);
 		}
 	}
 
     return true;
 }
+
+
+//
+// P_PushSpecialLine
+// Called when a thing pushes a special line, only in advanced map format
+// Only the front sides of lines are pushable.
+//
+bool
+P_PushSpecialLine
+( AActor*	thing,
+  line_t*	line,
+  int		side,
+  bool      FromServer)
+{
+	// Err...
+	// Use the back sides of VERY SPECIAL lines...
+	if (side)
+		return false;
+
+	if(thing)
+	{
+		if (GET_SPAC(line->flags) != SPAC_PUSH)
+			return false;
+
+		// Switches that other things can activate.
+		if (!thing->player)
+		{
+			// not for monsters?
+			if (!(line->flags & ML_MONSTERSCANACTIVATE))
+				return false;
+
+			// never open secret doors
+			if (line->flags & ML_SECRET)
+				return false;
+		}
+		else
+		{
+			// spectators and dead players can't push walls
+			if(thing->player->spectator ||
+                           thing->player->playerstate != PST_LIVE)
+				return false;
+		}
+	}
+	
+    TeleportSide = side;
+
+	if(LineSpecials[line->special] (line, thing, line->args[0],
+					line->args[1], line->args[2],
+					line->args[3], line->args[4]))
+	{
+		line->special = line->flags & ML_REPEAT_SPECIAL ? line->special : 0;
+		OnActivatedLine(line, thing, side, 3);
+
+		if(serverside)
+		{
+			P_ChangeSwitchTexture (line, line->flags & ML_REPEAT_SPECIAL);
+			OnChangedSwitchTexture (line, line->flags & ML_REPEAT_SPECIAL);
+		}
+	}
+
+    return true;
+}
+
+
 
 //
 // P_PlayerInSpecialSector
@@ -1201,6 +1434,7 @@ void P_PlayerInSpecialSector (player_t *player)
 		}
 
 		if (sector->special & SECRET_MASK) {
+			player->secretcount++;
 			level.found_secrets++;
 			sector->special &= ~SECRET_MASK;
 			if (player->mo == consoleplayer().camera)
@@ -1273,7 +1507,7 @@ void P_UpdateSpecials (void)
 // SPECIAL SPAWNING
 //
 
-BEGIN_CUSTOM_CVAR (forcewater, "0", CVAR_ARCHIVE)
+CVAR_FUNC_IMPL (sv_forcewater)
 {
 	if (gamestate == GS_LEVEL)
 	{
@@ -1287,7 +1521,6 @@ BEGIN_CUSTOM_CVAR (forcewater, "0", CVAR_ARCHIVE)
 		}
 	}
 }
-END_CUSTOM_CVAR (forcewater)
 
 //
 // P_SpawnSpecials
@@ -1379,12 +1612,50 @@ void P_SpawnSpecials (void)
 			sector->special &= 0xff00;
 			break;
 
+		  // [RH] Hexen-like phased lighting
+		case LightSequenceStart:
+			new DPhased (sector);
+			break;
+
+		case Light_Phased:
+			new DPhased (sector, 48, 63 - (sector->lightlevel & 63));
+			break;
+
 		case Sky2:
 			sector->sky = PL_SKYFLAT;
 			break;
 
 		default:
-			break;
+			// [RH] Try for normal Hexen scroller
+			if ((sector->special & 0xff) >= Scroll_North_Slow &&
+				(sector->special & 0xff) <= Scroll_SouthWest_Fast)
+			{
+				static char hexenScrollies[24][2] =
+				{
+					{  0,  1 }, {  0,  2 }, {  0,  4 },
+					{ -1,  0 }, { -2,  0 }, { -4,  0 },
+					{  0, -1 }, {  0, -2 }, {  0, -4 },
+					{  1,  0 }, {  2,  0 }, {  4,  0 },
+					{  1,  1 }, {  2,  2 }, {  4,  4 },
+					{ -1,  1 }, { -2,  2 }, { -4,  4 },
+					{ -1, -1 }, { -2, -2 }, { -4, -4 },
+					{  1, -1 }, {  2, -2 }, {  4, -4 }
+				};
+				int i = (sector->special & 0xff) - Scroll_North_Slow;
+				int dx = hexenScrollies[i][0] * (FRACUNIT/2);
+				int dy = hexenScrollies[i][1] * (FRACUNIT/2);
+
+				new DScroller (DScroller::sc_floor, dx, dy, -1, sector-sectors, 0);
+				// Hexen scrolling floors cause the player to move
+				// faster than they scroll. I do this just for compatibility
+				// with Hexen and recommend using Killough's more-versatile
+				// scrollers instead.
+				dx = FixedMul (-dx, CARRYFACTOR*2);
+				dy = FixedMul (dy, CARRYFACTOR*2);
+				new DScroller (DScroller::sc_carry, dx, dy, -1, sector-sectors, 0);
+				sector->special &= 0xff00;
+			}
+		break;
 		}
 	}
 
@@ -1412,7 +1683,7 @@ void P_SpawnSpecials (void)
 			{
 				sectors[s].heightsec = sec;
 				sectors[s].alwaysfake = !!lines[i].args[1];
-				if (forcewater)
+				if (sv_forcewater)
 					sec->waterzone = 2;
 			}
 			break;
@@ -1477,7 +1748,7 @@ void P_SpawnSpecials (void)
 		}
 
 	// [RH] Start running any open scripts on this map
-//	P_StartOpenScripts ();
+	P_StartOpenScripts ();
 }
 
 // killough 2/28/98:
@@ -1983,7 +2254,8 @@ BOOL PIT_PushThing (AActor *thing)
 		// If speed <= 0, you're outside the effective radius. You also have
 		// to be able to see the push/pull source point.
 
-		if ((speed > 0) && (P_CheckSight (thing, tmpusher->m_Source, true)))
+		if ((speed > 0) && ((HasBehavior && P_CheckSight2 (thing, tmpusher->m_Source, true))
+			|| (!HasBehavior && P_CheckSight (thing, tmpusher->m_Source, true))))
 		{
 			angle_t pushangle = P_PointToAngle (thing->x, thing->y, sx, sy);
 			if (tmpusher->m_Source->type == MT_PUSH)

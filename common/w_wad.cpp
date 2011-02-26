@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -199,6 +200,23 @@ BOOL W_IsIWAD(std::string filename, std::string hash)
 
     return false;
 }
+
+
+//
+// uppercoppy
+//
+// [RH] Copy up to 8 chars, upper-casing them in the process
+//
+void uppercopy (char *to, const char *from)
+{
+	int i;
+
+	for (i = 0; i < 8 && from[i]; i++)
+		to[i] = toupper (from[i]);
+	for (; i < 8; i++)
+		to[i] = 0;
+}
+
 
 // denis - Standard MD5SUM
 std::string W_MD5(std::string filename)
@@ -674,6 +692,18 @@ unsigned W_ReadChunk (const char *file, unsigned offs, unsigned len, void *dest,
 	else filelen = 0;
 
 	return read;
+}
+
+
+//
+// W_CheckLumpName
+//
+bool W_CheckLumpName (unsigned lump, const char *name)
+{
+	if (lump >= numlumps)
+		return false;
+
+	return !strnicmp (lumpinfo[lump].name, name, 8);
 }
 
 //

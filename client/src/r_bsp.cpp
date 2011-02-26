@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -876,6 +877,16 @@ void R_Subsector (int num)
 	// lightlevels on floor & ceiling lightlevels in the surrounding area.
 	R_AddSprites (sub->sector, (floorlightlevel + ceilinglightlevel) / 2);
 
+	if (sub->poly)
+	{ // Render the polyobj in the subsector first
+		int polyCount = sub->poly->numsegs;
+		seg_t **polySeg = sub->poly->segs;
+		while (polyCount--)
+		{
+			R_AddLine (*polySeg++);
+		}
+	}
+	
 	while (count--)
 	{
 		R_AddLine (line++);

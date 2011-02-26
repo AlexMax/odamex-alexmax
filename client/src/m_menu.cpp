@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -42,11 +43,16 @@
 #include "m_menu.h"
 #include "v_text.h"
 #include "st_stuff.h"
-#include "cl_ctf.h"
+#include "p_ctf.h"
 #include "r_sky.h"
 #include "cl_main.h"
+#include "c_bind.h"
 
 #include "gi.h"
+
+#ifdef _XBOX
+#include "i_xbox.h"
+#endif
 
 extern patch_t* 	hu_font[HU_FONTSIZE];
 
@@ -87,6 +93,9 @@ int 				saveCharIndex;	// which char we're editing
 char				saveOldString[SAVESTRINGSIZE];
 
 BOOL 				menuactive;
+
+int                 repeatKey;
+int                 repeatCount;
 
 extern bool st_firsttime;
 
@@ -174,7 +183,6 @@ bool M_DemoNoPlay;
 static DCanvas *FireScreen;
 
 EXTERN_CVAR (hud_targetnames)
-EXTERN_CVAR(cl_connectalert)
 
 //
 // DOOM MENU
@@ -729,6 +737,9 @@ void M_DoSave (int slot)
 //
 void M_SaveSelect (int choice)
 {
+	time_t     ti = time(NULL);
+	struct tm *lt = localtime(&ti);
+
 	// we are going to be intercepting all chars
 	genStringEnter = 1;
 	genStringEnd = M_DoSave;
@@ -736,8 +747,9 @@ void M_SaveSelect (int choice)
 
 	saveSlot = choice;
 	strcpy(saveOldString,savegamestrings[choice]);
-	if (!strcmp(savegamestrings[choice],EMPTYSTRING))
-		savegamestrings[choice][0] = 0;
+
+	strncpy(savegamestrings[choice], asctime(lt) + 4, 20);
+
 	saveCharIndex = strlen(savegamestrings[choice]);
 }
 
@@ -788,7 +800,7 @@ char	tempstring[80];
 
 void M_QuickSaveResponse(int ch)
 {
-	if (ch == 'y')
+	if (ch == 'y' || ch == KEY_JOY4)
 	{
 		M_DoSave (quickSaveSlot);
 		S_Sound (CHAN_VOICE, "switches/exitbutn", 1, ATTN_NONE);
@@ -835,7 +847,7 @@ void M_QuickSave(void)
 //
 void M_QuickLoadResponse(int ch)
 {
-	if (ch == 'y')
+	if (ch == 'y' || ch == KEY_JOY4)
 	{
 		M_LoadSelect(quickSaveSlot);
 		S_Sound (CHAN_VOICE, "switches/exitbutn", 1, ATTN_NONE);
@@ -969,7 +981,7 @@ void M_DrawEpisode(void)
 
 void M_VerifyNightmare(int ch)
 {
-	if (ch != 'y') {
+	if (ch != 'y' && ch != KEY_JOY4) {
 	    M_ClearMenus ();
 		return;
 	}
@@ -1056,7 +1068,7 @@ void M_Options(int choice)
 //
 void M_EndGameResponse(int ch)
 {
-	if (toupper(ch) != 'Y') {
+	if ((!isascii(ch) || toupper(ch) != 'Y') && ch != KEY_JOY4 ) {
 	    M_ClearMenus ();
 		return;
 	}
@@ -1085,7 +1097,7 @@ void M_EndGame(int choice)
 
 void M_QuitResponse(int ch)
 {
-	if (toupper(ch) != 'Y') {
+	if ((!isascii(ch) || toupper(ch) != 'Y') && ch != KEY_JOY4 ) {
 	    M_ClearMenus ();
 		return;
 	}
@@ -1131,8 +1143,8 @@ EXTERN_CVAR (cl_name)
 EXTERN_CVAR (cl_team)
 EXTERN_CVAR (cl_color)
 EXTERN_CVAR (cl_skin)
-EXTERN_CVAR (cl_autoaim)
 EXTERN_CVAR (cl_gender)
+EXTERN_CVAR (cl_autoaim)
 
 void M_PlayerSetup (int choice)
 {
@@ -1168,13 +1180,25 @@ static void M_PlayerSetupTicker (void)
 
 static void M_PlayerSetupDrawer (void)
 {
+	int x1,x2,y1,y2;
+	
+	x1 = (screen->width / 2)-(160*CleanXfac);
+	y1 = (screen->height / 2)-(100*CleanYfac);
+	
+    x2 = (screen->width / 2)+(160*CleanXfac);
+	y2 = (screen->height / 2)+(100*CleanYfac);
+	
+	// Background effect
+	OdamexEffect(x1,y1,x2,y2);
+	    
 	// Draw title
 	{
 		patch_t *patch = W_CachePatch ("M_PSTTL");
-
-		screen->DrawPatchClean (patch,
+        screen->DrawPatchClean (patch, 160-patch->width()/2, 10);
+        
+		/*screen->DrawPatchClean (patch,
 			160 - (patch->width() >> 1),
-			PSetupDef.y - (patch->height() * 3));
+			PSetupDef.y - (patch->height() * 3));*/
 	}
 
 	// Draw player name box
@@ -1556,13 +1580,17 @@ static void M_SlidePlayerRed (int choice)
 {
 	int color = V_GetColorFromString(NULL, cl_color.cstring());
 	int red = RPART(color);
+	int accel = 0;
+
+	if(repeatCount >= 10)
+		accel = 5;
 
 	if (choice == 0) {
-		red -= 1;
+		red -= 1 + accel;
 		if (red < 0)
 			red = 0;
 	} else {
-		red += 1;
+		red += 1 + accel;
 		if (red > 255)
 			red = 255;
 	}
@@ -1574,13 +1602,17 @@ static void M_SlidePlayerGreen (int choice)
 {
 	int color = V_GetColorFromString(NULL, cl_color.cstring());
 	int green = GPART(color);
+	int accel = 0;
+
+	if(repeatCount >= 10)
+		accel = 5;
 
 	if (choice == 0) {
-		green -= 1;
+		green -= 1 + accel;
 		if (green < 0)
 			green = 0;
 	} else {
-		green += 1;
+		green += 1 + accel;
 		if (green > 255)
 			green = 255;
 	}
@@ -1592,13 +1624,17 @@ static void M_SlidePlayerBlue (int choice)
 {
 	int color = V_GetColorFromString(NULL, cl_color.cstring());
 	int blue = BPART(color);
+	int accel = 0;
+
+	if(repeatCount >= 10)
+		accel = 5;
 
 	if (choice == 0) {
-		blue -= 1;
+		blue -= 1 + accel;
 		if (blue < 0)
 			blue = 0;
 	} else {
-		blue += 1;
+		blue += 1 + accel;
 		if (blue > 255)
 			blue = 255;
 	}
@@ -1672,13 +1708,32 @@ bool M_Responder (event_t* ev)
 {
 	int ch, ch2;
 	int i;
+	const char *cmd;
 
 	ch = ch2 = -1;
 
 	// eat mouse events
 	if(menuactive)
+	{
 		if(ev->type == ev_mouse)
 			return true;
+		else if(ev->type == ev_joystick)
+		{
+			if(OptionsActive)
+				M_OptResponder (ev);
+			// Eat joystick events for now -- Hyper_Eye
+			return true;
+		}
+	}
+
+	if (ev->type == ev_keyup)
+	{
+		if(repeatKey == ev->data1)
+		{
+			repeatKey = 0;
+			repeatCount = 0;
+		}
+	}
 
 	if (ev->type == ev_keydown)
 	{
@@ -1694,6 +1749,28 @@ bool M_Responder (event_t* ev)
 		return true;
 	}
 
+	// Handle Repeat
+	switch(ch)
+	{
+	  case KEY_HAT4:
+	  case KEY_LEFTARROW:
+	  case KEY_HAT2:
+	  case KEY_RIGHTARROW:
+		if(repeatKey == ch)
+			repeatCount++;
+		else
+		{
+			repeatKey = ch;
+			repeatCount = 0;
+		}
+		break;
+	  default:
+		break;
+	}
+
+
+	cmd = C_GetBinding (ch);
+
 	// Save Game string input
 	// [RH] and Player Name string input
 	if (genStringEnter)
@@ -1708,12 +1785,14 @@ bool M_Responder (event_t* ev)
 			}
 			break;
 
+		  case KEY_JOY2:
 		  case KEY_ESCAPE:
 			genStringEnter = 0;
 			M_ClearMenus ();
 			strcpy(&savegamestrings[saveSlot][0],saveOldString);
 			break;
 
+		  case KEY_JOY1:
 		  case KEY_ENTER:
 			genStringEnter = 0;
 			M_ClearMenus ();
@@ -1743,7 +1822,8 @@ bool M_Responder (event_t* ev)
 	if (messageToPrint)
 	{
 		if (messageNeedsInput &&
-			!(ch2 == ' ' || toupper(ch2) == 'N' || toupper(ch2) == 'Y' || ch == KEY_ESCAPE))
+			(!(ch2 == ' ' || ch == KEY_ESCAPE || ch == KEY_JOY2 || ch == KEY_JOY4 ||
+			 (isascii(ch2) && (toupper(ch2) == 'N' || toupper(ch2) == 'Y')))))
 			return true;
 
 		menuactive = messageLastMenuActive;
@@ -1769,20 +1849,33 @@ bool M_Responder (event_t* ev)
 	// Pop-up menu?
 	if (!menuactive)
 	{
+		// [ML] This is a regular binding now too!
+#ifdef _XBOX
+		if (ch == KEY_ESCAPE || ch == KEY_JOY9)
+#else
 		if (ch == KEY_ESCAPE)
+#endif
 		{
-			M_StartControlPanel ();
-			M_SetupNextMenu (&MainDef);
-			S_Sound (CHAN_VOICE, "switches/normbutn", 1, ATTN_NONE);
+			AddCommandString("menu_main");
 			return true;
 		}
 		return false;
 	}
-
+	
+	if(cmd)
+	{
+		// Respond to the main menu binding
+		if(!strcmp(cmd, "menu_main"))
+		{
+			M_ClearMenus();
+			return true;
+		}
+	}
 
 	// Keys usable within menu
 	switch (ch)
 	{
+	  case KEY_HAT3:
 	  case KEY_DOWNARROW:
 		do
 		{
@@ -1799,6 +1892,7 @@ bool M_Responder (event_t* ev)
 		} while(currentMenu->menuitems[itemOn].status==-1);
 		return true;
 
+	  case KEY_HAT1:
 	  case KEY_UPARROW:
 		do
 		{
@@ -1815,6 +1909,7 @@ bool M_Responder (event_t* ev)
 		} while(currentMenu->menuitems[itemOn].status==-1);
 		return true;
 
+	  case KEY_HAT4:
 	  case KEY_LEFTARROW:
 		if (currentMenu->menuitems[itemOn].routine &&
 			currentMenu->menuitems[itemOn].status == 2)
@@ -1824,6 +1919,7 @@ bool M_Responder (event_t* ev)
 		}
 		return true;
 
+	  case KEY_HAT2:
 	  case KEY_RIGHTARROW:
 		if (currentMenu->menuitems[itemOn].routine &&
 			currentMenu->menuitems[itemOn].status == 2)
@@ -1833,6 +1929,7 @@ bool M_Responder (event_t* ev)
 		}
 		return true;
 
+	  case KEY_JOY1:
 	  case KEY_ENTER:
 		if (currentMenu->menuitems[itemOn].routine &&
 			currentMenu->menuitems[itemOn].status)
@@ -1854,6 +1951,7 @@ bool M_Responder (event_t* ev)
 	  // [RH] Escape now moves back one menu instead of
 	  //	  quitting the menu system. Thus, backspace
 	  //	  is now ignored.
+	  case KEY_JOY2:
 	  case KEY_ESCAPE:
 		currentMenu->lastOn = itemOn;
 		M_PopMenuStack ();

@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -35,7 +35,7 @@
 #include "c_dispatch.h"
 #include "i_system.h"
 #include "md5.h"
-#include "sv_ctf.h"
+#include "p_ctf.h"
 
 #define MASTERPORT			15000
 

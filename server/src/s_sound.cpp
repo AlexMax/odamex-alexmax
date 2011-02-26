@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -172,8 +172,7 @@ void S_Sound (fixed_t x, fixed_t y, int channel, const char *name, float volume,
 	//S_StartNamedSound ((AActor *)(~0), NULL, x, y, channel, name, volume, SELECT_ATTEN(attenuation), false);
 }
 
-// S_StopSoundID from Hexen (albeit, modified somewhat)
-BOOL S_StopSoundID (int sound_id, int priority)
+bool S_StopSoundID (int sound_id)
 {
 	return true;
 }
@@ -507,6 +506,9 @@ void A_Ambient (AActor *actor)
 {
 }
 
+void S_ActivateAmbient (AActor *origin, int ambient)
+{
+}
 
 VERSION_CONTROL (s_sound_cpp, "$Id$")
 

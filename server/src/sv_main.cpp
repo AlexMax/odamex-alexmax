@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -36,6 +36,7 @@
 
 #include "doomtype.h"
 #include "doomstat.h"
+#include "dstrings.h"
 #include "d_player.h"
 #include "s_sound.h"
 #include "gi.h"
@@ -52,9 +53,10 @@
 #include "m_argv.h"
 #include "m_random.h"
 #include "vectors.h"
-#include "sv_ctf.h"
+#include "p_ctf.h"
 #include "w_wad.h"
 #include "md5.h"
+#include "p_mobj.h"
 
 #include <algorithm>
 #include <sstream>
@@ -68,7 +70,9 @@ bool clientside = false, serverside = true;
 bool predicting = false;
 baseapp_t baseapp = server;
 
-bool stepmode = false;
+extern bool HasBehavior;
+
+bool step_mode = false;
 
 #define IPADDRSIZE 4	// GhostlyDeath -- Someone might want to do IPv6 junk
 
@@ -95,6 +99,8 @@ EXTERN_CVAR(sv_globalspectatorchat)
 EXTERN_CVAR(sv_allowtargetnames)
 EXTERN_CVAR(sv_flooddelay)
 EXTERN_CVAR(sv_maxrate)
+
+void SexMessage (const char *from, char *to, int gender);
 
 CVAR_FUNC_IMPL (sv_maxclients)	// Describes the max number of clients that are allowed to connect. - does not work yet
 {
@@ -232,6 +238,7 @@ void SV_ServerSettingChange (void);
 // some doom functions
 void P_KillMobj (AActor *source, AActor *target, AActor *inflictor, bool joinkill);
 bool P_CheckSightEdges (const AActor* t1, const AActor* t2, float radius_boost = 0.0);
+bool P_CheckSightEdges2 (const AActor* t1, const AActor* t2, float radius_boost = 0.0);
 
 void SV_WinCheck (void);
 
@@ -442,6 +449,17 @@ void SV_IPListClear (std::vector<BanEntry_t> *list, std::string listname)
 	}
 }
 
+BEGIN_COMMAND (stepmode)
+{
+    if (step_mode)
+        step_mode = false;
+    else
+        step_mode = true;
+        
+    return;
+}
+END_COMMAND (stepmode)
+
 BEGIN_COMMAND(addban)
 {
 	std::string reason;
@@ -572,25 +590,6 @@ BEGIN_COMMAND(kickban)
 }
 END_COMMAND(kickban)
 
-// denis - list connected clients
-BEGIN_COMMAND (who)
-{
-	bool anybody = false;
-
-	for(int i = players.size()-1; i >= 0 ; i--)
-	{
-		Printf(PRINT_HIGH, "(%02d): %s - %s - frags:%d ping:%d\n", players[i].id, players[i].userinfo.netname, NET_AdrToString(clients[i].address), players[i].fragcount, players[i].ping);
-		anybody = true;
-	}
-
-	if(!anybody)
-	{
-		Printf(PRINT_HIGH, "There are no players on the server\n");
-		return;
-	}
-}
-END_COMMAND (who)
-
 BEGIN_COMMAND (say)
 {
 	if (argc > 1)
@@ -650,7 +649,7 @@ void SV_InitNetwork (void)
 		sv_maxclients.Set(w); // denis - todo
 	}
 
-	stepmode = Args.CheckParm ("-stepmode");
+	step_mode = Args.CheckParm ("-stepmode");
 
 	gametime = I_GetTime ();
 	
@@ -781,12 +780,16 @@ void SV_GetPackets (void)
 }
 
 // Print a midscreen message to a client
-void SV_MidPrint (const char *msg, player_t *p)
+void SV_MidPrint (const char *msg, player_t *p, int msgtime)
 {
     client_t *cl = &p->client;
 
     MSG_WriteMarker(&cl->reliablebuf, svc_midprint);
     MSG_WriteString(&cl->reliablebuf, msg);
+    if (msgtime)
+        MSG_WriteShort(&cl->reliablebuf, msgtime);
+    else
+        MSG_WriteShort(&cl->reliablebuf, 0);
 }
 
 //
@@ -1322,7 +1325,8 @@ bool SV_AwarenessUpdate(player_t &player, AActor *mo)
 				player.spectator)	// GhostlyDeath -- Spectators MUST see players to F12 properly
 		ok = true;
 
-	else if(player.mo && mo->player && sv_antiwallhack && P_CheckSightEdges(player.mo, mo, 5)/*player.awaresector[sectors - mo->subsector->sector]*/)
+	else if(player.mo && mo->player && sv_antiwallhack && 
+         ((HasBehavior && P_CheckSightEdges2(player.mo, mo, 5)) || (!HasBehavior && P_CheckSightEdges(player.mo, mo, 5)))/*player.awaresector[sectors - mo->subsector->sector]*/)
 		ok = true;
 
 	std::vector<size_t>::iterator a = std::find(mo->players_aware.begin(), mo->players_aware.end(), player.id);
@@ -1489,41 +1493,155 @@ void SV_UpdateSectors(client_t* cl)
 // SV_UpdateMovingSectors
 // Update doors, floors, ceilings etc... that are actively moving
 //
-void SV_UpdateMovingSectors(client_t* cl)
+void SV_UpdateMovingSectors(player_t &pl)
 {
-	for (int s=0; s<numsectors; s++)
+    client_t *cl = &pl.client;
+
+	for (int s = 0; s < numsectors; ++s)
 	{
-		sector_t* sec = &sectors[s];
+        sector_t* sec = &sectors[s];
+
+        if (sec->floordata)
+        {
+            if(sec->floordata->IsA(RUNTIME_CLASS(DElevator)))
+            {
+				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
+				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
+				MSG_WriteShort (&cl->netbuf, s);
+				MSG_WriteLong (&cl->netbuf, sec->floorheight);
+                MSG_WriteLong (&cl->netbuf, sec->ceilingheight);
+                MSG_WriteByte (&cl->netbuf, 4);
+
+				DElevator *Elevator = (DElevator *)sec->floordata;
+
+                MSG_WriteLong (&cl->netbuf, Elevator->m_Type);
+                MSG_WriteLong (&cl->netbuf, Elevator->m_Direction);
+                MSG_WriteLong (&cl->netbuf, Elevator->m_FloorDestHeight);
+                MSG_WriteLong (&cl->netbuf, Elevator->m_CeilingDestHeight);
+                MSG_WriteLong (&cl->netbuf, Elevator->m_Speed);
+            }
+            else
+            if(sec->floordata->IsA(RUNTIME_CLASS(DPillar)))
+            {
+				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
+				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
+				MSG_WriteShort (&cl->netbuf, s);
+				MSG_WriteLong (&cl->netbuf, sec->floorheight);
+                MSG_WriteLong (&cl->netbuf, sec->ceilingheight);
+                MSG_WriteByte (&cl->netbuf, 5);
+
+				DPillar *Pillar = (DPillar *)sec->floordata;
+
+                MSG_WriteLong (&cl->netbuf, Pillar->m_Type);
+                MSG_WriteLong (&cl->netbuf, Pillar->m_FloorSpeed);
+                MSG_WriteLong (&cl->netbuf, Pillar->m_CeilingSpeed);
+                MSG_WriteLong (&cl->netbuf, Pillar->m_FloorTarget);
+                MSG_WriteLong (&cl->netbuf, Pillar->m_CeilingTarget);
+                MSG_WriteBool (&cl->netbuf, Pillar->m_Crush);
+            }
+        }
 
 		if(sec->floordata)
 		{
-			if(sec->floordata->IsKindOf(RUNTIME_CLASS(DPlat)))
+			if(sec->floordata->IsA(RUNTIME_CLASS(DFloor)))
 			{
 				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
 				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
 				MSG_WriteShort (&cl->netbuf, s);
 				MSG_WriteLong (&cl->netbuf, sec->floorheight);
-				MSG_WriteLong (&cl->netbuf, sec->ceilingheight);
+                MSG_WriteLong (&cl->netbuf, sec->ceilingheight);
+                MSG_WriteByte (&cl->netbuf, 0);
 
-				DPlat *plat = (DPlat *)sec->floordata;
-				byte state; int count;
-				plat->GetState(state, count);
+				DFloor *Floor = (DFloor *)sec->floordata;
 
-				MSG_WriteByte (&cl->netbuf, state);
-				MSG_WriteLong (&cl->netbuf, count);
+                MSG_WriteLong(&cl->netbuf, Floor->m_Type);
+                MSG_WriteBool(&cl->netbuf, Floor->m_Crush);
+                MSG_WriteLong(&cl->netbuf, Floor->m_Direction);
+                MSG_WriteShort(&cl->netbuf, Floor->m_NewSpecial);
+                MSG_WriteShort(&cl->netbuf, Floor->m_Texture);
+                MSG_WriteLong(&cl->netbuf, Floor->m_FloorDestHeight);
+                MSG_WriteLong(&cl->netbuf, Floor->m_Speed);
+                MSG_WriteLong(&cl->netbuf, Floor->m_ResetCount);
+                MSG_WriteLong(&cl->netbuf, Floor->m_OrgHeight);
+                MSG_WriteLong(&cl->netbuf, Floor->m_Delay);
+                MSG_WriteLong(&cl->netbuf, Floor->m_PauseTime);
+                MSG_WriteLong(&cl->netbuf, Floor->m_StepTime);
+                MSG_WriteLong(&cl->netbuf, Floor->m_PerStepTime);
 			}
-			else if(sec->floordata->IsKindOf(RUNTIME_CLASS(DMovingFloor)))
+			else
+			if(sec->floordata->IsA(RUNTIME_CLASS(DPlat)))
 			{
 				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
 				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
 				MSG_WriteShort (&cl->netbuf, s);
 				MSG_WriteLong (&cl->netbuf, sec->floorheight);
-				MSG_WriteLong (&cl->netbuf, sec->ceilingheight);
+                MSG_WriteLong (&cl->netbuf, sec->ceilingheight);
+                MSG_WriteByte (&cl->netbuf, 1);
 
-				MSG_WriteByte (&cl->netbuf, 0);
-				MSG_WriteLong (&cl->netbuf, 0);
+				DPlat *Plat = (DPlat *)sec->floordata;
+
+                MSG_WriteLong(&cl->netbuf, Plat->m_Speed);
+                MSG_WriteLong(&cl->netbuf, Plat->m_Low);
+                MSG_WriteLong(&cl->netbuf, Plat->m_High);
+                MSG_WriteLong(&cl->netbuf, Plat->m_Wait);
+                MSG_WriteLong(&cl->netbuf, Plat->m_Count);
+                MSG_WriteLong(&cl->netbuf, Plat->m_Status);
+                MSG_WriteLong(&cl->netbuf, Plat->m_OldStatus);
+                MSG_WriteBool(&cl->netbuf, Plat->m_Crush);
+                MSG_WriteLong(&cl->netbuf, Plat->m_Tag);
+                MSG_WriteLong(&cl->netbuf, Plat->m_Type);
+                MSG_WriteBool(&cl->netbuf, Plat->m_PostWait);
 			}
 		}
+
+		if (sec->ceilingdata)
+        {
+            if(sec->ceilingdata->IsA(RUNTIME_CLASS(DCeiling)))
+            {
+				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
+				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
+				MSG_WriteShort (&cl->netbuf, s);
+				MSG_WriteLong (&cl->netbuf, sec->floorheight);
+                MSG_WriteLong (&cl->netbuf, sec->ceilingheight);
+                MSG_WriteByte (&cl->netbuf, 2);
+
+				DCeiling *Ceiling = (DCeiling *)sec->ceilingdata;
+
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_Type);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_BottomHeight);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_TopHeight);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_Speed);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_Speed1);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_Speed2);
+                MSG_WriteBool (&cl->netbuf, Ceiling->m_Crush);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_Silent);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_Direction);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_Texture);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_NewSpecial);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_Tag);
+                MSG_WriteLong (&cl->netbuf, Ceiling->m_OldDirection);
+            }
+            else
+            if(sec->ceilingdata->IsA(RUNTIME_CLASS(DDoor)))
+            {
+				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
+				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
+				MSG_WriteShort (&cl->netbuf, s);
+				MSG_WriteLong (&cl->netbuf, sec->floorheight);
+                MSG_WriteLong (&cl->netbuf, sec->ceilingheight);
+                MSG_WriteByte (&cl->netbuf, 3);
+
+				DDoor *Door = (DDoor *)sec->ceilingdata;
+
+                MSG_WriteLong (&cl->netbuf, Door->m_Type);
+                MSG_WriteLong (&cl->netbuf, Door->m_TopHeight);
+                MSG_WriteLong (&cl->netbuf, Door->m_Speed);
+                MSG_WriteLong (&cl->netbuf, Door->m_Direction);
+                MSG_WriteLong (&cl->netbuf, Door->m_TopWait);
+                MSG_WriteLong (&cl->netbuf, Door->m_TopCountdown);
+                MSG_WriteLong (&cl->netbuf, (Door->m_Line - lines));
+            }
+        }
 	}
 }
 
@@ -2052,7 +2170,7 @@ void SV_ConnectClient (void)
 	players[n].killcount	= 0;
 	players[n].points		= 0;
 
-	if(!stepmode) {
+	if(!step_mode) {
 		players[n].spectator	= true;
 		for (size_t j = 0; j < players.size(); j++)
 		{
@@ -2080,10 +2198,10 @@ void SV_ConnectClient (void)
 		MSG_WriteByte(&cl.reliablebuf, players[n].id);
 	}
 	
-	SV_MidPrint((char *)sv_motd.cstring(),(player_t *) &players[n]);
+	SV_MidPrint((char *)sv_motd.cstring(),(player_t *) &players[n], 6);
 }
 
-extern BOOL singleplayerjustdied;
+extern bool singleplayerjustdied;
 
 //
 // SV_DisconnectClient
@@ -3020,6 +3138,11 @@ void SV_WriteCommands(void)
 				MSG_WriteLong(&cl->netbuf, players[j].mo->momx);
 				MSG_WriteLong(&cl->netbuf, players[j].mo->momy);
 				MSG_WriteLong(&cl->netbuf, players[j].mo->momz);
+				
+				// [Russell] - hack, tell the client about the partial
+				// invisibility power of another player.. (cheaters can disable
+                // this but its all we have for now)
+                MSG_WriteLong(&cl->netbuf, players[j].powers[pw_invisibility]);
 			}
 
 		SV_UpdateHiddenMobj();
@@ -3059,6 +3182,7 @@ void SV_GetPlayerCmd(player_t &player)
 		MSG_ReadLong();
 		MSG_ReadLong();
 		MSG_ReadShort();
+		MSG_ReadLong(); // 24 bytes;
 		return;
 	}
 
@@ -3066,11 +3190,11 @@ void SV_GetPlayerCmd(player_t &player)
 	if (  cl->lastclientcmdtic && (tic - cl->lastclientcmdtic >= 2)
 		     && gamestate != GS_INTERMISSION)
 	{
-		cmd->ucmd.buttons = MSG_ReadByte();
+		cmd->ucmd.buttons = MSG_ReadByte(); // 1
 
 		if(player.playerstate != PST_DEAD)
 		{
-			player.mo->angle = MSG_ReadShort() << 16;
+			player.mo->angle = MSG_ReadShort() << 16; // 3
 
 			if (!sv_freelook)
 			{
@@ -3078,13 +3202,14 @@ void SV_GetPlayerCmd(player_t &player)
 				MSG_ReadShort();
 			}
 			else
-				player.mo->pitch = MSG_ReadShort() << 16;
+				player.mo->pitch = MSG_ReadShort() << 16; // 5
 		}
 		else
 			MSG_ReadLong();
 
-		cmd->ucmd.forwardmove = MSG_ReadShort();
-		cmd->ucmd.sidemove = MSG_ReadShort();
+		cmd->ucmd.forwardmove = MSG_ReadShort(); // 7
+		cmd->ucmd.sidemove = MSG_ReadShort(); // 9
+        cmd->ucmd.upmove = MSG_ReadShort(); // 11
 
 		if ( abs(cmd->ucmd.forwardmove) > 12800
 			|| abs(cmd->ucmd.sidemove) > 12800)
@@ -3093,7 +3218,7 @@ void SV_GetPlayerCmd(player_t &player)
 			return;
 		}
 
-		cmd->ucmd.impulse = MSG_ReadByte();
+		cmd->ucmd.impulse = MSG_ReadByte(); // 12
 
 		if(!sv_speedhackfix && gamestate == GS_LEVEL)
 		{
@@ -3103,17 +3228,17 @@ void SV_GetPlayerCmd(player_t &player)
 	}
 	else
 	{
-		// get 10 bytes
+		// get 12 bytes
 		MSG_ReadLong();
 		MSG_ReadLong();
-		MSG_ReadShort();
+		MSG_ReadLong();
 	}
 
 	// get current cmds and angle
-	cmd->ucmd.buttons = MSG_ReadByte();
+	cmd->ucmd.buttons = MSG_ReadByte(); // 13
 	if (gamestate != GS_INTERMISSION && player.playerstate != PST_DEAD)
 	{
-		if(stepmode)cmd->ucmd.yaw = MSG_ReadShort();
+		if(step_mode)cmd->ucmd.yaw = MSG_ReadShort(); // 15
 		else player.mo->angle = MSG_ReadShort() << 16;
 
 		if (!sv_freelook)
@@ -3122,13 +3247,14 @@ void SV_GetPlayerCmd(player_t &player)
 			MSG_ReadShort();
 		}
 		else
-			player.mo->pitch = MSG_ReadShort() << 16;
+			player.mo->pitch = MSG_ReadShort() << 16; // 17
 	}
 	else
 		MSG_ReadLong();
 
-	cmd->ucmd.forwardmove = MSG_ReadShort();
-	cmd->ucmd.sidemove = MSG_ReadShort();
+	cmd->ucmd.forwardmove = MSG_ReadShort(); // 19
+	cmd->ucmd.sidemove = MSG_ReadShort(); // 21
+    cmd->ucmd.upmove = MSG_ReadShort(); // 23
 
 	if ( abs(cmd->ucmd.forwardmove) > 12800
 		|| abs(cmd->ucmd.sidemove) > 12800)
@@ -3137,7 +3263,7 @@ void SV_GetPlayerCmd(player_t &player)
 		return;
 	}
 
-	cmd->ucmd.impulse = MSG_ReadByte();
+	cmd->ucmd.impulse = MSG_ReadByte(); // 24
 
 	if(!sv_speedhackfix && gamestate == GS_LEVEL)
 	{
@@ -3179,7 +3305,9 @@ void SV_UpdateConsolePlayer(player_t &player)
 	MSG_WriteLong (&cl->netbuf, mo->momy);
 	MSG_WriteLong (&cl->netbuf, mo->momz);
 
-	SV_UpdateMovingSectors(cl); // denis - fixme - todo - only info about the sector player is standing on info should be sent. note that this is not player->mo->subsector->sector
+    MSG_WriteByte (&cl->netbuf, mo->waterlevel);
+
+    SV_UpdateMovingSectors(player); // denis - fixme - todo - only info about the sector player is standing on info should be sent. note that this is not player->mo->subsector->sector
 
 //	MSG_WriteShort (&cl->netbuf, mo->momx >> FRACBITS);
 //	MSG_WriteShort (&cl->netbuf, mo->momy >> FRACBITS);
@@ -3259,7 +3387,7 @@ void SV_Spectate (player_t &player)
 			// Check to see if there are enough "activeplayers"
 			for (size_t i = 0; i < players.size(); i++)
 			{
-				if (!players[i].spectator)
+				if (!players[i].spectator && players[i].playerstate != PST_CONTACT && players[i].playerstate != PST_DOWNLOAD)
 					NumPlayers++;
 			}
 
@@ -3628,6 +3756,8 @@ void SV_WinCheck (void)
 	}
 }
 
+EXTERN_CVAR (sv_waddownloadcap)
+
 //
 // SV_WadDownloads
 //
@@ -3638,8 +3768,9 @@ void SV_WadDownloads (void)
 		return;
 
 	// don't send too much
-	if(gametic%(2 * (players.size()+1)))
-		return;
+	// [ML] 8/27/10: ...unless the server admin allows it
+	if(gametic%(2 * (players.size()+1)) && sv_waddownloadcap)
+        return;
 
 	// wad downloading
 	for(size_t i = 0; i < players.size(); i++)
@@ -3854,7 +3985,7 @@ void SV_RunTics (void)
 		}
 	}
 
-	if(newtics > 0 && !stepmode)
+	if(newtics > 0 && !step_mode)
 	{
 		SV_StepTics(newtics);
 		gametime = nowtime;
@@ -3929,8 +4060,19 @@ END_COMMAND (playerinfo)
 
 BEGIN_COMMAND (playerlist)
 {
-	
-	
+	bool anybody = false;
+
+	for(int i = players.size()-1; i >= 0 ; i--)
+	{
+		Printf(PRINT_HIGH, "(%02d): %s - %s - frags:%d ping:%d\n", players[i].id, players[i].userinfo.netname, NET_AdrToString(clients[i].address), players[i].fragcount, players[i].ping);
+		anybody = true;
+	}
+
+	if(!anybody)
+	{
+		Printf(PRINT_HIGH, "There are no players on the server\n");
+		return;
+	}
 }
 END_COMMAND (playerlist)
 
@@ -4002,6 +4144,367 @@ void MSG_WriteMarker (buf_t *b, svc_t c)
 	b->WriteByte((byte)c);
 }
 
+// [RH]
+// ClientObituary: Show a message when a player dies
+//
+void ClientObituary (AActor *self, AActor *inflictor, AActor *attacker)
+{
+	const char *message;
+	char gendermessage[1024];
+	int  gender;
+
+	if (!self->player)
+		return;
+
+	gender = self->player->userinfo.gender;
+
+	// Treat voodoo dolls as unknown deaths
+	if (inflictor && inflictor->player == self->player)
+		MeansOfDeath = MOD_UNKNOWN;
+
+	message = NULL;
+
+	switch (MeansOfDeath) {
+		case MOD_SUICIDE:
+			message = OB_SUICIDE;
+			break;
+		case MOD_FALLING:
+			message = OB_FALLING;
+			break;
+		case MOD_CRUSH:
+			message = OB_CRUSH;
+			break;
+		case MOD_EXIT:
+			message = OB_EXIT;
+			break;
+		case MOD_WATER:
+			message = OB_WATER;
+			break;
+		case MOD_SLIME:
+			message = OB_SLIME;
+			break;
+		case MOD_LAVA:
+			message = OB_LAVA;
+			break;
+		case MOD_BARREL:
+			message = OB_BARREL;
+			break;
+		case MOD_SPLASH:
+			message = OB_SPLASH;
+			break;
+	}
+
+	if (attacker && !message) {
+		if (attacker == self) {
+			switch (MeansOfDeath) {
+				case MOD_R_SPLASH:
+					message = OB_R_SPLASH;
+					break;
+				case MOD_ROCKET:
+					message = OB_ROCKET;
+					break;
+				default:
+					message = OB_KILLEDSELF;
+					break;
+			}
+		} else if (!attacker->player) {
+					if (MeansOfDeath == MOD_HIT) {
+						switch (attacker->type) {
+							case MT_UNDEAD:
+								message = OB_UNDEADHIT;
+								break;
+							case MT_TROOP:
+								message = OB_IMPHIT;
+								break;
+							case MT_HEAD:
+								message = OB_CACOHIT;
+								break;
+							case MT_SERGEANT:
+								message = OB_DEMONHIT;
+								break;
+							case MT_SHADOWS:
+								message = OB_SPECTREHIT;
+								break;
+							case MT_BRUISER:
+								message = OB_BARONHIT;
+								break;
+							case MT_KNIGHT:
+								message = OB_KNIGHTHIT;
+								break;
+							default:
+								break;
+						}
+					} else {
+						switch (attacker->type) {
+							case MT_POSSESSED:
+								message = OB_ZOMBIE;
+								break;
+							case MT_SHOTGUY:
+								message = OB_SHOTGUY;
+								break;
+							case MT_VILE:
+								message = OB_VILE;
+								break;
+							case MT_UNDEAD:
+								message = OB_UNDEAD;
+								break;
+							case MT_FATSO:
+								message = OB_FATSO;
+								break;
+							case MT_CHAINGUY:
+								message = OB_CHAINGUY;
+								break;
+							case MT_SKULL:
+								message = OB_SKULL;
+								break;
+							case MT_TROOP:
+								message = OB_IMP;
+								break;
+							case MT_HEAD:
+								message = OB_CACO;
+								break;
+							case MT_BRUISER:
+								message = OB_BARON;
+								break;
+							case MT_KNIGHT:
+								message = OB_KNIGHT;
+								break;
+							case MT_SPIDER:
+								message = OB_SPIDER;
+								break;
+							case MT_BABY:
+								message = OB_BABY;
+								break;
+							case MT_CYBORG:
+								message = OB_CYBORG;
+								break;
+							case MT_WOLFSS:
+								message = OB_WOLFSS;
+								break;
+							default:
+								break;
+						}
+					}
+		}
+	}
+
+	if (message) {
+		SexMessage (message, gendermessage, gender);
+		SV_BroadcastPrintf (PRINT_MEDIUM, "%s %s.\n", self->player->userinfo.netname, gendermessage);
+		return;
+	}
+
+	if (attacker && attacker->player) {
+		if (((sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF) && self->player->userinfo.team == attacker->player->userinfo.team) || sv_gametype == GM_COOP) {
+			int rnum = P_Random ();
+
+			self = attacker;
+			gender = self->player->userinfo.gender;
+
+			if (rnum < 64)
+				message = OB_FRIENDLY1;
+			else if (rnum < 128)
+				message = OB_FRIENDLY2;
+			else if (rnum < 192)
+				message = OB_FRIENDLY3;
+			else
+				message = OB_FRIENDLY4;
+		} else {
+			switch (MeansOfDeath) {
+				case MOD_FIST:
+					message = OB_MPFIST;
+					break;
+				case MOD_CHAINSAW:
+					message = OB_MPCHAINSAW;
+					break;
+				case MOD_PISTOL:
+					message = OB_MPPISTOL;
+					break;
+				case MOD_SHOTGUN:
+					message = OB_MPSHOTGUN;
+					break;
+				case MOD_SSHOTGUN:
+					message = OB_MPSSHOTGUN;
+					break;
+				case MOD_CHAINGUN:
+					message = OB_MPCHAINGUN;
+					break;
+				case MOD_ROCKET:
+					message = OB_MPROCKET;
+					break;
+				case MOD_R_SPLASH:
+					message = OB_MPR_SPLASH;
+					break;
+				case MOD_PLASMARIFLE:
+					message = OB_MPPLASMARIFLE;
+					break;
+				case MOD_BFG_BOOM:
+					message = OB_MPBFG_BOOM;
+					break;
+				case MOD_BFG_SPLASH:
+					message = OB_MPBFG_SPLASH;
+					break;
+				case MOD_TELEFRAG:
+					message = OB_MPTELEFRAG;
+					break;
+			}
+		}
+	}
+
+	if (message) {
+		SexMessage (message, gendermessage, gender);
+
+		std::string work = "%s ";
+		work += gendermessage;
+		work += ".\n";
+
+		SV_BroadcastPrintf (PRINT_MEDIUM, work.c_str(), self->player->userinfo.netname,
+							attacker->player->userinfo.netname);
+		return;
+	}
+
+	SexMessage (OB_DEFAULT, gendermessage, gender);
+	SV_BroadcastPrintf (PRINT_MEDIUM, "%s %s.\n", self->player->userinfo.netname, gendermessage);
+}
+void SV_SendDamagePlayer(player_t *player, int damage)
+{
+	for (size_t i=0; i < players.size(); i++)
+	{
+		client_t *cl = &clients[i];
+
+		MSG_WriteMarker(&cl->reliablebuf, svc_damageplayer);
+		MSG_WriteByte(&cl->reliablebuf, player->id);
+		MSG_WriteByte(&cl->reliablebuf, player->armorpoints);
+		MSG_WriteShort(&cl->reliablebuf, damage);
+	}
+}
+
+void SV_SendDamageMobj(AActor *target, int pain)
+{
+	for (size_t i = 0; i < players.size(); i++)
+	{
+		client_t *cl = &clients[i];
+
+		MSG_WriteMarker(&cl->reliablebuf, svc_damagemobj);
+		MSG_WriteShort(&cl->reliablebuf, target->netid);
+		MSG_WriteShort(&cl->reliablebuf, target->health);
+		MSG_WriteByte(&cl->reliablebuf, pain);
+	}
+}
+
+void SV_SendKillMobj(AActor *source, AActor *target, AActor *inflictor,
+				     bool joinkill)
+{
+	for (size_t i = 0; i < players.size(); i++)
+	{
+		client_t *cl = &clients[i];
+
+		if(!SV_IsPlayerAllowedToSee(players[i], target))
+			continue;
+
+		// send death location first
+		MSG_WriteMarker(&cl->netbuf, svc_movemobj);
+		MSG_WriteShort(&cl->netbuf, target->netid);
+		MSG_WriteByte(&cl->netbuf, target->rndindex);
+		MSG_WriteLong(&cl->netbuf, target->x);
+		MSG_WriteLong(&cl->netbuf, target->y);
+		MSG_WriteLong(&cl->netbuf, target->z);
+		MSG_WriteMarker(&cl->reliablebuf, svc_killmobj);
+
+		if (source)
+			MSG_WriteShort(&cl->reliablebuf, source->netid);
+		else
+			MSG_WriteShort(&cl->reliablebuf, 0);
+
+		MSG_WriteShort (&cl->reliablebuf, target->netid);
+		MSG_WriteShort (&cl->reliablebuf, inflictor ? inflictor->netid : 0);
+		MSG_WriteShort (&cl->reliablebuf, target->health);
+		MSG_WriteLong (&cl->reliablebuf, MeansOfDeath);
+		MSG_WriteByte (&cl->reliablebuf, joinkill);
+	}
+}
+
+// Tells clients to remove an actor from the world as it doesn't exist anymore
+void SV_SendDestroyActor(AActor *mo)
+{
+	if (mo->netid && mo->type != MT_PUFF)
+	{
+		for (size_t i = 0; i < mo->players_aware.size(); i++)
+		{
+			client_t *cl = &idplayer(mo->players_aware[i]).client;
+
+            // denis - todo - need a queue for destroyed (lost awareness) 
+            // objects, as a flood of destroyed things could easily overflow a 
+            // buffer
+			MSG_WriteMarker(&cl->reliablebuf, svc_removemobj); 
+			MSG_WriteShort(&cl->reliablebuf, mo->netid);
+		}
+	}
+
+	// AActor no longer active. NetID released.
+	if(mo->netid)
+		ServerNetID.ReleaseNetID( mo->netid );
+}
+
+// Missile exploded so tell clients about it
+void SV_ExplodeMissile(AActor *mo)
+{
+	for (size_t i = 0; i < players.size(); i++)
+	{
+		client_t *cl = &clients[i];
+
+		if(!SV_IsPlayerAllowedToSee(players[i], mo))
+			continue;
+
+		MSG_WriteMarker (&cl->reliablebuf, svc_movemobj);
+		MSG_WriteShort (&cl->reliablebuf, mo->netid);
+		MSG_WriteByte (&cl->reliablebuf, mo->rndindex);
+		MSG_WriteLong (&cl->reliablebuf, mo->x);
+		MSG_WriteLong (&cl->reliablebuf, mo->y);
+		MSG_WriteLong (&cl->reliablebuf, mo->z);
+
+		MSG_WriteMarker(&cl->reliablebuf, svc_explodemissile);
+		MSG_WriteShort(&cl->reliablebuf, mo->netid);
+	}
+}
+
+
+//
+// SV_PreservePlayer
+//
+void SV_PreservePlayer(player_t &player)
+{
+	if (!serverside || sv_gametype != GM_COOP || !validplayer(player) || !player.ingame())
+		return;
+
+	if(!unnatural_level_progression)
+		player.playerstate = PST_LIVE; // denis - carry weapons and keys over to next level
+
+	G_DoReborn(player);
+
+	// inform client
+	{
+		size_t i;
+		client_t *cl = &player.client;
+
+		MSG_WriteMarker (&cl->reliablebuf, svc_playerinfo);
+
+		for(i = 0; i < NUMWEAPONS; i++)
+			MSG_WriteByte (&cl->reliablebuf, player.weaponowned[i]);
+
+		for(i = 0; i < NUMAMMO; i++)
+		{
+			MSG_WriteShort (&cl->reliablebuf, player.maxammo[i]);
+			MSG_WriteShort (&cl->reliablebuf, player.ammo[i]);
+		}
+
+		MSG_WriteByte (&cl->reliablebuf, player.health);
+		MSG_WriteByte (&cl->reliablebuf, player.armorpoints);
+		MSG_WriteByte (&cl->reliablebuf, player.armortype);
+		MSG_WriteByte (&cl->reliablebuf, player.readyweapon);
+		MSG_WriteByte (&cl->reliablebuf, player.backpack);
+	}
+}
 
 VERSION_CONTROL (sv_main_cpp, "$Id$")
 

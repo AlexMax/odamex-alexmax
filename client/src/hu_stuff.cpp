@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -37,7 +38,7 @@
 #include "v_text.h"
 #include "v_video.h"
 #include "cl_main.h"
-#include "cl_ctf.h"
+#include "p_ctf.h"
 #include "i_video.h"
 #include "i_input.h"
 
@@ -47,10 +48,10 @@
 #define HU_INPUTY		(0 + (SHORT(hu_font[0]->height) +1))
 
 #define CTFBOARDWIDTH	236
-#define CTFBOARDHEIGHT	103
+#define CTFBOARDHEIGHT	40
 
 #define DMBOARDWIDTH	368
-#define DMBOARDHEIGHT	100
+#define DMBOARDHEIGHT	16
 
 #define TEAMPLAYBORDER	10
 #define DMBORDER		20
@@ -79,8 +80,7 @@ void HU_DMScores2 (player_t *player);
 void HU_TeamScores1 (player_t *player);
 void HU_TeamScores2 (player_t *player);
 
-void OdamexEffect (int xa, int ya, int xb, int yb);
-
+extern bool HasBehavior;
 extern inline int V_StringWidth (const char *str);
 
 static void ShoveChatStr (std::string str, byte who);
@@ -145,7 +145,7 @@ BOOL HU_Responder (event_t *ev)
 {
 	unsigned char c;
 
-	if (ev->data1 == KEY_RALT || ev->data1 == KEY_LALT)
+	if (ev->data1 == KEY_RALT || ev->data1 == KEY_LALT || ev->data1 == KEY_HAT1)
 	{
 		altdown = (ev->type == ev_keydown);
 		return false;
@@ -173,11 +173,14 @@ BOOL HU_Responder (event_t *ev)
 	// send a macro
 	if (altdown)
 	{
-		if (ev->data2 >= '0' && ev->data2 <= '9')
+		if ((ev->data2 >= '0' && ev->data2 <= '9') || (ev->data2 >= KEY_JOY1 && ev->data2 <= KEY_JOY10))
 		{
-			ShoveChatStr (chat_macros[ev->data2 - '0']->cstring(), headsupactive - 1);
+			if (ev->data2 >= KEY_JOY1 && ev->data2 <= KEY_JOY10)
+				ShoveChatStr (chat_macros[ev->data2 - KEY_JOY1]->cstring(), headsupactive - 1);
+			else
+				ShoveChatStr (chat_macros[ev->data2 - '0']->cstring(), headsupactive - 1);
             
-            I_ResumeMouse();
+			I_ResumeMouse();
 			headsupactive = 0;
 			return true;
 		}
@@ -189,7 +192,7 @@ BOOL HU_Responder (event_t *ev)
 		headsupactive = 0;
 		return true;
 	}
-	else if (ev->data1 == KEY_ESCAPE)
+	else if (ev->data1 == KEY_ESCAPE || ev->data1 == KEY_JOY2)
 	{
         I_ResumeMouse();
 		headsupactive = 0;
@@ -307,9 +310,17 @@ void HU_DrawTargetNames(void)
 				continue;
 			
 			// Check to see if the other player is visible
-			if (!P_CheckSightEdges(displayplayer().mo, players[i].mo, 0.0))
-				continue;
-			
+			if (HasBehavior)
+			{
+                if (!P_CheckSightEdges2(displayplayer().mo, players[i].mo, 0.0))
+                    continue;
+			}			
+			else
+			{
+                if (!P_CheckSightEdges(displayplayer().mo, players[i].mo, 0.0))
+                    continue;
+			}
+
 			// GhostlyDeath -- Don't draw dead enemies
 			if (!consoleplayer().spectator &&
 				(players[i].mo->health <= 0))
@@ -451,7 +462,7 @@ void HU_Drawer (void)
 		
         for (size_t i = 0; i < players.size(); ++i)
 		{
-            if (!players[i].spectator)
+            if (!players[i].spectator && players[i].playerstate != PST_CONTACT && players[i].playerstate != PST_DOWNLOAD)
                 ++num_players;
         }
 		
@@ -632,10 +643,7 @@ static bool STACK_ARGS compare_player_points (const player_t *arg1, const player
 	return arg2->points < arg1->points;
 }
 
-EXTERN_CVAR (usehighresboard)
-
-#define CTFBOARDWIDTH	236
-#define CTFBOARDHEIGHT	103
+EXTERN_CVAR (hud_usehighresboard)
 
 //
 // [Toke - Scores] HU_DrawScores
@@ -645,7 +653,7 @@ void HU_DrawScores (player_t *player)
 {
 	if (sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF)
 	{
-		if (usehighresboard)
+		if (hud_usehighresboard)
 		{
 			if (screen->width > (CTFBOARDWIDTH * 2)) // If board will fit
 				HU_TeamScores2 (player);
@@ -657,7 +665,7 @@ void HU_DrawScores (player_t *player)
 	}
 	else
 	{
-		if (usehighresboard && screen->width != 320)
+		if (hud_usehighresboard && screen->width != 320)
 			HU_DMScores2 (player);
 		else
 			HU_DMScores1 (player);
@@ -717,9 +725,9 @@ void HU_DMScores1 (player_t *player)
 	// Scoreboard Identify
 	// Dan - Tells which current game mode is being played
 	if (sv_gametype != GM_COOP)
-		screen->DrawText (CR_GOLD,120 * CleanXfac,10 * CleanYfac,"Deathmatch");
+		screen->DrawTextClean (CR_GOLD,120 * CleanXfac,10 * CleanYfac,"Deathmatch");
 	else
-		screen->DrawText (CR_GOLD,120 * CleanXfac,10 * CleanYfac,"Cooperative");
+		screen->DrawTextClean (CR_GOLD,120 * CleanXfac,10 * CleanYfac,"Cooperative");
 
 	//	Header display
 	screen->DrawTextClean (CR_GREY,	16	* CleanXfac,	25	* CleanYfac, "NAME");
@@ -751,7 +759,7 @@ void HU_DMScores1 (player_t *player)
 				color = BestColor (DefaultPalette->basecolors, RPART(color), GPART(color), BPART(color), DefaultPalette->numcolors);
 
 			// Display Color
-			if (!sortedplayers[i]->spectator)
+			if (!sortedplayers[i]->spectator && sortedplayers[i]->playerstate != PST_CONTACT && sortedplayers[i]->playerstate != PST_DOWNLOAD)
 				screen->Clear ((5 * CleanXfac), y, (13 * CleanXfac), y + hu_font[0]->height() * CleanYfac, color);
 
 			// Display Frags or Kills if coop
@@ -821,7 +829,7 @@ void HU_DMScores2 (player_t *player)
 {
 	char str[80];
 	std::vector<player_t *> sortedplayers(players.size());
-	unsigned int i, j;
+	unsigned int i, j, listsize;
 
 	if (player->camera->player)
 		player = player->camera->player;
@@ -835,6 +843,8 @@ void HU_DMScores2 (player_t *player)
 	else
 		std::sort(sortedplayers.begin(), sortedplayers.end(), compare_player_kills);
 
+    listsize = sortedplayers.size();
+    
 	//	Timelimit display
 /*
 	if (deathmatch && sv_timelimit && gamestate == GS_LEVEL)
@@ -859,24 +869,20 @@ void HU_DMScores2 (player_t *player)
 		screen->DrawTextClean (CR_GREY, screen->width/2 - V_StringWidth (str)/2*CleanXfac, y - 12 * CleanYfac, str);
 	}
 */
-
-
-
 	// Board location
-	int marginx = (screen->width  - DMBOARDWIDTH)	/ 2;
-	int marginy = (screen->height - DMBOARDHEIGHT)	/ 2;
-
 	int y = 21;
-
+	
+	int marginx = (screen->width  - DMBOARDWIDTH) / 2;
+	int marginy = (screen->height - DMBOARDHEIGHT) / 2;
 
 	int locx = marginx;
 	int locy = marginy / 2;
-
+   
 	// Background effect
-	OdamexEffect (locx - DMBORDER,
-				  locy - DMBORDER,
-				  locx + DMBOARDWIDTH  + DMBORDER,
-				  locy + DMBOARDHEIGHT + DMBORDER);
+	OdamexEffect (locx - DMBORDER, 
+                  locy - DMBORDER,
+				  locx + DMBOARDWIDTH  + DMBORDER, 
+				  locy + DMBOARDHEIGHT + (listsize*10) + DMBORDER);
 
 	// Scoreboard Identify
     // Dan - Tells which current game mode is being played
@@ -919,11 +925,8 @@ void HU_DMScores2 (player_t *player)
 	screen->DrawText	  (CR_GREY	,locx + 301		,locy + 11	,"PING"			);
 	screen->DrawText	  (CR_GREY	,locx + 339		,locy + 11	,"TIME"			);
 
-
-	i = sortedplayers.size();
-
 	//	Draw player info
-	for (i = 0; i < sortedplayers.size() && y < ST_Y - 12 * CleanYfac; i++)
+	for (i = 0; i < listsize && y < ST_Y - 12 * CleanYfac; i++)
 	{
 		int color = sortedplayers[i]->userinfo.color;
 
@@ -946,7 +949,7 @@ void HU_DMScores2 (player_t *player)
 						  BPART(blob),
 						  DefaultPalette->numcolors);
 
-		if (!sortedplayers[i]->spectator)
+		if (!sortedplayers[i]->spectator && sortedplayers[i]->playerstate != PST_CONTACT && sortedplayers[i]->playerstate != PST_DOWNLOAD)
 			screen->Clear (locx,
 						   locy + y,
 						   locx + 7,
@@ -1169,7 +1172,7 @@ void HU_TeamScores1 (player_t *player)
 								  BPART(blob),
 								  DefaultPalette->numcolors);
 
-				if (!sortedplayers[i]->spectator)
+				if (!sortedplayers[i]->spectator && sortedplayers[i]->playerstate != PST_CONTACT && sortedplayers[i]->playerstate != PST_DOWNLOAD)
 					screen->Clear (1, bluey, (7 * CleanXfac), bluey + (7 * CleanYfac), blob);
 
 				screen->DrawTextClean (colorblue	,	10	* CleanXfac,			bluey			,			str				);
@@ -1323,6 +1326,7 @@ void HU_TeamScores1 (player_t *player)
 void HU_TeamScores2 (player_t *player)
 {
 	char str[80];
+	unsigned int listsize;
 
 	std::vector<player_t *> sortedplayers(players.size());
 
@@ -1350,9 +1354,19 @@ void HU_TeamScores2 (player_t *player)
 		player = player->camera->player;
 
 	for (j = 0; j < sortedplayers.size(); j++)
+	{
 		sortedplayers[j] = &players[j];
+		
+        if (sortedplayers[j]->userinfo.team == TEAM_BLUE)
+            bcount++;
+            
+        if (sortedplayers[j]->userinfo.team == TEAM_RED)
+            rcount++;            
+	}
 
 	std::sort(sortedplayers.begin(), sortedplayers.end(), sv_gametype == GM_CTF ? compare_player_points : compare_player_frags);
+	
+	listsize = (rcount > bcount ? rcount : bcount);
 
 	// Board locations
 	int marginx = (screen->width - (CTFBOARDWIDTH * 2)) / 4;
@@ -1368,7 +1382,7 @@ void HU_TeamScores2 (player_t *player)
 	int rlocx = (marginx * 3) + CTFBOARDWIDTH;
 	int rlocy = marginy;
 
-
+    
 	//int glocx
 	//int glocy
 
@@ -1376,7 +1390,7 @@ void HU_TeamScores2 (player_t *player)
 	OdamexEffect (blocx - TEAMPLAYBORDER,
 				  blocy - TEAMPLAYBORDER,
 				  rlocx + CTFBOARDWIDTH  + TEAMPLAYBORDER,
-				  rlocy + CTFBOARDHEIGHT + TEAMPLAYBORDER);
+				  rlocy + CTFBOARDHEIGHT + (listsize*10) + TEAMPLAYBORDER);
 
 	// Player scores header
 	// Blue Bar
@@ -1396,7 +1410,10 @@ void HU_TeamScores2 (player_t *player)
 	// Scoreboard Identify
 	// Dan - Tells which current game mode is being played
     if (sv_gametype == GM_CTF)
-        screen->DrawText (CR_GOLD,blocx + 275,blocy + 0,"Capture The Flag");
+    {
+        strcpy(str, "Capture The Flag");
+        screen->DrawText (CR_GOLD,(screen->width/2)-(V_StringWidth(str)/2),blocy + 0,str);        
+    }
 
 	// BLUE
 	screen->DrawText	  (CR_GREY	,blocx + 8	,blocy + 16	,"SCORE:"			);
@@ -1484,7 +1501,7 @@ void HU_TeamScores2 (player_t *player)
 								  BPART(blob),
 								  DefaultPalette->numcolors);
 
-				if (!sortedplayers[i]->spectator)
+				if (!sortedplayers[i]->spectator && sortedplayers[i]->playerstate != PST_CONTACT && sortedplayers[i]->playerstate != PST_DOWNLOAD)
 					screen->Clear (blocx,
 								   blocy + bluey,
 								   blocx + 7,
@@ -1533,7 +1550,7 @@ void HU_TeamScores2 (player_t *player)
 
 				bluey += 10;
 
-				bcount++;
+				//bcount++;
 			}
 
 			if (sortedplayers[i]->userinfo.team == TEAM_RED)
@@ -1596,7 +1613,7 @@ void HU_TeamScores2 (player_t *player)
 
 				redy += 10;
 
-				rcount++;
+				//rcount++;
 			}
 		}
 	}
@@ -1717,7 +1734,8 @@ void HU_ConsoleScores (player_t *player)
             Printf_Bold("--------------------------------------\n");
 
             for (i = 0; i < sortedplayers.size(); i++) {
-                if (sortedplayers[i]->userinfo.team == j && !sortedplayers[i]->spectator) {
+                if (sortedplayers[i]->userinfo.team == j && !sortedplayers[i]->spectator 
+                && sortedplayers[i]->playerstate != PST_CONTACT && sortedplayers[i]->playerstate != PST_DOWNLOAD) {
                     if (sortedplayers[i] != player)
                         Printf(PRINT_HIGH, "%-15s %-6d N/A  %-5d %4d\n",
                             sortedplayers[i]->userinfo.netname,
@@ -1775,7 +1793,8 @@ void HU_ConsoleScores (player_t *player)
             Printf_Bold("--------------------------------------\n");
 
             for (i = 0; i < sortedplayers.size(); i++) {
-                if (sortedplayers[i]->userinfo.team == j && !sortedplayers[i]->spectator) {
+                if (sortedplayers[i]->userinfo.team == j && !sortedplayers[i]->spectator 
+                && sortedplayers[i]->playerstate != PST_CONTACT && sortedplayers[i]->playerstate != PST_DOWNLOAD) {
                     if (sortedplayers[i]->fragcount <= 0) // Copied from HU_DMScores1.
                         sprintf (str, "0.0");
                     else if (sortedplayers[i]->fragcount >= 1 && sortedplayers[i]->deathcount == 0)
@@ -1835,7 +1854,8 @@ void HU_ConsoleScores (player_t *player)
         Printf_Bold("--------------------------------------\n");
 
         for (i = 0; i < sortedplayers.size(); i++) {
-        	if (!sortedplayers[i]->spectator) {
+        	if (!sortedplayers[i]->spectator 
+        	&& sortedplayers[i]->playerstate != PST_CONTACT && sortedplayers[i]->playerstate != PST_DOWNLOAD) {
 				if (sortedplayers[i]->fragcount <= 0) // Copied from HU_DMScores1.
 					sprintf (str, "0.0");
 				else if (sortedplayers[i]->fragcount >= 1 && sortedplayers[i]->deathcount == 0)
@@ -1879,7 +1899,8 @@ void HU_ConsoleScores (player_t *player)
         Printf_Bold("--------------------------------------\n");
 
         for (i = 0; i < sortedplayers.size(); i++) {
-        	if (!sortedplayers[i]->spectator) {
+        	if (!sortedplayers[i]->spectator
+        	&& sortedplayers[i]->playerstate != PST_CONTACT && sortedplayers[i]->playerstate != PST_DOWNLOAD) {
 				if (sortedplayers[i]->killcount <= 0) // Copied from HU_DMScores1.
 					sprintf (str, "0.0");
 				else if (sortedplayers[i]->killcount >= 1 && sortedplayers[i]->deathcount == 0)

@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -106,7 +107,7 @@ int 			viewangletox[FINEANGLES/2];
 // from clipangle to -clipangle.
 angle_t 		*xtoviewangle;
 
-fixed_t			*finecosine = &finesine[FINEANGLES/4];
+const fixed_t	*finecosine = &finesine[FINEANGLES/4];
 
 int				scalelight[LIGHTLEVELS][MAXLIGHTSCALE];
 int				scalelightfixed[MAXLIGHTSCALE];
@@ -416,7 +417,9 @@ fixed_t R_ScaleFromGlobalAngle (angle_t visangle)
 // R_InitTables
 //
 //
-
+#if 0
+// [Russell] - Calling this function can desync demos (tnt demo1 msvc being a 
+// prime example)
 void R_InitTables (void)
 {
 	int i;
@@ -438,7 +441,7 @@ void R_InitTables (void)
 		finesine[i] = (fixed_t)(FRACUNIT * sin (a));
 	}
 }
-
+#endif
 
 //
 //
@@ -822,7 +825,7 @@ void R_Init (void)
 {
 	R_InitData ();
 	//R_InitPointToAngle ();
-	R_InitTables ();
+//	R_InitTables ();
 	// viewwidth / viewheight are set by the defaults
 
 	R_SetViewSize ((int)screenblocks);
@@ -898,6 +901,16 @@ void R_SetupFrame (player_t *player)
 	}
 
 	viewangle = camera->angle + viewangleoffset;
+
+	if (camera->player && camera->player->xviewshift && !paused)
+	{
+		int intensity = camera->player->xviewshift;
+		viewx += ((M_Random() % (intensity<<2))
+					-(intensity<<1))<<FRACBITS;
+		viewy += ((M_Random()%(intensity<<2))
+					-(intensity<<1))<<FRACBITS;
+	}
+		
 	extralight = camera == player->mo ? player->extralight : 0;
 
 	viewsin = finesine[viewangle>>ANGLETOFINESHIFT];
@@ -1125,7 +1138,7 @@ void R_RenderPlayerView (player_t *player)
 	R_DrawMasked ();
 
 	// [RH] Apply detail mode doubling
-	//R_DetailDouble ();
+	R_DetailDouble ();
 }
 
 //

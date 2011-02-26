@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -44,6 +44,8 @@ CVAR (sv_email,		"email@domain.com",			CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_NOE
 CVAR (sv_website,      "http://odamex.net/",         CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
 // Enables WAD file downloading
 CVAR (sv_waddownload,	"0",		CVAR_ARCHIVE | CVAR_SERVERINFO)
+// Enables WAD file download cap
+CVAR (sv_waddownloadcap, "0", CVAR_ARCHIVE | CVAR_SERVERINFO)
 // Reset the current map when the last player leaves
 CVAR (sv_emptyreset,   "0",        CVAR_ARCHIVE | CVAR_SERVERINFO)
 // Allow spectators talk to show to ingame players
@@ -93,8 +95,6 @@ CVAR (sv_maxrate, "200000", CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 // Gameplay settings
 // =================
 
-// (Teamplay/CTF): Players can injure others on the same team
-CVAR (sv_friendlyfire,		"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 // (Teamplay): Teams that are enabled
 CVAR (sv_teamsinplay,		"2", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_NOENABLEDISABLE)
 // (CTF) Flags dropped by the player must be returned manually
@@ -103,8 +103,6 @@ CVAR (ctf_manualreturn,	"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 CVAR (ctf_flagathometoscore,	"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 // (CTF) A flag that is dropped will be returned automatically after this timeout
 CVAR (ctf_flagtimeout,	"600", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
-// (Teamplay/CTF) When disabled, treat team spawns like normal deathmatch spawns.
-CVAR (sv_teamspawns, "1", CVAR_SERVERARCHIVE | CVAR_LATCH | CVAR_SERVERINFO)
 
 VERSION_CONTROL (sv_cvarlist_cpp, "$Id$")
 

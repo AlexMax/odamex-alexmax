@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom 1.22).
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -47,6 +47,7 @@ char DefBindings[] =
 	"bind 5 \"impulse 5\"; "
 	"bind 6 \"impulse 6\"; "
 	"bind 7 \"impulse 7\"; "
+	"bind 8 \"impulse 8\"; "
 	"bind - sizedown; "
 	"bind = sizeup; "
 	"bind ctrl +attack; "
@@ -59,6 +60,22 @@ char DefBindings[] =
 	"bind downarrow +back; "
 	"bind , +moveleft; "
 	"bind . +moveright; "
+#ifdef _XBOX // Alternative defaults for Xbox
+	"bind hat1right messagemode2; "
+	"bind hat1left spynext; "
+	"bind hat1up messagemode; "
+	"bind hat1down \"impulse 3\"; "
+	"bind joy1 +use; "
+	"bind joy2 weapnext; "
+	"bind joy3 +jump; "
+	"bind joy4 weapprev; "
+	"bind joy5 togglemap; "
+	"bind joy6 +showscores; "
+	"bind joy7 +speed; "
+	"bind joy8 +attack; "
+	"bind joy10 toggleconsole; "
+	"bind joy12 centerview; "
+#else
 	"bind mouse1 +attack; "
 	"bind mouse2 +strafe; "
 	"bind mouse3 +forward; "
@@ -67,6 +84,7 @@ char DefBindings[] =
 	"bind joy2 +strafe; "
 	"bind joy3 +speed; "
 	"bind joy4 +use; "
+#endif
 	"bind capslock \"toggle cl_run\"; "	// <- This too
 	"bind f1 menu_help; "
 	"bind f2 menu_save; "
@@ -157,7 +175,11 @@ const char *KeyNames[NUM_KEYS] = {
    // 0163 - 0166
 	"joy25",	"joy26",	"joy27",	"joy28",
    // 0167 - 016A
-	"joy29",	"joy30",	"joy31",	"joy32"
+	"joy29",	"joy30",	"joy31",	"joy32",
+  // 016B - 016E
+	"hat1up",	"hat1right","hat1down",	"hat1left",
+  // 016F - 0172
+	"hat2up",	"hat2right","hat2down",	"hat2left"
 };
 
 static std::string Bindings[NUM_KEYS];

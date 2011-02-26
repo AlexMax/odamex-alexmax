@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -401,8 +401,10 @@ void LstOdaServerList::AddServerToList(const Server &s,
     SetItem(li);
 
     // Number of players, Maximum players column
+    // TODO: acquire max players, max clients and spectators from these 2 and
+    // create some kind of graphical column maybe
     li.m_col = serverlist_field_players;
-    li.m_text = wxString::Format(_T("%d/%d"),s.Info.Players.size(),s.Info.MaxPlayers);
+    li.m_text = wxString::Format(_T("%d/%d"),s.Info.Players.size(),s.Info.MaxClients);
     
     SetItem(li); 
     

@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -48,7 +49,7 @@
 #include "cl_main.h"
 #include "gi.h"
 
-#include "cl_ctf.h"
+#include "p_ctf.h"
 
 /* Reimplement old way of doing red/gold colors, from Chocolate Doom - ML */
 
@@ -787,7 +788,7 @@ END_COMMAND (god)
 
 BEGIN_COMMAND (notarget)
 {
-	if (CheckCheatmode ())
+	if (CheckCheatmode () || connected)
 		return;
 
 	consoleplayer().cheats ^= CF_NOTARGET;

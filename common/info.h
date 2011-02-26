@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -183,7 +184,7 @@ typedef enum
 	SPR_GIB7,
 	// [RH] Dummy for unknown mapthing
 	SPR_UNKN,
-	
+		
 	//	[Toke - CTF]
 	SPR_BSOK,
 	SPR_RSOK,
@@ -193,7 +194,9 @@ typedef enum
 	SPR_RDWN,
 	SPR_BCAR,
 	SPR_RCAR,
-
+	
+	SPR_TLGL,
+	
 	NUMSPRITES
 
 } spritenum_t;
@@ -1215,7 +1218,11 @@ typedef enum
 	S_BCAR,	// Blue Flag
 	S_RCAR,	// Red Flag
 	// -----------------------------------
-
+	S_BRIDGE1,
+	S_BRIDGE2,
+	S_BRIDGE3,
+	S_BRIDGE4,
+	S_BRIDGE5,	
 	NUMSTATES
 } statenum_t;
 
@@ -1431,7 +1438,14 @@ typedef enum {
 	MT_BCAR,
 	MT_RCAR,
 	// -----------------------------------
-
+	
+	MT_BRIDGE,	
+	MT_MAPSPOT,
+	MT_MAPSPOTGRAVITY,
+	MT_BRIDGE32,
+	MT_BRIDGE16,
+	MT_BRIDGE8,
+	
 	NUMMOBJTYPES
 
 } mobjtype_t;
@@ -1459,6 +1473,7 @@ typedef struct
 	int speed;
 	int radius;
 	int height;
+	int cdheight;
 	int mass;
 	int damage;
 	const char *activesound;	// [RH] not int

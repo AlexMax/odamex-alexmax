@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -19,6 +19,12 @@
 //	SDL music handler
 //
 //-----------------------------------------------------------------------------
+
+#if defined(_WIN32) && !defined(_XBOX)
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
+#include <mmsystem.h>
+#endif
 
 
 #include <stdio.h>
@@ -59,7 +65,10 @@ static CFDataRef cfd;
 
 // [Russell] - define a temporary midi file, for consistency
 // SDL < 1.2.7
-#if MIX_MAJOR_VERSION < 1 || (MIX_MAJOR_VERSION == 1 && MIX_MINOR_VERSION < 2) || (MIX_MAJOR_VERSION == 1 && MIX_MINOR_VERSION == 2 && MIX_PATCHLEVEL < 7)
+#ifdef _XBOX
+	// Use the cache partition
+	#define TEMP_MIDI "Z:\\temp_music"
+#elif MIX_MAJOR_VERSION < 1 || (MIX_MAJOR_VERSION == 1 && MIX_MINOR_VERSION < 2) || (MIX_MAJOR_VERSION == 1 && MIX_MINOR_VERSION == 2 && MIX_PATCHLEVEL < 7)
     #define TEMP_MIDI "temp_music"
 #endif
 
@@ -76,6 +85,43 @@ static bool music_initialized = false;
 // [Nes] - For pausing the music during... pause.
 int curpause = 0;
 EXTERN_CVAR (snd_musicvolume)
+
+// [Russell] - From prboom+
+#if defined(_WIN32) && !defined(_XBOX)
+void I_midiOutSetVolumes(int volume)
+{
+  MMRESULT result;
+  int calcVolume;
+  MIDIOUTCAPS capabilities;
+  unsigned int i;
+
+  if (volume > 128)
+    volume = 128;
+  if (volume < 0)
+    volume = 0;
+  calcVolume = (65535 * volume / 128);
+
+  SDL_LockAudio();
+
+  //Device loop
+  for (i = 0; i < midiOutGetNumDevs(); i++)
+  {
+    //Get device capabilities
+    result = midiOutGetDevCaps(i, &capabilities, sizeof(capabilities));
+
+    if (result == MMSYSERR_NOERROR)
+    {
+      //Adjust volume on this candidate
+      if ((capabilities.dwSupport & MIDICAPS_VOLUME))
+      {
+        midiOutSetVolume((HMIDIOUT)i, MAKELONG(calcVolume, calcVolume));
+      }
+    }
+  }
+
+  SDL_UnlockAudio();
+}
+#endif
 
 // [Russell] - A better name, since we support multiple formats now
 void I_SetMusicVolume (float volume)
@@ -96,7 +142,17 @@ void I_SetMusicVolume (float volume)
 
 #else
 
-	Mix_VolumeMusic((int)(volume * MIX_MAX_VOLUME));
+// [Russell] - From prboom+
+// [Russell] - Disabled as it causes too many problems on vista/7
+//#ifdef _WIN32
+    // e6y: workaround
+//    if (Mix_GetMusicType(NULL) == MUS_MID)
+//        I_midiOutSetVolumes((int)(volume * MIX_MAX_VOLUME));
+//    else
+        // It is non-midi, call Mix_VolumeMusic below
+//#endif
+    
+    Mix_VolumeMusic((int)(volume * MIX_MAX_VOLUME));
 
 #endif
 }

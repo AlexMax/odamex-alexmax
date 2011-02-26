@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1997-2000 by id Software Inc.
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -28,8 +28,10 @@
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
+#ifndef _XBOX
 #include <windows.h>
-#endif
+#endif // _XBOX
+#endif // WIN32
 
 #include "doomtype.h"
 #include "cmdlib.h"
@@ -46,9 +48,10 @@ std::string progdir, startdir; // denis - todo - maybe move this into Args
 
 void FixPathSeparator (std::string &path)
 {
+	// Use the platform appropriate path separator
 	for(size_t i = 0; i < path.length(); i++)
-		if(path[i] == '\\')
-			path[i] = '/';
+		if(path[i] == '\\' || path[i] == '/')
+			path[i] = PATHSEPCHAR;
 }
 
 char *copystring (const char *s)

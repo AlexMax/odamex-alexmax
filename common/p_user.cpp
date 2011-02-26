@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -28,6 +29,7 @@
 #include "doomstat.h"
 #include "s_sound.h"
 #include "i_system.h"
+#include "i_net.h"
 
 // Index of the special effects (INVUL inverse) map.
 #define INVERSECOLORMAP 		32
@@ -42,8 +44,9 @@
 EXTERN_CVAR (sv_allowjump)
 EXTERN_CVAR (cl_mouselook)
 EXTERN_CVAR (sv_freelook)
+EXTERN_CVAR (co_zdoomphys)
 
-extern bool predicting, stepmode;
+extern bool predicting, step_mode;
 
 //
 // P_Thrust
@@ -198,6 +201,12 @@ void P_PlayerLookUpDown (player_t *p)
 	}
 }
 
+CVAR_FUNC_IMPL (sv_aircontrol)
+{
+	level.aircontrol = (fixed_t)((float)var * 65536.f);
+	G_AirControlChanged ();
+}
+
 //
 // P_MovePlayer
 //
@@ -205,7 +214,16 @@ void P_MovePlayer (player_t *player)
 {
 	ticcmd_t *cmd = &player->cmd;
 	AActor *mo = player->mo;
+	
+	if (player->jumpTics)
+		player->jumpTics--;
+	
+	mo->onground = (mo->z <= mo->floorz) || (mo->flags2 & MF2_ONMOBJ);
 
+	// [RH] Don't let frozen players move
+	if (player->cheats & CF_FROZEN)
+		return;
+		
 	// Move around.
 	// Reactiontime is used to prevent movement
 	//	for a bit after a teleport.
@@ -215,7 +233,7 @@ void P_MovePlayer (player_t *player)
 		return;
 	}
 
-	// [RH] check for swim/jump
+	// [RH] check for jump
 	if ((cmd->ucmd.buttons & BT_JUMP) == BT_JUMP)
 	{
 		if (player->mo->waterlevel >= 2)
@@ -226,29 +244,42 @@ void P_MovePlayer (player_t *player)
 		{
 			player->mo->momz = 3*FRACUNIT;
 		}		
-		else if (sv_allowjump && player->mo->onground && !player->mo->momz)
+		else if (sv_allowjump && player->mo->onground && !player->jumpTics)
 		{
-			player->mo->momz += 7*FRACUNIT;
-
+			player->mo->momz += 8*FRACUNIT;
 			if(!player->spectator)
 				S_Sound (player->mo, CHAN_BODY, "*jump1", 1, ATTN_NORM);
+				
+            player->mo->flags2 &= ~MF2_ONMOBJ;
+            player->jumpTics = 18;				
 		}
 	}
-
-	if (cmd->ucmd.upmove == -32768)
-	{ // Only land if in the air
-		if ((player->mo->flags2 & MF2_FLY) && player->mo->waterlevel < 2)
-		{
-			player->mo->flags2 &= ~MF2_FLY;
-			player->mo->flags &= ~MF_NOGRAVITY;
-		}
-	}
-	else if (cmd->ucmd.upmove != 0)
+	
+	if (co_zdoomphys)
 	{
-		if (player->mo->waterlevel >= 2 || (player->mo->flags2 & MF2_FLY))
+		if (cmd->ucmd.upmove &&
+			(player->mo->waterlevel >= 2 || player->mo->flags2 & MF2_FLY))
 		{
-			player->mo->momz = cmd->ucmd.upmove << 9;
-			if (player->mo->waterlevel < 2 && !(player->mo->flags2 & MF2_FLY))
+			player->mo->momz = cmd->ucmd.upmove << 8;
+		}		
+	}
+	else
+	{
+		if (cmd->ucmd.upmove == -32768)
+		{ // Only land if in the air
+			if ((player->mo->flags2 & MF2_FLY) && player->mo->waterlevel < 2)
+			{
+				player->mo->flags2 &= ~MF2_FLY;
+				player->mo->flags &= ~MF_NOGRAVITY;
+			}
+		}
+		else if (cmd->ucmd.upmove != 0)
+		{
+			if (player->mo->waterlevel >= 2 || (player->mo->flags2 & MF2_FLY))
+			{
+				player->mo->momz = cmd->ucmd.upmove << 8;
+			}
+			else if (player->mo->waterlevel < 2 && !(player->mo->flags2 & MF2_FLY))
 			{
 				player->mo->flags2 |= MF2_FLY;
 				player->mo->flags |= MF_NOGRAVITY;
@@ -256,28 +287,22 @@ void P_MovePlayer (player_t *player)
 				{ // Stop falling scream
 					S_StopSound (player->mo, CHAN_VOICE);
 				}
+			}        
+			else if (cmd->ucmd.upmove > 0)
+			{
+				//P_PlayerUseArtifact (player, arti_fly);
 			}
-		}
-		else if (cmd->ucmd.upmove > 0)
-		{
-			//P_PlayerUseArtifact (player, arti_fly);
-		}
+		}		
 	}
-	
+
 	// Look left/right
-	if(clientside || stepmode)
+	if(clientside || step_mode)
 	{
 		mo->angle += cmd->ucmd.yaw << 16;
 
 		// Look up/down stuff
 		P_PlayerLookUpDown(player);
 	}
-
-	mo->onground = (mo->z <= mo->floorz);
-
-	// [RH] Don't let frozen players move
-	if (player->cheats & CF_FROZEN)
-		return;
 
 	// killough 10/98:
 	//
@@ -297,13 +322,23 @@ void P_MovePlayer (player_t *player)
 		if (!mo->onground && !(mo->flags2 & MF2_FLY) && !mo->waterlevel)
 		{
 			// [RH] allow very limited movement if not on ground.
-			movefactor >>= 8;
-			bobfactor >>= 8;
+			if (co_zdoomphys)
+			{
+				movefactor = FixedMul (movefactor, level.aircontrol);
+				bobfactor = FixedMul (bobfactor, level.aircontrol);
+			}
+			else
+			{
+				movefactor >>= 8;
+				bobfactor >>= 8;
+			}
 		}
 		forwardmove = (cmd->ucmd.forwardmove * movefactor) >> 8;
 		sidemove = (cmd->ucmd.sidemove * movefactor) >> 8;
-
-		if(mo->onground || (mo->flags2 & MF2_FLY))
+		
+		// [ML] Check for these conditions unless advanced physics is on
+		if(co_zdoomphys || 
+			(!co_zdoomphys && (mo->onground || (mo->flags2 & MF2_FLY) || mo->waterlevel)))
 		{
 			if (forwardmove)
 			{
@@ -319,12 +354,66 @@ void P_MovePlayer (player_t *player)
 		{
 			P_SetMobjState (player->mo, S_PLAY_RUN1); // denis - fixme - this function might destoy player->mo without setting it to 0
 		}
+
+		if (player->cheats & CF_REVERTPLEASE)
+		{
+			player->cheats &= ~CF_REVERTPLEASE;
+			player->camera = player->mo;
+		}
+	}
+}
+
+// [RH] (Adapted from Q2)
+// P_FallingDamage
+//
+void P_FallingDamage (AActor *ent)
+{
+	float	delta;
+	int		damage;
+
+	if (!ent->player)
+		return;		// not a player
+
+	if (ent->flags & MF_NOCLIP)
+		return;
+
+	if ((ent->player->oldvelocity[2] < 0)
+		&& (ent->momz > ent->player->oldvelocity[2])
+		&& (!(ent->flags2 & MF2_ONMOBJ)
+			|| !(ent->z <= ent->floorz)))
+	{
+		delta = (float)ent->player->oldvelocity[2];
+	}
+	else
+	{
+		if (!(ent->flags2 & MF2_ONMOBJ))
+			return;
+		delta = (float)(ent->momz - ent->player->oldvelocity[2]);
+	}
+	delta = delta*delta * 2.03904313e-11f;
+
+	if (delta < 1)
+		return;
+
+	if (delta < 15)
+	{
+		//ent->s.event = EV_FOOTSTEP;
+		return;
 	}
 
-	if (player->cheats & CF_REVERTPLEASE)
+	if (delta > 30)
 	{
-		player->cheats &= ~CF_REVERTPLEASE;
-		player->camera = player->mo;
+		damage = (int)((delta-30)/2);
+		if (damage < 1)
+			damage = 1;
+
+		if (0)
+			P_DamageMobj (ent, NULL, NULL, damage, MOD_FALLING);
+	}
+	else
+	{
+		//ent->s.event = EV_FALLSHORT;
+		return;
 	}
 }
 
@@ -408,6 +497,10 @@ void P_PlayerThink (player_t *player)
 	//		it a warning if the player trying to spawn is a bot
 	if (!player->mo)
 		I_Error ("No player %d start\n", player->id);
+		
+	client_t *cl = &player->client;
+	
+	player->xviewshift = 0;		// [RH] Make sure view is in right place
 
 	// fixme: do this in the cheat code
 	if (player->cheats & CF_NOCLIP)
@@ -443,7 +536,7 @@ void P_PlayerThink (player_t *player)
 		P_CalcHeight (player);
 	}
 
-	if (player->mo->subsector->sector->special || player->mo->subsector->sector->damage)
+	if (player->mo->subsector && (player->mo->subsector->sector->special || player->mo->subsector->sector->damage))
 		P_PlayerInSpecialSector (player);
 
 	// Check for weapon change.
@@ -489,6 +582,12 @@ void P_PlayerThink (player_t *player)
 			|| (gamemode != shareware) )
 			{
 				player->pendingweapon = newweapon;
+						
+				if (serverside)
+				{	// [ML] From Zdaemon .99: use changeweapon here
+					MSG_WriteMarker	(&cl->reliablebuf, svc_changeweapon);
+					MSG_WriteByte (&cl->reliablebuf, (byte)player->pendingweapon);	
+				}
 			}
 		}
 	}
@@ -593,11 +692,15 @@ void player_s::Serialize (FArchive &arc)
 			<< cheats
 			<< refire
 			<< killcount
+			<< itemcount
+			<< secretcount			
 			<< damagecount
 			<< bonuscount
 			/*<< attacker->netid*/
 			<< extralight
 			<< fixedcolormap
+			<< xviewshift
+			<< jumpTics			
 			<< respawn_time
 			<< air_finished;
 		for (i = 0; i < NUMPOWERS; i++)
@@ -637,11 +740,15 @@ void player_s::Serialize (FArchive &arc)
 			>> cheats
 			>> refire
 			>> killcount
+			>> itemcount
+			>> secretcount			
 			>> damagecount
 			>> bonuscount
 			/*>> attacker->netid*/
 			>> extralight
 			>> fixedcolormap
+			>> xviewshift
+			>> jumpTics			
 			>> respawn_time
 			>> air_finished;
 		for (i = 0; i < NUMPOWERS; i++)

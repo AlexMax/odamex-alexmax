@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -100,9 +101,6 @@ int				dc_color;				// [RH] Color for column filler
 
 // first pixel in a column (possibly virtual) 
 byte*			dc_source;				
-
-// [RH] Tutti-Frutti fix
-unsigned int	dc_mask;
 
 // just for profiling 
 int 			dccount;

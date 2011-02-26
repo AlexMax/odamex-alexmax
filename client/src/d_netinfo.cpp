@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -41,7 +41,7 @@
 #include "st_stuff.h"
 #include "cl_main.h"
 
-#include "cl_ctf.h"
+#include "p_ctf.h"
 
 
 EXTERN_CVAR (cl_autoaim)
@@ -87,33 +87,27 @@ team_t D_TeamByName (const char *team)
 	else return TEAM_NONE;
 }
 
-void D_SetupUserInfo (void)
-{
+void D_SetupUserInfo(void) {
+
+	userinfo_t *coninfo = &consoleplayer().userinfo;
+	
+	memset (&consoleplayer().userinfo, 0, sizeof(userinfo_t));
+	
+	strncpy (coninfo->netname, cl_name.cstring(), MAXPLAYERNAME);
+	coninfo->team	 = D_TeamByName (cl_team.cstring()); // [Toke - Teams]
+	coninfo->color	 = V_GetColorFromString (NULL, cl_color.cstring());
+	coninfo->skin	 = R_FindSkin (cl_skin.cstring());
+	coninfo->gender  = D_GenderByName (cl_gender.cstring());
+	coninfo->aimdist = (fixed_t)(cl_autoaim * 16384.0);
 }
 
 void D_UserInfoChanged (cvar_t *cvar)
 {
-//	if (gamestate != GS_STARTUP)
-//		D_SetupUserInfo();
+	if (gamestate != GS_STARTUP && !connected)
+		D_SetupUserInfo();
 
 	if (connected)
 		CL_SendUserInfo();
-}
-
-void D_SendServerInfoChange (const cvar_t *cvar, const char *value)
-{
-}
-
-void D_DoServerInfoChange (byte **stream)
-{
-}
-
-void D_WriteUserInfoStrings (int i, byte **stream, bool compact)
-{
-}
-
-void D_ReadUserInfoStrings (int i, byte **stream, bool update)
-{
 }
 
 FArchive &operator<< (FArchive &arc, userinfo_t &info)

@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -27,7 +28,6 @@
 
 #include "doomtype.h"
 #include "v_video.h"
-
 
 // [RH] True if the display is not in a window
 extern BOOL Fullscreen;
@@ -64,6 +64,10 @@ void I_SetWindowIcon(void);
 bool I_CheckResolution (int width, int height, int bpp);
 void I_ClosestResolution (int *width, int *height, int bits);
 bool I_SetResolution (int width, int height, int bpp);
+
+bool I_CheckVideoDriver (const char *name);
+
+bool I_SetOverscan (float scale);
 
 void I_StartModeIterator (int bits);
 bool I_NextMode (int *width, int *height);

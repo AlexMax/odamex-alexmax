@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -34,9 +35,15 @@
 #include <io.h>
 #include <direct.h>
 #include <process.h>
+#ifndef NOMINMAX
 #define NOMINMAX
-#include <windows.h>
 #endif
+#ifdef _XBOX
+#include <xtl.h>
+#else
+#include <windows.h>
+#endif // !_XBOX
+#endif // WIN32
 
 #ifdef UNIX
 #define HAVE_PWD_H
@@ -80,11 +87,21 @@
 #include "c_dispatch.h"
 #include "cl_main.h"
 
+#ifdef _XBOX
+#include "i_xbox.h"
+#endif
+
+#ifdef GEKKO
+#include "i_wii.h"
+#endif
+
+#ifndef GCONSOLE // I will add this back later -- Hyper_Eye
 #include "txt_main.h"
 #define ENDOOM_W 80
 #define ENDOOM_H 25
+#endif // _XBOX
 
-EXTERN_CVAR (show_endoom)
+EXTERN_CVAR (r_showendoom)
 
 QWORD (*I_GetTime) (void);
 QWORD (*I_WaitForTic) (QWORD);
@@ -97,7 +114,11 @@ ticcmd_t *I_BaseTiccmd(void)
 
 /* [Russell] - Modified to accomodate a minimal allowable heap size */
 // These values are in megabytes
+#ifdef _XBOX
+size_t def_heapsize = 16;
+#else
 size_t def_heapsize = 32;
+#endif
 const size_t min_heapsize = 8;
 
 // The size we got back from I_ZoneBase in megabytes
@@ -261,7 +282,7 @@ std::string I_GetCWD ()
 	return ret;
 }
 
-#ifdef UNIX
+#if defined(UNIX) && !defined(GEKKO)
 std::string I_GetHomeDir(std::string user = "")
 {
 	const char *envhome = getenv("HOME");
@@ -280,8 +301,8 @@ std::string I_GetHomeDir(std::string user = "")
 			I_FatalError ("Please set your HOME variable");
 	}
 
-	if(home[home.length() - 1] != '/')
-		home += "/";
+	if(home[home.length() - 1] != PATHSEPCHAR)
+		home += PATHSEP;
 
 	return home;
 }
@@ -289,11 +310,11 @@ std::string I_GetHomeDir(std::string user = "")
 
 std::string I_GetUserFileName (const char *file)
 {
-#ifdef UNIX
+#if defined(UNIX) && !defined(GEKKO) 
 	std::string path = I_GetHomeDir();
 
-	if(path[path.length() - 1] != '/')
-		path += "/";
+	if(path[path.length() - 1] != PATHSEPCHAR)
+		path += PATHSEP;
 
 	path += ".odamex";
 
@@ -314,25 +335,30 @@ std::string I_GetUserFileName (const char *file)
 		}
 	}
 
-	path += "/";
+	path += PATHSEP;
 	path += file;
-#endif
+#elif defined(_XBOX)
+	std::string path = "T:";
 
-#ifdef WIN32
+	path += PATHSEP;
+	path += file;
+#else
 	std::string path = I_GetBinaryDir();
 
-	if(path[path.length() - 1] != '/')
-		path += "/";
+	if(path[path.length() - 1] != PATHSEPCHAR)
+		path += PATHSEP;
 
 	path += file;
 #endif
+
+	FixPathSeparator(path);
 
 	return path;
 }
 
 void I_ExpandHomeDir (std::string &path)
 {
-#ifdef UNIX
+#if defined(UNIX) && !defined(GEKKO) 
 	if(!path.length())
 		return;
 
@@ -341,7 +367,7 @@ void I_ExpandHomeDir (std::string &path)
 
 	std::string user;
 
-	size_t slash_pos = path.find_first_of('/');
+	size_t slash_pos = path.find_first_of(PATHSEPCHAR);
 	size_t end_pos = path.length();
 
 	if(slash_pos == std::string::npos)
@@ -361,7 +387,12 @@ std::string I_GetBinaryDir()
 {
 	std::string ret;
 
-#ifdef WIN32
+#ifdef _XBOX
+	// D:\ always corresponds to the binary path whether running from DVD or HDD.
+	ret = "D:\\"; 
+#elif defined GEKKO
+	ret = "sd:/";
+#elif defined WIN32
 	char tmp[MAX_PATH]; // denis - todo - make separate function
 	GetModuleFileName (NULL, tmp, sizeof(tmp));
 	ret = tmp;
@@ -388,8 +419,8 @@ std::string I_GetBinaryDir()
 				if(!segment.length())
 					continue;
 
-				if(segment[segment.length() - 1] != '/')
-					segment += "/";
+				if(segment[segment.length() - 1] != PATHSEPCHAR)
+					segment += PATHSEP;
 				segment += Args[0];
 
 				if(realpath(segment.c_str(), realp))
@@ -404,7 +435,8 @@ std::string I_GetBinaryDir()
 
 	FixPathSeparator(ret);
 
-	size_t slash = ret.find_last_of('/');
+	size_t slash = ret.find_last_of(PATHSEPCHAR);
+
 	if(slash == std::string::npos)
 		return "";
 	else
@@ -421,6 +453,7 @@ void I_FinishClockCalibration ()
 
 void I_Endoom(void)
 {
+#ifndef GCONSOLE // I will return to this -- Hyper_Eye
 	unsigned char *endoom_data;
 	unsigned char *screendata;
 	int y;
@@ -463,6 +496,7 @@ void I_Endoom(void)
 	// Shut down text mode screen
 
 	TXT_Shutdown();
+#endif // Hyper_Eye
 }
 
 //
@@ -482,7 +516,7 @@ void STACK_ARGS I_Quit (void)
 	
 	I_ShutdownHardware();
 
-	if (show_endoom && !Args.CheckParm ("-novideo"))
+	if (r_showendoom && !Args.CheckParm ("-novideo"))
 		I_Endoom();
 }
 
@@ -639,7 +673,7 @@ std::string I_GetClipboardText (void)
 	return ret;
 #endif
 
-#ifdef WIN32
+#if defined WIN32 && !defined _XBOX
 	std::string ret;
 
 	if(!IsClipboardFormatAvailable(CF_TEXT))

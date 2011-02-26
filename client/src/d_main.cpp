@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -32,7 +33,11 @@
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif // _XBOX
 #else
 #include <sys/stat.h>
 #endif
@@ -84,8 +89,16 @@
 #include "v_text.h"
 #include "gi.h"
 #include "stats.h"
-#include "cl_ctf.h"
+#include "p_ctf.h"
 #include "cl_main.h"
+
+#ifdef GEKKO
+#include "i_wii.h"
+#endif
+
+#ifdef _XBOX
+#include "i_xbox.h"
+#endif
 
 extern size_t got_heapsize;
 
@@ -137,6 +150,8 @@ static int pagetic;
 
 EXTERN_CVAR (sv_allowexit)
 EXTERN_CVAR (sv_nomonsters)
+EXTERN_CVAR (sv_freelook)
+EXTERN_CVAR (sv_allowjump)
 EXTERN_CVAR (waddirs)
 EXTERN_CVAR (snd_sfxvolume)				// maximum volume for sound
 EXTERN_CVAR (snd_musicvolume)			// maximum volume for music
@@ -478,7 +493,7 @@ void D_PageDrawer (void)
 	else
 	{
 		screen->Clear (0, 0, screen->width, screen->height, 0);
-		screen->PrintStr (0, 0, "Page graphic goes here", 22);
+		//screen->PrintStr (0, 0, "Page graphic goes here", 22);
 	}
 }
 
@@ -659,8 +674,8 @@ std::string BaseFileSearchDir(std::string dir, std::string file, std::string ext
 {
 	std::string found;
 
-	if(dir[dir.length() - 1] != '/')
-		dir += "/";
+	if(dir[dir.length() - 1] != PATHSEPCHAR)
+		dir += PATHSEP;
 
 	std::transform(hash.begin(), hash.end(), hash.begin(), toupper);
 	std::string dothash = ".";
@@ -724,18 +739,8 @@ std::string BaseFileSearchDir(std::string dir, std::string file, std::string ext
 		return "";
 	}
 
-	while (true)
+	do
 	{
-		if(!FindNextFile(hFind, &FindFileData))
-		{
-			dwError = GetLastError();
-
-			if(dwError != ERROR_NO_MORE_FILES)
-				Printf (PRINT_HIGH, "FindNextFile failed. GetLastError: %d\n", dwError);
-
-			break;
-		}
-
 		if(FindFileData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY)
 			continue;
 
@@ -759,7 +764,11 @@ std::string BaseFileSearchDir(std::string dir, std::string file, std::string ext
 				Printf (PRINT_HIGH, "Required MD5: %s\n\n", hash.c_str());
 			}
 		}
-	}
+	} while(FindNextFile(hFind, &FindFileData));
+
+	dwError = GetLastError();
+	if(dwError != ERROR_NO_MORE_FILES)
+		Printf (PRINT_HIGH, "FindNextFile failed. GetLastError: %d\n", dwError);
 
 	FindClose(hFind);
 #endif
@@ -768,10 +777,10 @@ std::string BaseFileSearchDir(std::string dir, std::string file, std::string ext
 }
 
 //
-// denis - AddSearchDir
+// denis - D_AddSearchDir
 // Split a new directory string using the separator and append results to the output
 //
-void AddSearchDir(std::vector<std::string> &dirs, const char *dir, const char separator)
+void D_AddSearchDir(std::vector<std::string> &dirs, const char *dir, const char separator)
 {
 	if(!dir)
 		return;
@@ -790,8 +799,8 @@ void AddSearchDir(std::vector<std::string> &dirs, const char *dir, const char se
 		FixPathSeparator(segment);
 		I_ExpandHomeDir(segment);
 
-		if(segment[segment.length() - 1] != '/')
-			segment += "/";
+		if(segment[segment.length() - 1] != PATHSEPCHAR)
+			segment += PATHSEP;
 
 		dirs.push_back(segment);
 	}
@@ -801,7 +810,7 @@ void AddSearchDir(std::vector<std::string> &dirs, const char *dir, const char se
 // denis - BaseFileSearch
 // Check all paths of interest for a given file with a possible extension
 //
-std::string BaseFileSearch (std::string file, std::string ext = "", std::string hash = "")
+std::string BaseFileSearch(std::string file, std::string ext, std::string hash)
 {
 	#ifdef WIN32
 		// absolute path?
@@ -811,7 +820,7 @@ std::string BaseFileSearch (std::string file, std::string ext = "", std::string 
 		const char separator = ';';
 	#else
 		// absolute path?
-		if(file[0] == '/' || file[0] == '~')
+		if(file[0] == PATHSEPCHAR || file[0] == '~')
 			return file;
 
 		const char separator = ':';
@@ -829,11 +838,11 @@ std::string BaseFileSearch (std::string file, std::string ext = "", std::string 
 	dirs.push_back(startdir);
 	dirs.push_back(progdir);
 
-	AddSearchDir(dirs, Args.CheckValue("-waddir"), separator);
-	AddSearchDir(dirs, getenv("DOOMWADDIR"), separator);
-	AddSearchDir(dirs, getenv("DOOMWADPATH"), separator);
-    AddSearchDir(dirs, getenv("HOME"), separator);
-    AddSearchDir(dirs, waddirs.cstring(), separator);
+	D_AddSearchDir(dirs, Args.CheckValue("-waddir"), separator);
+	D_AddSearchDir(dirs, getenv("DOOMWADDIR"), separator);
+	D_AddSearchDir(dirs, getenv("DOOMWADPATH"), separator);
+	D_AddSearchDir(dirs, getenv("HOME"), separator);
+	D_AddSearchDir(dirs, waddirs.cstring(), separator);
 
     dirs.erase(std::unique(dirs.begin(), dirs.end()), dirs.end());
 
@@ -845,8 +854,8 @@ std::string BaseFileSearch (std::string file, std::string ext = "", std::string 
 		{
 			std::string &dir = dirs[i];
 
-			if(dir[dir.length() - 1] != '/')
-				dir += "/";
+			if(dir[dir.length() - 1] != PATHSEPCHAR)
+				dir += PATHSEP;
 
 			return dir + found;
 		}
@@ -1085,9 +1094,15 @@ void D_AddDefWads (std::string iwad)
 	}
 
 	I_SetTitleString(IdentifyVersion(iwad).c_str());
+}
 
+//
+// D_AddDefSkins
+//
+/*void D_AddDefSkins (void)
+{
 	// [RH] Add any .wad files in the skins directory
-/*#ifndef UNIX // denis - fixme - 1) _findnext not implemented on linux or osx, use opendir 2) server does not need skins, does it?
+#ifndef UNIX // denis - fixme - 1) _findnext not implemented on linux or osx, use opendir 2) server does not need skins, does it?
 	{
 		char curdir[256];
 
@@ -1099,14 +1114,14 @@ void D_AddDefWads (std::string iwad)
 			int stuffstart;
 
 			std::string pd = progdir;
-			if(pd[pd.length() - 1] != '/')
-				pd += '/';
+			if(pd[pd.length() - 1] != PATHSEPCHAR)
+				pd += PATHSEPCHAR;
 
 			stuffstart = sprintf (skindir, "%sskins", pd.c_str());
 
 			if (!chdir (skindir))
 			{
-				skindir[stuffstart++] = '/';
+				skindir[stuffstart++] = PATHSEPCHAR;
 				if ((handle = I_FindFirst ("*.wad", &findstate)) != -1)
 				{
 					do
@@ -1126,10 +1141,10 @@ void D_AddDefWads (std::string iwad)
 			if (home)
 			{
 				stuffstart = sprintf (skindir, "%s%s.odamex/skins", home,
-									  home[strlen(home)-1] == '/' ? "" : "/");
+									  home[strlen(home)-1] == PATHSEPCHAR ? "" : PATHSEP);
 				if (!chdir (skindir))
 				{
-					skindir[stuffstart++] = '/';
+					skindir[stuffstart++] = PATHSEPCHAR;
 					if ((handle = I_FindFirst ("*.wad", &findstate)) != -1)
 					{
 						do
@@ -1148,9 +1163,16 @@ void D_AddDefWads (std::string iwad)
 			chdir (curdir);
 		}
 	}
-#endif*/
+#endif
+}*/
 
-	modifiedgame = false;
+//
+// D_AddCmdParameterFiles
+// Add the files specified with -file, do this only when it first loads
+//
+void D_AddCmdParameterFiles(void)
+{
+    modifiedgame = false;
 
 	DArgs files = Args.GatherFiles ("-file", ".wad", true);
 	if (files.NumArgs() > 0)
@@ -1257,9 +1279,11 @@ void V_InitPalette (void);
 
 bool lastWadRebootSuccess = true;
 
-std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> &wadnames,
-                                     std::vector<std::string> needhashes,
-                                     const std::vector<std::string> &patch_files)
+std::vector<size_t> D_DoomWadReboot(
+	const std::vector<std::string> &wadnames,
+    const std::vector<std::string> &patch_files,
+    std::vector<std::string> needhashes
+)
 {
 	std::vector<size_t> fails;
 	size_t i;
@@ -1291,6 +1315,26 @@ std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> &wadnames,
 
 	// Close all open WAD files
 	W_Close();
+	
+	// [ML] 9/11/10: Reset custom wad level information from MAPINFO et al.
+    // I have never used memset, I hope I am not invoking satan by doing this :(
+	if (wadlevelinfos)
+    {
+		for (i = 0; i < numwadlevelinfos; i++)
+			if (wadlevelinfos[i].snapshot)
+			{
+				delete wadlevelinfos[i].snapshot;
+				wadlevelinfos[i].snapshot = NULL;
+			}
+        memset(wadlevelinfos,0,sizeof(wadlevelinfos));        
+        numwadlevelinfos = 0;
+    }
+    
+    if (wadclusterinfos)
+    {
+        memset(wadclusterinfos,0,sizeof(wadclusterinfos));
+        numwadclusterinfos = 0;	        
+    }
 
 	// Restart the memory manager
 	Z_Init();
@@ -1299,6 +1343,7 @@ std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> &wadnames,
 	gamestate = GS_STARTUP; // prevent console from trying to use nonexistant font
 
 	wadfiles.clear();
+	modifiedgame = false;	
 
 	std::string custwad;
 	if(wadnames.empty() == false)
@@ -1312,7 +1357,7 @@ std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> &wadnames,
 
 		// strip absolute paths, as they present a security risk
 		FixPathSeparator(tmp);
-		size_t slash = tmp.find_last_of('/');
+		size_t slash = tmp.find_last_of(PATHSEPCHAR);
 		if(slash != std::string::npos)
 			tmp = tmp.substr(slash + 1, tmp.length() - slash);
 
@@ -1351,6 +1396,7 @@ std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> &wadnames,
 	V_InitPalette();
 
 	G_SetLevelStrings ();
+	G_ParseMapInfo ();	
 	S_ParseSndInfo();
 
 	M_Init();
@@ -1359,8 +1405,6 @@ std::vector<size_t> D_DoomWadReboot (const std::vector<std::string> &wadnames,
 
 	S_Init (snd_sfxvolume, snd_musicvolume);
 	ST_Init();
-
-	//NoWipe = 1;
 
 	// preserve state
 	lastWadRebootSuccess = fails.empty();
@@ -1399,6 +1443,7 @@ void D_DoomMain (void)
 		iwad = "";
 
 	D_AddDefWads(iwad);
+	D_AddCmdParameterFiles();
 
 	wadhashes = W_InitMultipleFiles (wadfiles);
 
@@ -1491,6 +1536,9 @@ void D_DoomMain (void)
 	// [RH] Now that all text strings are set up,
 	// insert them into the level and cluster data.
 	G_SetLevelStrings ();
+	
+	// [RH] Parse through all loaded mapinfo lumps
+	G_ParseMapInfo ();	
 
 	// [RH] Parse any SNDINFO lumps
 	S_ParseSndInfo();
@@ -1558,7 +1606,11 @@ void D_DoomMain (void)
 				{
 					// single player warp (like in g_level)
 					serverside = true;
-
+                    sv_allowexit = "1";
+                    sv_nomonsters = "0";
+                    sv_freelook = "1";
+                    sv_allowjump = "1";
+                    sv_gametype = GM_COOP;
 					players.clear();
 					players.push_back(player_t());
 					players.back().playerstate = PST_REBORN;

@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -51,7 +52,7 @@
 #include "g_game.h"
 #include "g_level.h"
 #include "sv_main.h"
-#include "sv_ctf.h"
+#include "p_ctf.h"
 #include "gi.h"
 
 #define SAVESTRINGSIZE	24
@@ -62,8 +63,6 @@ BOOL	G_CheckDemoStatus (void);
 void	G_ReadDemoTiccmd (ticcmd_t* cmd, int player);
 void	G_WriteDemoTiccmd (ticcmd_t* cmd, int player, int buf);
 void	G_PlayerReborn (player_t &player);
-
-void	G_DoReborn (player_t &playernum);
 
 void	G_DoNewGame (void);
 void	G_DoLoadGame (void);
@@ -106,7 +105,7 @@ player_t					nullplayer;
 byte			consoleplayer_id;			// player taking events and displaying
 byte			displayplayer_id;			// view being displayed
 int 			gametic;
-BOOL			singleplayerjustdied = false;	// Nes - When it's okay for single-player servers to reload.
+bool			singleplayerjustdied = false;	// Nes - When it's okay for single-player servers to reload.
 
 enum demoversion_t
 {
@@ -914,7 +913,7 @@ void G_SaveGame (int slot, char *description)
 {
 }
 
-void G_BuildSaveName (char *name, int slot)
+void G_BuildSaveName (std::string &name, int slot)
 {
 }
 
@@ -977,7 +976,7 @@ BOOL CheckIfExitIsGood (AActor *self)
     unsigned int i;
 
     for(i = 0; i < players.size(); i++)
-        if(players[i].fragcount == sv_fraglimit)
+        if(players[i].fragcount >= sv_fraglimit)
             break;
 
     if (sv_gametype != GM_COOP && self)

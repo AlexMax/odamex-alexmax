@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -36,7 +37,7 @@
 #include "m_cheat.h"
 #include "i_system.h"
 #include "c_dispatch.h"
-#include "cl_ctf.h"
+#include "p_ctf.h"
 
 // Needs access to LFB.
 #include "v_video.h"
@@ -675,6 +676,11 @@ void AM_LevelInit(void)
 void AM_Stop (void)
 {
 	static event_t st_notify = { ev_keyup, AM_MSGEXITED, 0, 0 };
+
+    if (!automapactive)
+    {
+        return;
+    }
 
 	AM_unloadPics ();
 	automapactive = false;

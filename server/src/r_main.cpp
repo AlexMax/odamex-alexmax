@@ -4,6 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -45,6 +46,10 @@ void R_SpanInitData ();
 
 extern int *walllights;
 extern dyncolormap_t NormalLight;
+
+// [Russell] - Server expects these to exist
+// [Russell] - Doesn't get used serverside
+byte *translationtables;
 
 fixed_t			FocalLengthX;
 fixed_t			FocalLengthY;
@@ -97,7 +102,7 @@ int 			viewangletox[FINEANGLES/2];
 // from clipangle to -clipangle.
 angle_t 		*xtoviewangle;
 
-fixed_t			*finecosine = &finesine[FINEANGLES/4];
+const fixed_t	*finecosine = &finesine[FINEANGLES/4];
 
 int				scalelight[LIGHTLEVELS][MAXLIGHTSCALE];
 int				scalelightfixed[MAXLIGHTSCALE];
@@ -318,7 +323,7 @@ void R_InitPointToAngle (void)
 // R_InitTables
 //
 //
-
+#if 0
 void R_InitTables (void)
 {
 	int i;
@@ -340,6 +345,7 @@ void R_InitTables (void)
 		finesine[i] = (fixed_t)(FRACUNIT * sin (a));
 	}
 }
+#endif
 
 //
 //
@@ -351,7 +357,7 @@ void R_Init (void)
 {
 	R_InitData ();
 	//R_InitPointToAngle ();
-	R_InitTables ();
+	//R_InitTables ();
 
 	framecount = 0;
 }

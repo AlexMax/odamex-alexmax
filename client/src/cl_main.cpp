@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2009 by The Odamex Team.
+// Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -25,6 +25,7 @@
 
 #include "doomtype.h"
 #include "doomstat.h"
+#include "dstrings.h"
 #include "d_player.h"
 #include "g_game.h"
 #include "d_net.h"
@@ -39,7 +40,7 @@
 #include "cl_main.h"
 #include "c_console.h"
 #include "d_main.h"
-#include "cl_ctf.h"
+#include "p_ctf.h"
 #include "m_random.h"
 #include "w_wad.h"
 #include "md5.h"
@@ -50,11 +51,19 @@
 #include <vector>
 #include <map>
 
+#ifdef _XBOX
+#include "i_xbox.h"
+#endif
+
+#if _MSC_VER == 1310
+#pragma optimize("",off)
+#endif
+
 // denis - fancy gfx, but no game manipulation
 bool clientside = true, serverside = false;
 baseapp_t baseapp = client;
 
-extern bool stepmode;
+extern bool step_mode;
 
 // denis - client version (VERSION or other supported)
 short version = 0;
@@ -89,10 +98,17 @@ EXTERN_CVAR (sv_weaponstay)
 
 EXTERN_CVAR (cl_name)
 EXTERN_CVAR (cl_color)
-EXTERN_CVAR (cl_autoaim)
 EXTERN_CVAR (cl_team)
 EXTERN_CVAR (cl_skin)
 EXTERN_CVAR (cl_gender)
+
+CVAR_FUNC_IMPL (cl_autoaim)
+{
+	if (var < 0)
+		var.Set(0.0f);
+	else if (var > 5000.0f)
+		var.Set(5000.0f);
+}
 
 EXTERN_CVAR (sv_maxplayers)
 EXTERN_CVAR (sv_maxclients)
@@ -109,10 +125,11 @@ EXTERN_CVAR (sv_monstersrespawn)
 EXTERN_CVAR (sv_itemsrespawn)
 EXTERN_CVAR (sv_allowcheats)
 EXTERN_CVAR (sv_allowtargetnames)
-EXTERN_CVAR(cl_mouselook)
-EXTERN_CVAR(sv_freelook)
-EXTERN_CVAR (interscoredraw)
-EXTERN_CVAR(cl_connectalert)
+EXTERN_CVAR (cl_mouselook)
+EXTERN_CVAR (sv_freelook)
+EXTERN_CVAR (cl_connectalert)
+EXTERN_CVAR (cl_disconnectalert)
+EXTERN_CVAR (waddirs)
 
 void CL_RunTics (void);
 void CL_PlayerTimes (void);
@@ -132,7 +149,7 @@ void P_SetPsprite (player_t *player, int position, statenum_t stnum);
 void P_ExplodeMissile (AActor* mo);
 void G_SetDefaultTurbo (void);
 void P_CalcHeight (player_t *player);
-BOOL P_CheckMissileSpawn (AActor* th);
+bool P_CheckMissileSpawn (AActor* th);
 void CL_SetMobjSpeedAndAngle(void);
 
 void P_PlayerLookUpDown (player_t *p);
@@ -239,7 +256,7 @@ void CL_DisconnectClient(void)
 		{
 			// GhostlyDeath <August 1, 2008> -- Play disconnect sound
 			// GhostlyDeath <August 6, 2008> -- Only if they really are inside
-			if (cl_connectalert && &player != &consoleplayer())
+			if (cl_disconnectalert && &player != &consoleplayer())
 				S_Sound (CHAN_VOICE, "misc/plpart", 1, ATTN_NONE);
 			players.erase(players.begin() + i);
 			break;
@@ -255,6 +272,17 @@ void CL_DisconnectClient(void)
 }
 
 /////// CONSOLE COMMANDS ///////
+
+BEGIN_COMMAND (stepmode)
+{
+    if (step_mode)
+        step_mode = false;
+    else
+        step_mode = true;
+        
+    return;
+}
+END_COMMAND (stepmode)
 
 BEGIN_COMMAND (connect)
 {
@@ -517,24 +545,23 @@ void CL_MoveThing(AActor *mobj, fixed_t x, fixed_t y, fixed_t z)
 //
 void CL_SendUserInfo(void)
 {
-	userinfo_t coninfo;
+	userinfo_t *coninfo = &consoleplayer().userinfo;
 
-    memset (&coninfo, 0, sizeof(coninfo));
+    memset (&consoleplayer().userinfo, 0, sizeof(coninfo));
 
-	strncpy (coninfo.netname, cl_name.cstring(), MAXPLAYERNAME);
-	coninfo.team	 = D_TeamByName (cl_team.cstring()); // [Toke - Teams]
-	coninfo.aimdist = (fixed_t)(cl_autoaim * 16384.0);
-	coninfo.color	 = V_GetColorFromString (NULL, cl_color.cstring());
-	coninfo.skin	 = R_FindSkin (cl_skin.cstring());
-	coninfo.gender  = D_GenderByName (cl_gender.cstring());
-
+	strncpy (coninfo->netname, cl_name.cstring(), MAXPLAYERNAME);
+	coninfo->team	 = D_TeamByName (cl_team.cstring()); // [Toke - Teams]
+	coninfo->color	 = V_GetColorFromString (NULL, cl_color.cstring());
+	coninfo->skin	 = R_FindSkin (cl_skin.cstring());
+	coninfo->gender  = D_GenderByName (cl_gender.cstring());
+	coninfo->aimdist = (fixed_t)(cl_autoaim * 16384.0);
 	MSG_WriteMarker	(&net_buffer, clc_userinfo);
-	MSG_WriteString	(&net_buffer, coninfo.netname);
-	MSG_WriteByte	(&net_buffer, coninfo.team); // [Toke]
-	MSG_WriteLong	(&net_buffer, coninfo.gender);
-	MSG_WriteLong	(&net_buffer, coninfo.color);
-	MSG_WriteString	(&net_buffer, (char *)skins[coninfo.skin].name); // [Toke - skins]
-	MSG_WriteLong	(&net_buffer, coninfo.aimdist);
+	MSG_WriteString	(&net_buffer, coninfo->netname);
+	MSG_WriteByte	(&net_buffer, coninfo->team); // [Toke]
+	MSG_WriteLong	(&net_buffer, coninfo->gender);
+	MSG_WriteLong	(&net_buffer, coninfo->color);
+	MSG_WriteString	(&net_buffer, (char *)skins[coninfo->skin].name); // [Toke - skins]
+	MSG_WriteLong	(&net_buffer, coninfo->aimdist);
 }
 
 
@@ -855,7 +882,7 @@ bool CL_PrepareConnect(void)
         PatchFiles.push_back(MSG_ReadString());
 	
     // TODO: Allow deh/bex file downloads
-	std::vector<size_t> missing_files = D_DoomWadReboot(wadnames, wadhashes, PatchFiles);
+	std::vector<size_t> missing_files = D_DoomWadReboot(wadnames, PatchFiles, wadhashes);
 
 	if(missing_files.size())
 	{
@@ -1035,7 +1062,10 @@ void CL_Print (void)
 // Print a message in the middle of the screen
 void CL_MidPrint (void)
 {
-    C_MidPrint(MSG_ReadString());
+    const char *str = MSG_ReadString();
+    int msgtime = MSG_ReadShort();
+    
+    C_MidPrint(str,NULL,msgtime);
 }
 
 
@@ -1048,7 +1078,7 @@ void CL_UpdatePlayer()
 
 	if(!validplayer(*p) || !p->mo)
 	{
-		for (int i=0; i<33; i++)
+		for (int i=0; i<37; i++)
 			MSG_ReadByte();
 		return;
 	}
@@ -1076,6 +1106,14 @@ void CL_UpdatePlayer()
 	p->real_velocity[0] = p->mo->momx;
 	p->real_velocity[1] = p->mo->momy;
 	p->real_velocity[2] = p->mo->momz;
+
+    // [Russell] - hack, read and set invisibility flag
+    p->powers[pw_invisibility] = MSG_ReadLong();
+
+    if (p->powers[pw_invisibility])
+    {
+        p->mo->flags |= MF_SHADOW;
+    }
 
 	p->mo->frame = frame;
 
@@ -1114,7 +1152,9 @@ void CL_UpdateLocalPlayer(void)
 	p.real_velocity[1] = MSG_ReadLong();
 	p.real_velocity[2] = MSG_ReadLong();
 
-	real_plats.clear();
+    p.mo->waterlevel = MSG_ReadByte();
+
+	real_plats.Clear();
 }
 
 void CL_ResendSvGametic(void)
@@ -1626,6 +1666,17 @@ player_t* player = &players[consoleplayer];
 	 }
 */
 
+//
+// CL_ChangeWeapon
+// [ML] From Zdaemon .99
+//
+void CL_ChangeWeapon (void)
+{
+	player_t *p = &consoleplayer();
+	p->pendingweapon = (weapontype_t)MSG_ReadByte();
+}
+
+
 
 //
 // CL_Sound
@@ -1729,34 +1780,218 @@ void CL_UpdateMovingSector(void)
 {
 	int tic = MSG_ReadLong();
 	unsigned short s = (unsigned short)MSG_ReadShort();
-	unsigned long fh = MSG_ReadLong(); // floor height
-	MSG_ReadLong(); // ceiling height
-	byte state = MSG_ReadByte();
-	int count = MSG_ReadLong();
+    fixed_t fh = MSG_ReadLong(); // floor height
+    fixed_t ch = MSG_ReadLong(); // ceiling height
+    byte Type = MSG_ReadByte();
 
-/*
-	if(!sectors || s >= numsectors)
-		return;
+    // Replaces the data in the corresponding struct
+    // 0 = floors, 1 = ceilings, 2 = elevators/pillars 
+    byte ReplaceType;
 
-	plat_pred_t pred = {s, state, count, tic, fh};
-//	sector_t *sec = &sectors[s];
+	plat_pred_t pred;
+	
+	memset(&pred, 0, sizeof(pred));
 
-//	if(!sec->floordata)
-//		sec->floordata = new DMovingFloor(sec);
+	pred.secnum = s;
+	pred.tic = tic;
+	pred.floorheight = fh;
+	pred.ceilingheight = ch;
 
-	size_t i;
+	switch(Type)
+	{
+        // Floors
+        case 0:
+        {
+            pred.Floor.m_Type = (DFloor::EFloor)MSG_ReadLong();
+            pred.Floor.m_Crush = MSG_ReadBool();
+            pred.Floor.m_Direction = MSG_ReadLong();
+            pred.Floor.m_NewSpecial = MSG_ReadShort();
+            pred.Floor.m_Texture = MSG_ReadShort();
+            pred.Floor.m_FloorDestHeight = MSG_ReadLong();
+            pred.Floor.m_Speed = MSG_ReadLong();
+            pred.Floor.m_ResetCount = MSG_ReadLong();
+            pred.Floor.m_OrgHeight = MSG_ReadLong();
+            pred.Floor.m_Delay = MSG_ReadLong();
+            pred.Floor.m_PauseTime = MSG_ReadLong();
+            pred.Floor.m_StepTime = MSG_ReadLong(); 
+            pred.Floor.m_PerStepTime = MSG_ReadLong();
 
-	for(i = 0; i < real_plats.size(); i++)
+            if(!sectors || s >= numsectors)
+                return;
+
+            sector_t *sec = &sectors[s];
+
+            if(!sec->floordata)
+                sec->floordata = new DFloor(sec);
+
+            ReplaceType = 0;
+        }
+        break;
+
+        // Platforms
+	    case 1:
+	    {
+            pred.Floor.m_Speed = MSG_ReadLong();
+            pred.Floor.m_Low = MSG_ReadLong();
+            pred.Floor.m_High = MSG_ReadLong();
+            pred.Floor.m_Wait = MSG_ReadLong();
+            pred.Floor.m_Count = MSG_ReadLong();
+            pred.Floor.m_Status = MSG_ReadLong();
+            pred.Floor.m_OldStatus = MSG_ReadLong();
+            pred.Floor.m_Crush = MSG_ReadBool();
+            pred.Floor.m_Tag = MSG_ReadLong();
+            pred.Floor.m_Type = MSG_ReadLong();
+            pred.Floor.m_PostWait = MSG_ReadBool();
+
+            if(!sectors || s >= numsectors)
+                return;
+
+            sector_t *sec = &sectors[s];
+
+            if(!sec->floordata)
+                sec->floordata = new DPlat(sec);
+
+            ReplaceType = 0;
+	    }
+	    break;
+
+        // Ceilings
+        case 2:
+        {
+            pred.Ceiling.m_Type = (DCeiling::ECeiling)MSG_ReadLong();
+            pred.Ceiling.m_BottomHeight = MSG_ReadLong();
+            pred.Ceiling.m_TopHeight = MSG_ReadLong();
+            pred.Ceiling.m_Speed = MSG_ReadLong();
+            pred.Ceiling.m_Speed1 = MSG_ReadLong();
+            pred.Ceiling.m_Speed2 = MSG_ReadLong();
+            pred.Ceiling.m_Crush = MSG_ReadBool();
+            pred.Ceiling.m_Silent = MSG_ReadLong();
+            pred.Ceiling.m_Direction = MSG_ReadLong();
+            pred.Ceiling.m_Texture = MSG_ReadLong();
+            pred.Ceiling.m_NewSpecial = MSG_ReadLong();
+            pred.Ceiling.m_Tag = MSG_ReadLong();
+            pred.Ceiling.m_OldDirection = MSG_ReadLong();
+
+            if(!sectors || s >= numsectors)
+                return;
+
+            sector_t *sec = &sectors[s];
+
+            if(!sec->ceilingdata)
+                sec->ceilingdata = new DCeiling(sec);
+
+            ReplaceType = 1;
+        }
+        break;
+
+        // Doors
+        case 3:
+        {
+            int LineIndex;
+
+            pred.Ceiling.m_Type = (DDoor::EVlDoor)MSG_ReadLong();
+            pred.Ceiling.m_TopHeight = MSG_ReadLong();
+            pred.Ceiling.m_Speed = MSG_ReadLong();
+            pred.Ceiling.m_Direction = MSG_ReadLong();
+            pred.Ceiling.m_TopWait = MSG_ReadLong();
+            pred.Ceiling.m_TopCountdown = MSG_ReadLong();
+            LineIndex = MSG_ReadLong();
+
+            if (!lines || LineIndex >= numlines)
+                return;
+
+            pred.Ceiling.m_Line = &lines[LineIndex];
+
+            if(!sectors || s >= numsectors)
+                return;
+
+            sector_t *sec = &sectors[s];
+
+            if(!sec->ceilingdata)
+                sec->ceilingdata = new DDoor(sec);
+
+            ReplaceType = 1;
+        }
+        break;
+
+        // Elevators
+        case 4:
+        {
+            pred.Both.m_Type = (DElevator::EElevator)MSG_ReadLong();
+            pred.Both.m_Direction = MSG_ReadLong();
+            pred.Both.m_FloorDestHeight = MSG_ReadLong();
+            pred.Both.m_CeilingDestHeight = MSG_ReadLong();
+            pred.Both.m_Speed = MSG_ReadLong();
+
+            if(!sectors || s >= numsectors)
+                return;
+
+            sector_t *sec = &sectors[s];
+
+            if(!sec->ceilingdata && !sec->floordata)
+                sec->ceilingdata = sec->floordata = new DElevator(sec);
+
+            ReplaceType = 2;
+        }
+        break;
+
+        // Pillars
+        case 5:
+        {
+            pred.Both.m_Type = (DPillar::EPillar)MSG_ReadLong();
+            pred.Both.m_FloorSpeed = MSG_ReadLong();
+            pred.Both.m_CeilingSpeed = MSG_ReadLong();
+            pred.Both.m_FloorTarget = MSG_ReadLong();
+            pred.Both.m_CeilingTarget = MSG_ReadLong();
+            pred.Both.m_Crush = MSG_ReadBool();
+
+            if(!sectors || s >= numsectors)
+                return;
+
+            sector_t *sec = &sectors[s];
+
+            if(!sec->ceilingdata && !sec->floordata)
+                sec->ceilingdata = sec->floordata = new DPillar();
+
+            ReplaceType = 2;
+        }
+        break;
+
+	    default:
+            return;
+	}
+
+    size_t i;
+
+	for(i = 0; i < real_plats.Size(); i++)
 	{
 		if(real_plats[i].secnum == s)
 		{
-			real_plats[i] = pred;
+            real_plats[i].tic = pred.tic;
+
+			if (ReplaceType == 0)
+            {
+                real_plats[i].floorheight = pred.floorheight;
+                real_plats[i].Floor = pred.Floor;
+            }
+            else if (ReplaceType == 1)
+            {
+                real_plats[i].ceilingheight = pred.ceilingheight;
+                real_plats[i].Ceiling = pred.Ceiling;
+            }
+            else
+            {
+                real_plats[i].floorheight = pred.floorheight;
+                real_plats[i].ceilingheight = pred.ceilingheight;
+                real_plats[i].Both = pred.Both;
+            }
+
 			break;
 		}
 	}
 
-	if(i == real_plats.size())
-		real_plats.push_back(pred);*/
+	if(i == real_plats.Size())
+		real_plats.Push(pred);
 }
 
 
@@ -1946,9 +2181,9 @@ void CL_Switch()
 
 	if(!P_SetButtonInfo(&lines[l], state, time)) // denis - fixme - security
 		if(wastoggled)
-			P_ChangeSwitchTexture(&lines[l], lines[l].flags & ML_SPECIAL_REPEAT);  // denis - fixme - security
+			P_ChangeSwitchTexture(&lines[l], lines[l].flags & ML_REPEAT_SPECIAL);  // denis - fixme - security
 
-	if(wastoggled && !(lines[l].flags & ML_SPECIAL_REPEAT)) // non repeat special
+	if(wastoggled && !(lines[l].flags & ML_REPEAT_SPECIAL)) // non repeat special
 		lines[l].special = 0;
 }
 
@@ -1976,6 +2211,9 @@ void CL_ActivateLine(void)
 	case 2:
 		P_ShootSpecialLine(mo, &lines[l], true);
 		break;
+    case 3:
+        P_PushSpecialLine(mo, &lines[l], side, true);
+        break;
 	}
 }
 
@@ -1997,7 +2235,7 @@ void CL_LoadMap(void)
 
 	G_InitNew (mapname);
 
-	real_plats.clear();
+	real_plats.Clear();
 
 	CTF_CheckFlags(consoleplayer());
 
@@ -2017,8 +2255,6 @@ void CL_FullGame()
 void CL_ExitLevel()
 {
 	if(gamestate != GS_DOWNLOAD) {
-        if (multiplayer && interscoredraw)
-            AddCommandString("displayscores");
 		gameaction = ga_completed;
 	}
 }
@@ -2091,23 +2327,52 @@ void IntDownloadComplete(void)
     }
 
     // got the wad! save it!
-    std::string filename = "./"; // denis - todo try first of waddir/DOOMWADDIR/startdir/progdir in that order
-    filename += download.filename;
+    std::vector<std::string> dirs;
+    std::string filename;
+    size_t i;
+#ifdef WIN32
+    const char separator = ';';
+#else
+    const char separator = ':';
+#endif
 
-    // check for existing file
-    if(M_FileExists(filename.c_str()))
+    // Try to save to the wad paths in this order -- Hyper_Eye
+    D_AddSearchDir(dirs, Args.CheckValue("-waddir"), separator);
+    D_AddSearchDir(dirs, getenv("DOOMWADDIR"), separator);
+    D_AddSearchDir(dirs, getenv("DOOMWADPATH"), separator);
+    D_AddSearchDir(dirs, waddirs.cstring(), separator);
+    dirs.push_back(startdir);
+    dirs.push_back(progdir);
+
+    dirs.erase(std::unique(dirs.begin(), dirs.end()), dirs.end());
+
+    for(i = 0; i < dirs.size(); i++)
     {
-        // there is an existing file, so use a new file whose name includes the checksum
-        filename += ".";
-        filename += actual_md5;
+        filename.clear();
+        filename = dirs[i];
+        if(filename[filename.length() - 1] != PATHSEPCHAR)
+            filename += PATHSEP;
+        filename += download.filename;
+
+        // check for existing file
+   	    if(M_FileExists(filename.c_str()))
+   	    {
+   	        // there is an existing file, so use a new file whose name includes the checksum
+   	        filename += ".";
+   	        filename += actual_md5;
+   	    }
+
+        if (M_WriteFile(filename, download.buf->ptr(), download.buf->maxsize()))
+            break;
     }
 
-    if (!M_WriteFile(filename, download.buf->ptr(), download.buf->maxsize()))
+    // Unable to write
+    if(i == dirs.size())
     {
         download.filename = "";
         download.md5 = "";
         download.got_bytes = 0;
-		
+
         if (download.buf != NULL)
         {
             delete download.buf;
@@ -2365,6 +2630,7 @@ void CL_InitCommands(void)
 	cmds[svc_fireshotgun]		= &CL_FireShotgun;
 	cmds[svc_firessg]			= &CL_FireSSG;
 	cmds[svc_firechaingun]		= &CL_FireChainGun;
+	cmds[svc_changeweapon]		= &CL_ChangeWeapon;
 	cmds[svc_connectclient]		= &CL_ConnectClient;
 	cmds[svc_disconnectclient]	= &CL_DisconnectClient;
 	cmds[svc_activateline]		= &CL_ActivateLine;
@@ -2498,17 +2764,19 @@ void CL_SendCmd(void)
 	MSG_WriteShort(&net_buffer, p->mo->pitch >> 16);
 	MSG_WriteShort(&net_buffer, cmd->ucmd.forwardmove);
 	MSG_WriteShort(&net_buffer, cmd->ucmd.sidemove);
+	MSG_WriteShort(&net_buffer, cmd->ucmd.upmove);
 	MSG_WriteByte(&net_buffer, cmd->ucmd.impulse);
 
     // send the current cmds in the message
     cmd = &consoleplayer().cmd;
 
 	MSG_WriteByte(&net_buffer, cmd->ucmd.buttons);
-	if(stepmode) MSG_WriteShort(&net_buffer, cmd->ucmd.yaw);
+	if(step_mode) MSG_WriteShort(&net_buffer, cmd->ucmd.yaw);
 	else MSG_WriteShort(&net_buffer, (p->mo->angle + (cmd->ucmd.yaw << 16)) >> 16);
 	MSG_WriteShort(&net_buffer, (p->mo->pitch + (cmd->ucmd.pitch << 16)) >> 16);
 	MSG_WriteShort(&net_buffer, cmd->ucmd.forwardmove);
 	MSG_WriteShort(&net_buffer, cmd->ucmd.sidemove);
+	MSG_WriteShort(&net_buffer, cmd->ucmd.upmove);
 	MSG_WriteByte(&net_buffer, cmd->ucmd.impulse);
 
     NET_SendPacket(net_buffer, serveraddr);
@@ -2544,6 +2812,78 @@ void CL_RunTics (void)
 
 	if (sv_gametype == GM_CTF)
 		CTF_RunTics ();
+}
+
+void PickupMessage (AActor *toucher, const char *message)
+{
+	// Some maps have multiple items stacked on top of each other.
+	// It looks odd to display pickup messages for all of them.
+	static int lastmessagetic;
+	static const char *lastmessage = NULL;
+
+	if (toucher == consoleplayer().camera
+		&& (lastmessagetic != gametic || lastmessage != message))
+	{
+		lastmessagetic = gametic;
+		lastmessage = message;
+		Printf (PRINT_LOW, "%s\n", message);
+	}
+}
+
+//
+// void WeaponPickupMessage (weapontype_t &Weapon)
+//
+// This is used for displaying weaponstay messages, it is inevitably a hack
+// because weaponstay is a hack
+void WeaponPickupMessage (AActor *toucher, weapontype_t &Weapon)
+{
+    switch (Weapon)
+    {
+        case wp_shotgun:
+        {
+            PickupMessage(toucher, GOTSHOTGUN);
+        }
+        break;
+
+        case wp_chaingun:
+        {
+            PickupMessage(toucher, GOTCHAINGUN);
+        }
+        break;
+
+        case wp_missile:
+        {
+            PickupMessage(toucher, GOTLAUNCHER);
+        }
+        break;
+
+        case wp_plasma:
+        {
+            PickupMessage(toucher, GOTPLASMA);
+        }
+        break;
+
+        case wp_bfg:
+        {
+            PickupMessage(toucher, GOTBFG9000);
+        }
+        break;
+
+        case wp_chainsaw:
+        {
+            PickupMessage(toucher, GOTCHAINSAW);
+        }
+        break;
+
+        case wp_supershotgun:
+        {
+            PickupMessage(toucher, GOTSHOTGUN2);
+        }
+        break;
+        
+        default:
+        break;
+    }
 }
 
 void OnChangedSwitchTexture (line_t *line, int useAgain) {}
