@@ -1,7 +1,7 @@
 // Emacs style mode select   -*- C++ -*-
 //-----------------------------------------------------------------------------
 //
-// $Id: cl_main.cpp 2117 2011-02-22 20:33:04Z mike $
+// $Id$
 //
 // Copyright (C) 2006-2010 by The Odamex Team.
 //
@@ -286,3 +286,5 @@ BEGIN_COMMAND(stopnetdemo){
 	}
 }
 END_COMMAND(stopnetdemo)
+
+VERSION_CONTROL (cl_main_cpp, "$Id$")
