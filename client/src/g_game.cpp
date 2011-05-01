@@ -895,6 +895,7 @@ void G_Ticker (void)
 	gamestate_t	oldgamestate;
 	size_t i;
 
+		
 	// Run client tics;
 	CL_RunTics ();
 
@@ -955,14 +956,26 @@ void G_Ticker (void)
     static int realrate = 0;
     int packet_size;
 
-	if (demoplayback)
+	if (demoplayback){
 		G_ReadDemoTiccmd(); // play all player commands
-	if (demorecording)
-		G_WriteDemoTiccmd(); // read in all player commands
+	}
 
-    if (connected)
+	if (demorecording){
+		G_WriteDemoTiccmd(); // read in all player commands
+	}
+
+	
+
+	if(netdemoPlayback){
+		CL_ReadNetDemoMeassages(&realrate);
+	}
+
+	
+	if (connected && !netdemoPlayback)
     {
-       while ((packet_size = NET_GetPacket()) )
+		
+		
+       while ((packet_size = NET_GetPacket()))
        {
 		   // denis - don't accept candy from strangers
 		   if(!NET_CompareAdr(serveraddr, net_from))
@@ -999,12 +1012,18 @@ void G_Ticker (void)
 	   if (gametic - last_received > 65)
 		   noservermsgs = true;
 	}
-	else if (NET_GetPacket() )
+	else if (NET_GetPacket() && !netdemoPlayback)
 	{
 		// denis - don't accept candy from strangers
 		if((gamestate == GS_DOWNLOAD || gamestate == GS_CONNECTING)
 			&& NET_CompareAdr(serveraddr, net_from))
 		{
+			if(netdemoRecord){
+				if(net_message.cursize != 0){
+					CL_CaptureDeliciousPackets(net_message);
+				}
+			}
+
 			int type = MSG_ReadLong();
 
 			if(type == CHALLENGE)
@@ -1023,9 +1042,14 @@ void G_Ticker (void)
 				// we are already connected to this server, quit first
 				MSG_WriteMarker(&net_buffer, clc_disconnect);
 				NET_SendPacket(net_buffer, serveraddr);
+				if(netdemoPlayback){
+					CL_StopDemoPlayBack();
+				}
 			}
 		}
 	}
+
+	
 
 	// check for special buttons
 	if(serverside && consoleplayer().ingame())

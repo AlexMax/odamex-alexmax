@@ -138,6 +138,7 @@ void CL_GetServerSettings(void);
 void CL_RequestDownload(std::string filename, std::string filehash = "");
 void CL_TryToConnect(DWORD server_token);
 void CL_Decompress(int sequence);
+void CL_LocalDemoTic(void);
 
 //	[Toke - CTF]
 void CalcTeamFrags (void);
@@ -195,6 +196,15 @@ void CL_QuitNetGame(void)
 
 	actor_by_netid.clear();
 	players.clear();
+
+	//demos - NullPoint
+	if(netdemoRecord)
+		CL_StopRecordingNetDemo();
+
+	if(netdemoPlayback)
+	{
+		netdemoPlayback = false; //for now stop the demo
+	}	
 }
 
 
@@ -2481,6 +2491,7 @@ void CL_InitCommands(void)
 	cmds[svc_spectate]   		= &CL_Spectate;
 	
 	cmds[svc_touchspecial]      = &CL_TouchSpecialThing;
+	cmds[svc_netdemocap]        = &CL_LocalDemoTic;	
 }
 
 //
@@ -2490,10 +2501,23 @@ void CL_ParseCommands(void)
 {
 	std::vector<svc_t>	history;
 	svc_t				cmd = svc_abort;
-
-	static bool once = true;
-	if(once)CL_InitCommands();
+	static bool 		once = true;
+	
+	if(once)
+		CL_InitCommands();
+		
 	once = false;
+	
+	if(netdemoRecord)
+	{
+		if(net_message.cursize != 0)
+		{
+			if(gamestate == GS_LEVEL)
+				CL_WirteNetDemoMessages(net_message);
+			else
+				CL_CaptureDeliciousPackets(net_message);
+		}
+	}
 
 	while(connected)
 	{
@@ -2530,7 +2554,6 @@ void CL_ParseCommands(void)
 				Printf(PRINT_HIGH, "CL_ParseCommands: message #%d [%d %s]\n", j, history[j], svc_info[history[j]].getName());
 		}
 	}
-
 }
 
 extern int outrate;
@@ -2702,13 +2725,42 @@ void WeaponPickupMessage (AActor *toucher, weapontype_t &Weapon)
     }
 }
 
+void CL_LocalDemoTic(){
+	
+	player_t clientPlayer = consoleplayer();
+	fixed_t x, y, z, momx, momy, momz;
+	angle_t angle;
+	
+	gametic = MSG_ReadLong();
+	clientPlayer.cmd.ucmd.buttons = MSG_ReadByte();
+	clientPlayer.cmd.ucmd.pitch = MSG_ReadShort();
+	clientPlayer.cmd.ucmd.yaw = MSG_ReadShort();
+	clientPlayer.cmd.ucmd.forwardmove = MSG_ReadShort();
+	clientPlayer.cmd.ucmd.sidemove = MSG_ReadShort();
+	clientPlayer.cmd.ucmd.upmove = MSG_ReadShort();
+	clientPlayer.cmd.ucmd.roll = MSG_ReadShort();
+
+	x = MSG_ReadLong();
+	y = MSG_ReadLong();
+	z = MSG_ReadLong();
+	momx = MSG_ReadLong();
+	momy = MSG_ReadLong();
+	momz = MSG_ReadLong();
+	angle = MSG_ReadLong();
+
+	if(clientPlayer.mo)
+	{
+		clientPlayer.mo->x = x;
+		clientPlayer.mo->y = y;
+		clientPlayer.mo->z = z;
+		clientPlayer.mo->momx = momx;
+		clientPlayer.mo->momy = momy;
+		clientPlayer.mo->momz = momz;
+		clientPlayer.mo->angle = angle;
+	}
+}
+
 void OnChangedSwitchTexture (line_t *line, int useAgain) {}
 void OnActivatedLine (line_t *line, AActor *mo, int side, int activationType) {}
 
 VERSION_CONTROL (cl_main_cpp, "$Id$")
-
-
-
-
-
-
