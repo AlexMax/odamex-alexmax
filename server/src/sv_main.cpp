@@ -601,10 +601,14 @@ BEGIN_COMMAND (say)
 }
 END_COMMAND (say)
 
+void STACK_ARGS call_terms (void);
 
 BEGIN_COMMAND (rquit)
 {
 	SV_SendReconnectSignal();
+
+    call_terms();
+
 	exit (0);
 }
 END_COMMAND (rquit)
@@ -612,6 +616,8 @@ END_COMMAND (rquit)
 
 BEGIN_COMMAND (quit)
 {
+    call_terms();
+
 	exit (0);
 }
 END_COMMAND (quit)
@@ -3280,7 +3286,13 @@ void SV_UpdateConsolePlayer(player_t &player)
 {
 	// GhostlyDeath -- Spectators are on their own really
 	if (player.spectator)
+	{
+        if (gametic % 3)
+            return;
+        
+        SV_UpdateMovingSectors(player);
 		return;
+	}
 
 	// It's not a good idea to send 33 bytes every tic.
 	if (gametic % 3)

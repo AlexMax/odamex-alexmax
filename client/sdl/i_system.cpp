@@ -516,6 +516,8 @@ void STACK_ARGS I_Quit (void)
 	
 	I_ShutdownHardware();
 
+    CloseNetwork();
+
 	if (r_showendoom && !Args.CheckParm ("-novideo"))
 		I_Endoom();
 }
@@ -527,6 +529,8 @@ void STACK_ARGS I_Quit (void)
 BOOL gameisdead;
 
 #define MAX_ERRORTEXT	1024
+
+void STACK_ARGS call_terms (void);
 
 void STACK_ARGS I_FatalError (const char *error, ...)
 {
@@ -549,6 +553,9 @@ void STACK_ARGS I_FatalError (const char *error, ...)
 	if (!has_exited)	// If it hasn't exited yet, exit now -- killough
 	{
 		has_exited = 1;	// Prevent infinitely recursive exits -- killough
+
+		call_terms();
+
 		exit(-1);
 	}
 }

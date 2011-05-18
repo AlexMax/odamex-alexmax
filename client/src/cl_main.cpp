@@ -517,8 +517,12 @@ BEGIN_COMMAND (join)
 }
 END_COMMAND (join)
 
+void STACK_ARGS call_terms (void);
+
 BEGIN_COMMAND (quit)
 {
+    call_terms();
+
 	exit (0);
 }
 END_COMMAND (quit)

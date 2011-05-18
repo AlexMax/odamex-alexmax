@@ -470,6 +470,8 @@ BOOL gameisdead;
 
 #define MAX_ERRORTEXT	1024
 
+void STACK_ARGS call_terms (void);
+
 void STACK_ARGS I_FatalError (const char *error, ...)
 {
     static BOOL alreadyThrown = false;
@@ -493,8 +495,11 @@ void STACK_ARGS I_FatalError (const char *error, ...)
 
     if (!has_exited)    // If it hasn't exited yet, exit now -- killough
     {
-                has_exited = 1; // Prevent infinitely recursive exits -- killough
-                exit(-1);
+        has_exited = 1; // Prevent infinitely recursive exits -- killough
+
+        call_terms();
+
+        exit(-1);
     }
 }
 
@@ -560,12 +565,17 @@ int I_FindAttr (findstate_t *fileinfo)
 // I_ConsoleInput
 //
 #ifdef WIN32
+int ShutdownNow();
+
 std::string I_ConsoleInput (void)
 {
 	// denis - todo - implement this properly!!!
     static char     text[1024] = {0};
     static char     buffer[1024] = {0};
     unsigned int    len = strlen(buffer);
+
+    if (ShutdownNow())
+        return "quit";
 
 	while(kbhit() && len < sizeof(text))
 	{
