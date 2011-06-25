@@ -270,6 +270,22 @@ AActor::AActor (fixed_t ix, fixed_t iy, fixed_t iz, mobjtype_t itype) :
 	}
 }
 
+//
+// P_AnimationTick
+//
+void P_AnimationTick(AActor *mo)
+{
+	if (mo && mo->tics != -1)
+	{
+		mo->tics--;
+
+		// you can cycle through multiple states in a tic
+		if (!mo->tics)
+			if (!P_SetMobjState (mo, mo->state->nextstate) )
+				return;         // freed itself
+	}
+}
+
 
 //
 // P_RemoveMobj
@@ -405,20 +421,20 @@ void AActor::RunThink ()
 					{
 						PlayerLandedOnThing (this, onmo);
 					}
-				}
 					
-				if (onmo->z + P_ThingInfoHeight(onmo->info) - z <= 24 * FRACUNIT)
-				{
-					/*if (player)
+					if (onmo->z + onmo->height - z <= 24 * FRACUNIT)
 					{
-						player->viewheight -= z + onmo->height - z;
-						player->deltaviewheight =
-							(VIEWHEIGHT - player->viewheight)>>3;
-					}*/
-					z = onmo->z + P_ThingInfoHeight(onmo->info);
+						/*if (player)
+						{
+							player->viewheight -= z + onmo->height - z;
+							player->deltaviewheight =
+								(VIEWHEIGHT - player->viewheight)>>3;
+						}*/
+						z = onmo->z + onmo->height;
+					}
+					flags2 |= MF2_ONMOBJ;
+					momz = 0;
 				}
-				flags2 |= MF2_ONMOBJ;
-				momz = 0;
 			}
 		}
 	    else
@@ -469,12 +485,9 @@ void AActor::RunThink ()
     // calling action functions at transitions
 	if (tics != -1)
 	{
-		tics--;
-
-		// you can cycle through multiple states in a tic
-		if (!tics)
-			if (!P_SetMobjState (this, state->nextstate) )
-				return; 		// freed itself
+		// run P_AnimationTick on everything except players who aren't voodoo dolls
+		if (!(player && this == player->mo))
+			P_AnimationTick(this);
 	}
 	else
 	{
@@ -815,7 +828,10 @@ void P_XYMovement(AActor *mo)
 					mo->Destroy ();
 					return;
 				}
-				P_ExplodeMissile (mo);
+				// [SL] 2011-06-02 - Only server should control explosions 
+				if (serverside)
+					 P_ExplodeMissile (mo);
+
 			}
 			else
 			{
@@ -940,7 +956,7 @@ void P_ZMovement(AActor *mo)
          dist = P_AproxDistance (mo->x - mo->target->x,
                                  mo->y - mo->target->y);
 
-         delta =(mo->target->z + (P_ThingInfoHeight(mo->info)>>1)) - mo->z;
+		delta =(mo->target->z + (mo->height>>1)) - mo->z;
 
          if (delta<0 && dist < -(delta*3) )
             mo->z -= FLOATSPEED;
@@ -1030,15 +1046,13 @@ void P_ZMovement(AActor *mo)
                 // Decrease viewheight for a moment
                 // after hitting the ground (hard),
                 // and utter appropriate sound.
-                mo->player->deltaviewheight = mo->momz>>3;
 
-                if (clientside && !predicting)
-                    S_Sound (mo, CHAN_AUTO, "*land1", 1, ATTN_NORM);
+				if (clientside && !predicting)
+					PlayerLandedOnThing(mo, NULL);
             }
-            
-            mo->momz = 0;
          }
          
+          mo->momz = 0;
       }
       mo->z = mo->floorz;
 
@@ -1055,7 +1069,9 @@ void P_ZMovement(AActor *mo)
       if ( (mo->flags & MF_MISSILE)
             && !(mo->flags & MF_NOCLIP) )
       {
-         P_ExplodeMissile (mo);
+		// [SL] 2011-06-02 - Only server should control explosions 
+		if (serverside)
+			P_ExplodeMissile (mo);
          return;
       }
    }
@@ -1117,10 +1133,10 @@ void P_ZMovement(AActor *mo)
 		}
    }
 
-   if (mo->z + P_ThingInfoHeight(mo->info) > mo->ceilingz)
+   if (mo->z + mo->height > mo->ceilingz)
    {
 		// hit the ceiling
-		mo->z = mo->ceilingz - P_ThingInfoHeight(mo->info);
+		mo->z = mo->ceilingz - mo->height;
 		if (mo->flags2 & MF2_FLOORBOUNCE)
 		{
 			// reverse momentum here for ceiling bounce
@@ -1146,7 +1162,9 @@ void P_ZMovement(AActor *mo)
 				mo->Destroy ();
 				return;
 			}			
-			P_ExplodeMissile (mo);
+			// [SL] 2011-06-02 - Only server should control explosions 
+			if (serverside)
+				P_ExplodeMissile (mo);
 			return;
 		}
 	}
@@ -1158,7 +1176,26 @@ void P_ZMovement(AActor *mo)
 void PlayerLandedOnThing(AActor *mo, AActor *onmobj)
 {
 	mo->player->deltaviewheight = mo->momz>>3;
-	S_Sound (mo, CHAN_AUTO, "*land1", 1, ATTN_IDLE);
+	if (co_zdoomphys)
+	{
+		// [SL] 2011-06-16 - ZDoom Oomphiness
+		if (mo->health > 0)
+		{
+			if (mo->momz < (fixed_t)(level.gravity * mo->subsector->sector->gravity * -983.04f))
+			{
+				S_Sound (mo, CHAN_VOICE, "*grunt1", 1, ATTN_NORM);
+			}
+			if (onmobj != NULL)
+			{
+				S_Sound (mo, CHAN_AUTO, "*land1", 1, ATTN_NORM);
+			}
+		}
+	}
+	else
+	{
+		// [SL] 2011-06-16 - Vanilla Doom Oomphiness
+		S_Sound (mo, CHAN_AUTO, "*land1", 1, ATTN_NORM);
+	}
 //	mo->player->centering = true;
 }
 
@@ -1422,6 +1459,7 @@ void P_SpawnBlood (fixed_t x, fixed_t y, fixed_t z, angle_t dir, int damage)
         SV_SpawnMobj(th);
 }
 
+void SV_AwarenessUpdate(player_t &pl, AActor* mo);
 //
 // P_CheckMissileSpawn
 // Moves the missile forward a bit
@@ -1441,11 +1479,22 @@ bool P_CheckMissileSpawn (AActor* th)
 
 	// killough 3/15/98: no dropoff (really = don't care for missiles)
 
+	// [SL] 2011-06-02 - If a missile explodes immediatley upon firing,
+	// make sure we spawn the missile first, send it to all clients immediately
+	// instead of queueing it, then explode it.
 	if (!P_TryMove (th, th->x, th->y, false))
 	{
+		for (size_t i = 0; i < players.size(); i++)
+		{
+			if (th)
+				SV_AwarenessUpdate(players[i], th);
+		}
 		P_ExplodeMissile (th);
 		return false;
 	}
+	else
+		SV_SpawnMobj(th);
+
 	return true;
 }
 
@@ -1511,8 +1560,6 @@ AActor* P_SpawnMissile (AActor *source, AActor *dest, mobjtype_t type)
     th->momz = (dest_z - source->z) / dist;
 
     P_CheckMissileSpawn (th);
-
-    SV_SpawnMobj(th);
 
     return th;
 }
@@ -1603,8 +1650,6 @@ void P_SpawnPlayerMissile (AActor *source, mobjtype_t type)
 		th->momy = FixedMul(speed, finesine[an>>ANGLETOFINESHIFT]);
 		th->momz = FixedMul(speed, slope);
 	}
-
-	SV_SpawnMobj(th);
 
 	P_CheckMissileSpawn (th);
 }
@@ -1855,7 +1900,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		playerstarts.push_back(*mthing);
 		player_t &p = idplayer(playernum+1);
 
-		if (sv_gametype == GM_COOP &&
+		if (clientside && sv_gametype == GM_COOP &&
 			(validplayer(p) && p.ingame()))
 		{
 			P_SpawnPlayer (p, mthing);
@@ -1892,6 +1937,34 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 
 	if (!(mthing->flags & bit))
 		return;
+
+	// [RH] sound sequence overrides
+	if (mthing->type >= 1400 && mthing->type < 1410)
+	{
+		R_PointInSubsector (mthing->x<<FRACBITS,
+			mthing->y<<FRACBITS)->sector->seqType = mthing->type - 1400;
+		return;
+	}
+	else if (mthing->type == 1411)
+	{
+		int type;
+
+		if (mthing->args[0] == 255)
+			type = -1;
+		else
+			type = mthing->args[0];
+
+		if (type > 63)
+		{
+			Printf (PRINT_HIGH, "Sound sequence %d out of range\n", type);
+		}
+		else
+		{
+			R_PointInSubsector (mthing->x << FRACBITS,
+				mthing->y << FRACBITS)->sector->seqType = type;
+		}
+		return;
+	}
 
 	// [RH] Determine if it is an old ambient thing, and if so,
 	//		map it to MT_AMBIENT with the proper parameter.
@@ -1964,15 +2037,23 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 			return;
 		}
 	}
-	
-    //#if 0
+
+    // [SL] 2011-05-31 - Moved so that clients get right level.total_items, etc
+	if (i == MT_SECRETTRIGGER)
+	{
+		level.total_secrets++;
+	}
+	if (mobjinfo[i].flags & MF_COUNTKILL)
+		level.total_monsters++;
+	if (mobjinfo[i].flags & MF_COUNTITEM)
+		level.total_items++;
+
     // for client...
 	// Type 14 is a teleport exit. We must spawn it here otherwise
 	// teleporters won't work well.
 	if (!serverside && (mthing->flags & MF_SPECIAL) && (mthing->type != 14))
 		return;
-    //#endif
-
+    
 	// spawn it
 	x = mthing->x << FRACBITS;
 	y = mthing->y << FRACBITS;
@@ -1982,10 +2063,6 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		sector_t *sec = R_PointInSubsector (x, y)->sector;
 		sec->waterzone = 1;
 		return;
-	}
-	else if (i == MT_SECRETTRIGGER)
-	{
-		level.total_secrets++;
 	}
 
 	if (mobjinfo[i].flags & MF_SPAWNCEILING)
@@ -2025,10 +2102,6 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 
 	if (mobj->tics > 0)
 		mobj->tics = 1 + (P_Random () % mobj->tics);
-	if (mobj->flags & MF_COUNTKILL)
-		level.total_monsters++;
-	if (mobj->flags & MF_COUNTITEM)
-		level.total_items++;
 
 	if (i != MT_SPARK)
 		mobj->angle = ANG45 * (mthing->angle/45);

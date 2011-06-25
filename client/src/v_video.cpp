@@ -514,9 +514,9 @@ BOOL V_DoModeSetup (int width, int height, int bits)
 
 	// Allocate a new virtual framebuffer
 	if (I_CheckVideoDriver("directx") && vid_fullscreen)
-		screen = I_AllocateScreen (width, height, bits, false);
+		screen = I_AllocateScreen ((height*4)/3, height, bits, false);
 	else
-		screen = I_AllocateScreen (width, height, bits, true);
+		screen = I_AllocateScreen ((height*4)/3, height, bits, false);
 
 	V_ForceBlend (0,0,0,0);
 	if (bits == 8)

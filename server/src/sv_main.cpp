@@ -101,6 +101,7 @@ EXTERN_CVAR(sv_flooddelay)
 EXTERN_CVAR(sv_maxrate)
 
 void SexMessage (const char *from, char *to, int gender);
+void SV_RemoveDisconnectedPlayer(player_t &player);
 
 CVAR_FUNC_IMPL (sv_maxclients)	// Describes the max number of clients that are allowed to connect. - does not work yet
 {
@@ -113,19 +114,14 @@ CVAR_FUNC_IMPL (sv_maxclients)	// Describes the max number of clients that are a
 	while(players.size() > sv_maxclients)
 	{
 		int last = players.size() - 1;
+		MSG_WriteMarker (&players[last].client.reliablebuf, svc_print);
+		MSG_WriteByte (&players[last].client.reliablebuf, PRINT_CHAT);
+		MSG_WriteString (&players[last].client.reliablebuf, 
+						"Client limit reduced. Please try connecting again later.\n");
 		SV_DropClient(players[last]);
-		players.erase(players.begin() + last);
+		SV_RemoveDisconnectedPlayer(players[last]);
 	}
 
-	// repair mo after player pointers are reset
-	for(size_t i = 0; i < players.size(); i++)
-	{
-		if(players[i].mo)
-			players[i].mo->player = &players[i];
-	}
-
-	// update tracking cvar
-	sv_clientcount.ForceSet(players.size());
 	//R_InitTranslationTables();
 }
 
@@ -721,6 +717,55 @@ void SV_CheckTimeouts (void)
 	}
 }
 
+
+//
+// SV_RemoveDisconnectedPlayer
+//
+// [SL] 2011-05-18 - Destroy a player's mo actor and remove the player_t
+// from the global players vector.  Update mo->player pointers.
+void SV_RemoveDisconnectedPlayer(player_t &player)
+{
+	// remove player awareness from all actors
+	AActor *mo;
+	TThinkerIterator<AActor> iterator;
+	while ( (mo = iterator.Next() ) )
+	{
+		mo->players_aware.erase(
+				std::remove(mo->players_aware.begin(), 
+							mo->players_aware.end(), player.id),
+				mo->players_aware.end());
+	}
+
+	// remove this player's actor object
+	if (player.mo)
+	{
+		if (sv_gametype == GM_CTF)		//  [Toke - CTF]
+			CTF_CheckFlags(player);
+
+		player.mo->Destroy();
+		player.mo = AActor::AActorPtr();
+	}
+
+	// remove this player from the global players vector
+	for (size_t i=0; i<players.size(); i++)
+	{
+		if (players[i].id == player.id)
+			players.erase(players.begin() + i);
+	}
+	
+	// update tracking cvar
+	sv_clientcount.ForceSet(players.size());
+
+	// update mo->player pointers after we potentially change the memory
+	// addresses of the player_t objects with players.erase()
+	for (size_t i=0; i<players.size(); i++)
+	{
+		if (players[i].mo)
+			players[i].mo->player = &players[i];
+	}
+}
+
+
 //
 // SV_GetPackets
 //
@@ -749,40 +794,22 @@ void SV_GetPackets (void)
 	}
 
 	size_t i = 0;
-    BOOL resetlevel = false;
-
-	// remove disconnected players
 	while (i < players.size())
 	{
-        if(players[i].playerstate == PST_DISCONNECT)
-		{
-            players.erase(players.begin() + i);
-
-			// update tracking cvar
-			sv_clientcount.ForceSet(players.size());
-
-            if (sv_emptyreset && players.size() == 0)
-                resetlevel = true;
-        }
+		if (players[i].playerstate == PST_DISCONNECT)
+			SV_RemoveDisconnectedPlayer(players[i]);
 		else
-        {
-            ++i;
-        }
-	}
+			i++;
+	}	
 
-	// repair mo after player pointers are reset
-	for(i = 0; i < players.size(); ++i)
+	// [SL] 2011-05-18 - Handle sv_emptyreset
+	static size_t last_player_count = players.size();
+	if (sv_emptyreset && players.size() == 0 && last_player_count > 0)
 	{
-		if(players[i].mo)
-			players[i].mo->player = &players[i];
-	}
-
-	if (resetlevel)
-    {
-        resetlevel = false;
-
+		// The last player just disconnected so reset the level
         G_DeferedInitNew(level.mapname);
     }
+	last_player_count = players.size();
 }
 
 // Print a midscreen message to a client
@@ -1243,6 +1270,9 @@ byte SV_PlayerHearingLoss(player_t &pl, fixed_t &x, fixed_t &y)
 //
 void SV_SendMobjToClient(AActor *mo, client_t *cl)
 {
+	if (!mo)
+		return;
+
 	MSG_WriteMarker(&cl->reliablebuf, svc_spawnmobj);
 	MSG_WriteLong(&cl->reliablebuf, mo->x);
 	MSG_WriteLong(&cl->reliablebuf, mo->y);
@@ -1312,6 +1342,9 @@ bool SV_AwarenessUpdate(player_t &player, AActor *mo)
 {
 	bool ok = false;
 
+	if (!mo)
+		return false;
+
 	if(player.mo == mo)
 		ok = true;
 	else if(!mo->player)
@@ -1327,10 +1360,6 @@ bool SV_AwarenessUpdate(player_t &player, AActor *mo)
 	else if (	player.mo && mo->player && sv_antiwallhack &&
 				player.spectator)	// GhostlyDeath -- Spectators MUST see players to F12 properly
 		ok = true;
-	else if (	player.mo && mo->player && sv_antiwallhack &&
-				player.spectator)	// GhostlyDeath -- Spectators MUST see players to F12 properly
-		ok = true;
-
 	else if(player.mo && mo->player && sv_antiwallhack && 
          ((HasBehavior && P_CheckSightEdges2(player.mo, mo, 5)) || (!HasBehavior && P_CheckSightEdges(player.mo, mo, 5)))/*player.awaresector[sectors - mo->subsector->sector]*/)
 		ok = true;
@@ -1398,6 +1427,9 @@ void SV_SpawnMobj(AActor *mo)
 //
 bool SV_IsPlayerAllowedToSee(player_t &p, AActor *mo)
 {
+	if (!mo)
+		return false;
+
 	if (mo->flags & MF_SPECTATOR)
 		return false; // GhostlyDeath -- always false, as usual!
 	else
@@ -1491,6 +1523,39 @@ void SV_UpdateSectors(client_t* cl)
 			}
 			else
 				MSG_WriteByte(&cl->netbuf, 0);*/
+		}
+	}
+}
+
+//
+// SV_DestroyFinishedMovingSectors
+//
+// Calls Destroy() on moving sectors that are done moving.
+//
+void SV_DestroyFinishedMovingSectors()
+{
+	for (int i = 0; i < numsectors; i++)
+	{
+		if (sectors[i].floordata && 
+			sectors[i].floordata->IsA(RUNTIME_CLASS(DPlat)))
+		{
+			DPlat *plat = (DPlat *)sectors[i].floordata;
+			if (plat->m_Status == DPlat::destroy)
+			{
+				sectors[i].floordata = NULL;
+				plat->Destroy();
+			}
+		}
+
+		if (sectors[i].ceilingdata &&
+			sectors[i].ceilingdata->IsA(RUNTIME_CLASS(DDoor)))
+		{
+			DDoor *door = (DDoor *)sectors[i].ceilingdata;
+			if (door->m_Status == DDoor::destroy)
+			{
+				sectors[i].ceilingdata = NULL;
+				door->Destroy();
+			}
 		}
 	}
 }
@@ -1596,7 +1661,6 @@ void SV_UpdateMovingSectors(player_t &pl)
                 MSG_WriteBool(&cl->netbuf, Plat->m_Crush);
                 MSG_WriteLong(&cl->netbuf, Plat->m_Tag);
                 MSG_WriteLong(&cl->netbuf, Plat->m_Type);
-                MSG_WriteBool(&cl->netbuf, Plat->m_PostWait);
 			}
 		}
 
@@ -1645,6 +1709,7 @@ void SV_UpdateMovingSectors(player_t &pl)
                 MSG_WriteLong (&cl->netbuf, Door->m_Direction);
                 MSG_WriteLong (&cl->netbuf, Door->m_TopWait);
                 MSG_WriteLong (&cl->netbuf, Door->m_TopCountdown);
+				MSG_WriteLong (&cl->netbuf, Door->m_Status);
                 MSG_WriteLong (&cl->netbuf, (Door->m_Line - lines));
             }
         }
@@ -1858,7 +1923,6 @@ bool SV_BanCheck (client_t *cl, int n)
 
 			SV_SendPacket (players[n]);
 			cl->displaydisconnect = false;
-			SV_DropClient(players[n]);
 			return true;
 		}
 		else if (exception)	// don't bother because they'll be allowed multiple times
@@ -2229,25 +2293,6 @@ void SV_DisconnectClient(player_t &who)
 
 	   MSG_WriteMarker(&cl.reliablebuf, svc_disconnectclient);
 	   MSG_WriteByte(&cl.reliablebuf, who.id);
-	}
-
-	// remove player awareness from all actors
-	AActor *mo;
-    TThinkerIterator<AActor> iterator;
-    while ( (mo = iterator.Next() ) )
-    {
-		mo->players_aware.erase(
-					std::remove(mo->players_aware.begin(), mo->players_aware.end(), who.id),
-					mo->players_aware.end());
-	}
-
-	if(who.mo)
-	{
-		if(sv_gametype == GM_CTF) // [Toke - CTF]
-			CTF_CheckFlags (who);
-
-		who.mo->Destroy();
-		who.mo = AActor::AActorPtr();
 	}
 
 	if (who.client.displaydisconnect) {
@@ -3281,7 +3326,6 @@ void SV_GetPlayerCmd(player_t &player)
 	cl->lastcmdtic = gametic;
 }
 
-
 void SV_UpdateConsolePlayer(player_t &player)
 {
 	// GhostlyDeath -- Spectators are on their own really
@@ -3413,7 +3457,9 @@ void SV_Spectate (player_t &player)
 						MSG_WriteByte (&(players[j].client.reliablebuf), player.id);
 						MSG_WriteByte (&(players[j].client.reliablebuf), false);
 					}
-					P_KillMobj(NULL, player.mo, NULL, true);
+					
+					if (player.mo)
+						P_KillMobj(NULL, player.mo, NULL, true);
 					player.playerstate = PST_REBORN;
 					if (sv_gametype != GM_TEAMDM && sv_gametype != GM_CTF)
 						SV_BroadcastPrintf (PRINT_HIGH, "%s joined the game.\n", player.userinfo.netname);
@@ -3476,6 +3522,9 @@ void SV_RConPassword (player_t &player)
 //
 void SV_Suicide(player_t &player)
 {
+	if (!player.mo)
+		return;
+
 	// merry suicide!
 	P_DamageMobj (player.mo, NULL, NULL, 10000, MOD_SUICIDE);
 	player.mo->player = NULL;
@@ -3634,7 +3683,8 @@ void SV_WantWad(player_t &player)
 //
 void SV_ParseCommands(player_t &player)
 {
-	 while(validplayer(player))
+	// [SL] 2011-06-16 - Ignore commands from disconnected players
+	 while(validplayer(player) && player.playerstate != PST_DISCONNECT)
 	 {
 		clc_t cmd = (clc_t)MSG_ReadByte();
 
@@ -3964,6 +4014,11 @@ void SV_StepTics (QWORD tics)
 		SV_SendPackets();
 		SV_ClearClientsBPS();
 		SV_CheckTimeouts();
+		
+		// Since clients are only sent sector updates every 3rd tic, don't destroy
+		// the finished moving sectors until we've sent the clients the update
+		if (!(gametic % 3))
+			SV_DestroyFinishedMovingSectors();
 
 		gametic++;
 	}
@@ -4165,7 +4220,7 @@ void ClientObituary (AActor *self, AActor *inflictor, AActor *attacker)
 	char gendermessage[1024];
 	int  gender;
 
-	if (!self->player)
+	if (!self || !self->player)
 		return;
 
 	gender = self->player->userinfo.gender;

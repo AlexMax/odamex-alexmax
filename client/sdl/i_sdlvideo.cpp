@@ -41,6 +41,7 @@
 #include "i_system.h"
 #include "m_argv.h"
 #include "m_memio.h"
+#include "v_video.h"
 
 #ifdef _XBOX
 #include "i_xbox.h"
@@ -156,6 +157,9 @@ SDLVideo::SDLVideo(int parm)
       for (size_t i = 0; i < STACKARRAY_LENGTH(CustomVidModes); ++i)
         vidModeList.push_back(CustomVidModes[i]);
 
+      // Sort the modes
+      std::sort(vidModeList.begin(), vidModeList.end(), bp_vm_uni_sort);
+
       // Get rid of any duplicates (SDL some times reports duplicates as well)
       vidModeList.erase(std::unique(vidModeList.begin(), vidModeList.end(), 
             bp_vm_uni_cmp), vidModeList.end());
@@ -239,18 +243,19 @@ bool SDLVideo::SetMode (int width, int height, int bits, bool fs)
    // SoM: I'm not sure if we should request a software or hardware surface yet... So I'm
    // just ganna let SDL decide.
 
-   if(fs && !vidModeList.empty())
+   if(!vidModeList.empty())
    {
       flags = 0;
        
-      flags |= SDL_FULLSCREEN;
+      if (fs)
+		flags |= SDL_FULLSCREEN;
 
       if(bits == 8)
          flags |= SDL_HWPALETTE;
    }
 
    // fullscreen directx requires a 32-bit mode to fix broken palette
-   if (I_CheckVideoDriver("directx") && fs)
+   if (I_CheckVideoDriver("directx"))
       sbits = 32;
 
    if(!(sdlScreen = SDL_SetVideoMode(width, height, sbits, flags)))
@@ -291,6 +296,10 @@ void SDLVideo::SetOldPalette (byte *doompalette)
 
 void SDLVideo::UpdateScreen (DCanvas *canvas)
 {
+	unsigned int neww = (screenh*4)/3;
+	
+	SDL_Rect rect = {(DisplayWidth/2)-(neww/2),0,neww,screenh};
+	
    if(palettechanged)
    {
       // m_Private may or may not be the primary surface (sdlScreen)
@@ -300,7 +309,7 @@ void SDLVideo::UpdateScreen (DCanvas *canvas)
 
    // If not writing directly to the screen blit to the primary surface
    if(canvas->m_Private != sdlScreen)
-      SDL_BlitSurface((SDL_Surface*)canvas->m_Private, NULL, sdlScreen, NULL);
+      SDL_BlitSurface((SDL_Surface*)canvas->m_Private, NULL, sdlScreen, &rect);
    
    SDL_Flip(sdlScreen);
 }

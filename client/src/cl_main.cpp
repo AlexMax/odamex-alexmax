@@ -1227,7 +1227,6 @@ void CL_SpawnMobj()
 		if(target)
 			mo->target = target->ptr();
 		CL_SetMobjSpeedAndAngle();
-		P_CheckMissileSpawn(mo);
 	}
 
     if (mo->flags & MF_COUNTKILL)
@@ -1845,7 +1844,6 @@ void CL_UpdateMovingSector(void)
             pred.Floor.m_Crush = MSG_ReadBool();
             pred.Floor.m_Tag = MSG_ReadLong();
             pred.Floor.m_Type = MSG_ReadLong();
-            pred.Floor.m_PostWait = MSG_ReadBool();
 
             if(!sectors || s >= numsectors)
                 return;
@@ -1899,6 +1897,7 @@ void CL_UpdateMovingSector(void)
             pred.Ceiling.m_Direction = MSG_ReadLong();
             pred.Ceiling.m_TopWait = MSG_ReadLong();
             pred.Ceiling.m_TopCountdown = MSG_ReadLong();
+			pred.Ceiling.m_Status = MSG_ReadLong();
             LineIndex = MSG_ReadLong();
 
             if (!lines || LineIndex >= numlines)
