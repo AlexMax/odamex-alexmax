@@ -32,6 +32,7 @@
 #include "c_dispatch.h"
 #include "d_net.h"
 #include "cl_demo.h"
+#include "p_user.h"
 #include "m_swap.h"
 #include "version.h"
 
@@ -461,7 +462,7 @@ bool NetDemo::stopPlaying()
 
 void NetDemo::writeSnapshot(buf_t *netbuffer)
 {
-/*	// DEBUG
+	// DEBUG
 	Printf(PRINT_HIGH, "Writing snapshot at tic %d\n", gametic);
 
 	// Update the netdemo's snapshot index
@@ -481,7 +482,7 @@ void NetDemo::writeSnapshot(buf_t *netbuffer)
 	MSG_WriteChunk(netbuffer, tempbuf.data, snapshot_datalen);
 
 	//[SL] DEBUG
-	Printf(PRINT_HIGH, "Writing %d bytes for snapshot\n", snapshot_datalen); */
+	Printf(PRINT_HIGH, "Writing %d bytes for snapshot\n", snapshot_datalen);
 }
 
 void NetDemo::writeLocalCmd(buf_t *netbuffer) const

@@ -656,6 +656,7 @@ BEGIN_COMMAND(rew)
 }
 END_COMMAND(rew)
 
+
 //
 // CL_MoveThing
 //
@@ -3145,10 +3146,10 @@ void CL_NetDemoPlay(std::string filename)
 
 void CL_NetDemoSnapshot()
 {
-/*	// read the length of the snapshot
+	// read the length of the snapshot
 	int len = MSG_ReadLong();
 
-
+/*
 	// [SL] DEBUG!
 	Printf(PRINT_HIGH, "Skipping over %d bytes of snapshot data\n", len);
 

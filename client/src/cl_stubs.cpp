@@ -52,8 +52,9 @@ void SV_PreservePlayer(player_t &player) {}
 			
 void CTF_RememberFlagPos(mapthing2_t *mthing) {}
 void CTF_SpawnFlag(flag_t f) {}
-bool SV_AwarenessUpdate(player_t &pl, AActor* mo) { return true; }
 void SV_SendPackets(void) {}
+bool SV_SendPacket(player_s &player) { return true; }
+
 
 VERSION_CONTROL (cl_stubs_cpp, "$Id$")
 

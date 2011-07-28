@@ -35,6 +35,7 @@
 #include "vectors.h"
 #include "g_game.h"
 #include "p_mobj.h"
+#include "p_user.h"
 #include "p_ctf.h"
 
 #define WATER_SINK_FACTOR		3
@@ -1503,7 +1504,6 @@ void P_SpawnBlood (fixed_t x, fixed_t y, fixed_t z, angle_t dir, int damage)
         SV_SpawnMobj(th);
 }
 
-bool SV_AwarenessUpdate(player_t &pl, AActor* mo);
 //
 // P_CheckMissileSpawn
 // Moves the missile forward a bit
@@ -1531,7 +1531,7 @@ bool P_CheckMissileSpawn (AActor* th)
 		for (size_t i = 0; i < players.size(); i++)
 		{
 			if (th)
-				SV_AwarenessUpdate(players[i], th);
+				P_WriteAwarenessUpdate(players[i].client.reliablebuf, players[i], th);
 		}
 		P_ExplodeMissile (th);
 		return false;
