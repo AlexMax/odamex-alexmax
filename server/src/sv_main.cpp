@@ -57,7 +57,6 @@
 #include "w_wad.h"
 #include "md5.h"
 #include "p_mobj.h"
-#include "p_user.h"
 #include "p_unlag.h"
 
 #include <algorithm>
@@ -1081,6 +1080,22 @@ void SV_UpdateFrags (player_t &player)
     }
 }
 
+//
+// SV_SendUserInfo
+//
+void SV_SendUserInfo (player_t &player, client_t* cl)
+{
+	player_t *p = &player;
+
+	MSG_WriteMarker	(&cl->reliablebuf, svc_userinfo);
+	MSG_WriteByte	(&cl->reliablebuf, p->id);
+	MSG_WriteString (&cl->reliablebuf, p->userinfo.netname);
+	MSG_WriteByte	(&cl->reliablebuf, p->userinfo.team);
+	MSG_WriteLong	(&cl->reliablebuf, p->userinfo.gender);
+	MSG_WriteLong	(&cl->reliablebuf, p->userinfo.color);
+	MSG_WriteString	(&cl->reliablebuf, skins[p->userinfo.skin].name);  // [Toke - skins]
+	MSG_WriteShort	(&cl->reliablebuf, time(NULL) - p->JoinTime);
+}
 
 //
 //	SV_SetupUserInfo
@@ -1152,7 +1167,7 @@ void SV_SetupUserInfo (player_t &player)
 	// inform all players of new player info
 	for (size_t i = 0; i < players.size(); i++ )
 	{
-		P_WriteUserInfo (clients[i].reliablebuf, player);
+		SV_SendUserInfo (player, &clients[i]);
 	}
 }
 
@@ -1227,6 +1242,7 @@ team_t SV_GoodTeam (void)
 	return TEAM_NONE;
 }
 
+
 //
 // [denis] SV_ClientHearingLoss
 // determine if an actor should be able to hear a sound
@@ -1270,6 +1286,143 @@ byte SV_PlayerHearingLoss(player_t &pl, fixed_t &x, fixed_t &y)
 	return vol;
 }
 
+//
+// SV_SendMobjToClient
+//
+void SV_SendMobjToClient(AActor *mo, client_t *cl)
+{
+	if (!mo)
+		return;
+
+	MSG_WriteMarker(&cl->reliablebuf, svc_spawnmobj);
+	MSG_WriteLong(&cl->reliablebuf, mo->x);
+	MSG_WriteLong(&cl->reliablebuf, mo->y);
+	MSG_WriteLong(&cl->reliablebuf, mo->z);
+	MSG_WriteLong(&cl->reliablebuf, mo->angle);
+
+	MSG_WriteShort(&cl->reliablebuf, mo->type);
+	MSG_WriteShort(&cl->reliablebuf, mo->netid);
+	MSG_WriteByte(&cl->reliablebuf, mo->rndindex);
+	MSG_WriteShort(&cl->reliablebuf, (mo->state - states)); // denis - sending state fixes monster ghosts appearing under doors
+
+	if(mo->flags & MF_MISSILE || mobjinfo[mo->type].flags & MF_MISSILE) // denis - check type as that is what the client will be spawning
+	{
+		MSG_WriteShort (&cl->reliablebuf, mo->target ? mo->target->netid : 0);
+		MSG_WriteShort (&cl->reliablebuf, mo->netid);
+		MSG_WriteLong (&cl->reliablebuf, mo->angle);
+		MSG_WriteLong (&cl->reliablebuf, mo->momx);
+		MSG_WriteLong (&cl->reliablebuf, mo->momy);
+		MSG_WriteLong (&cl->reliablebuf, mo->momz);
+	}
+	else
+	{
+		if(mo->flags & MF_AMBUSH || mo->flags & MF_DROPPED)
+		{
+			MSG_WriteMarker(&cl->reliablebuf, svc_mobjinfo);
+			MSG_WriteShort(&cl->reliablebuf, mo->netid);
+			MSG_WriteLong(&cl->reliablebuf, mo->flags);
+		}
+	}
+
+	// animating corpses
+	if((mo->flags & MF_CORPSE) && mo->state - states != S_GIBS)
+	{
+		MSG_WriteMarker (&cl->reliablebuf, svc_corpse);
+		MSG_WriteShort (&cl->reliablebuf, mo->netid);
+		MSG_WriteByte (&cl->reliablebuf, mo->frame);
+		MSG_WriteByte (&cl->reliablebuf, mo->tics);
+	}
+}
+
+//
+// SV_IsTeammate
+//
+bool SV_IsTeammate(player_t &a, player_t &b)
+{
+	// same player isn't own teammate
+	if(&a == &b)
+		return false;
+
+	if (sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF)
+	{
+		if (a.userinfo.team == b.userinfo.team)
+			return true;
+		else
+			return false;
+	}
+	else if (sv_gametype == GM_COOP)
+		return true;
+
+	else return false;
+}
+
+//
+// [denis] SV_AwarenessUpdate
+//
+bool SV_AwarenessUpdate(player_t &player, AActor *mo)
+{
+	bool ok = false;
+
+	if (!mo)
+		return false;
+
+	if(player.mo == mo)
+		ok = true;
+	else if(!mo->player)
+		ok = true;
+	else if (mo->flags & MF_SPECTATOR)      // GhostlyDeath -- Spectating things
+		ok = false;
+	else if(player.mo && mo->player && mo->player->spectator)
+		ok = false;
+	else if(player.mo && mo->player && SV_IsTeammate(player, *mo->player))
+		ok = true;
+	else if(player.mo && mo->player && !sv_antiwallhack)
+		ok = true;
+	else if (	player.mo && mo->player && sv_antiwallhack &&
+				player.spectator)	// GhostlyDeath -- Spectators MUST see players to F12 properly
+		ok = true;
+	else if(player.mo && mo->player && sv_antiwallhack && 
+         ((HasBehavior && P_CheckSightEdges2(player.mo, mo, 5)) || (!HasBehavior && P_CheckSightEdges(player.mo, mo, 5)))/*player.awaresector[sectors - mo->subsector->sector]*/)
+		ok = true;
+
+	std::vector<size_t>::iterator a = std::find(mo->players_aware.begin(), mo->players_aware.end(), player.id);
+	bool previously_ok = (a != mo->players_aware.end());
+
+	client_t *cl = &player.client;
+
+	if(!ok && previously_ok)
+	{
+		mo->players_aware.erase(a);
+
+		MSG_WriteMarker (&cl->reliablebuf, svc_removemobj);
+		MSG_WriteShort (&cl->reliablebuf, mo->netid);
+
+		return true;
+	}
+	else if(!previously_ok && ok)
+	{
+		mo->players_aware.push_back(player.id);
+
+		if(!mo->player || mo->player->playerstate != PST_LIVE)
+		{
+			SV_SendMobjToClient(mo, cl);
+		}
+		else
+		{
+			MSG_WriteMarker (&cl->reliablebuf, svc_spawnplayer);
+			MSG_WriteByte (&cl->reliablebuf, mo->player->id);
+			MSG_WriteShort (&cl->reliablebuf, mo->netid);
+			MSG_WriteLong (&cl->reliablebuf, mo->angle);
+			MSG_WriteLong (&cl->reliablebuf, mo->x);
+			MSG_WriteLong (&cl->reliablebuf, mo->y);
+			MSG_WriteLong (&cl->reliablebuf, mo->z);
+		}
+
+		return true;
+	}
+
+	return false;
+}
 
 //
 // [denis] SV_SpawnMobj
@@ -1283,7 +1436,7 @@ void SV_SpawnMobj(AActor *mo)
 	for (size_t i = 0; i < players.size(); i++)
 	{
 		if(mo->player)
-			P_WriteAwarenessUpdate(clients[i].reliablebuf, players[i], mo);
+			SV_AwarenessUpdate(players[i], mo);
 		else
 			players[i].to_spawn.push(mo->ptr());
 	}
@@ -1306,6 +1459,94 @@ bool SV_IsPlayerAllowedToSee(player_t &p, AActor *mo)
 
 #define HARDWARE_CAPABILITY 1000
 
+//
+// SV_UpdateHiddenMobj
+//
+void SV_UpdateHiddenMobj (void)
+{
+	// denis - todo - throttle this
+	AActor *mo;
+	TThinkerIterator<AActor> iterator;
+	size_t i, e = players.size();
+
+	for(i = 0; i != e; i++)
+	{
+		player_t &pl = players[i];
+
+		if(!pl.mo)
+			continue;
+
+		int updated = 0;
+
+		while(!pl.to_spawn.empty())
+		{
+			mo = pl.to_spawn.front();
+
+			pl.to_spawn.pop();
+
+			if(mo && !mo->WasDestroyed())
+				updated += SV_AwarenessUpdate(pl, mo);
+
+			if(updated > 16)
+				break;
+		}
+
+		while ( (mo = iterator.Next() ) )
+		{
+			updated += SV_AwarenessUpdate(pl, mo);
+
+			if(updated > 16)
+				break;
+		}
+	}
+}
+
+//
+// SV_UpdateSectors
+// Update doors, floors, ceilings etc... that have at some point moved
+//
+void SV_UpdateSectors(client_t* cl)
+{
+	for (int s=0; s<numsectors; s++)
+	{
+		sector_t* sec = &sectors[s];
+
+		if (sec->moveable)
+		{
+			MSG_WriteMarker (&cl->reliablebuf, svc_sector);
+			MSG_WriteShort (&cl->reliablebuf, s);
+			MSG_WriteShort (&cl->reliablebuf, sec->floorheight>>FRACBITS);
+			MSG_WriteShort (&cl->reliablebuf, sec->ceilingheight>>FRACBITS);
+			MSG_WriteShort (&cl->reliablebuf, sec->floorpic);
+			MSG_WriteShort (&cl->reliablebuf, sec->ceilingpic);
+
+			/*if(sec->floordata->IsKindOf(RUNTIME_CLASS(DMover)))
+			{
+				DMover *d = sec->floordata;
+				MSG_WriteByte(&cl->netbuf, 1);
+				MSG_WriteByte(&cl->netbuf, d->get_speed());
+				MSG_WriteByte(&cl->netbuf, d->get_dest());
+				MSG_WriteByte(&cl->netbuf, d->get_crush());
+				MSG_WriteByte(&cl->netbuf, d->get_floorOrCeiling());
+				MSG_WriteByte(&cl->netbuf, d->get_direction());
+			}
+			else
+				MSG_WriteByte(&cl->netbuf, 0);
+
+			if(sec->ceilingdata->IsKindOf(RUNTIME_CLASS(DMover)))
+			{
+				MSG_WriteByte(&cl->netbuf, 1);
+				MSG_WriteByte(&cl->netbuf, d->get_speed());
+				MSG_WriteByte(&cl->netbuf, d->get_dest());
+				MSG_WriteByte(&cl->netbuf, d->get_crush());
+				MSG_WriteByte(&cl->netbuf, d->get_floorOrCeiling());
+				MSG_WriteByte(&cl->netbuf, d->get_direction());
+			}
+			else
+				MSG_WriteByte(&cl->netbuf, 0);*/
+		}
+	}
+}
 
 //
 // SV_DestroyFinishedMovingSectors
@@ -1512,6 +1753,87 @@ void SV_SendGametic(client_t* cl)
 	MSG_WriteByte(&cl->reliablebuf, gametic & 0xFF);
 }
 
+
+//
+// SV_ClientFullUpdate
+//
+void SV_ClientFullUpdate (player_t &pl)
+{
+	size_t	i;
+	client_t *cl = &pl.client;
+
+	// send player's info to the client
+	for (i=0; i < players.size(); i++)
+	{
+		if (!players[i].ingame())
+			continue;
+
+		if(players[i].mo)
+			SV_AwarenessUpdate(pl, players[i].mo);
+
+		SV_SendUserInfo(players[i], cl);
+
+		if (cl->reliablebuf.cursize >= 600)
+			if(!SV_SendPacket(pl))
+				return;
+	}
+
+	// update frags/points/spectate
+	for (i = 0; i < players.size(); i++)
+	{
+		if (!players[i].ingame())
+			continue;
+
+		MSG_WriteMarker(&cl->reliablebuf, svc_updatefrags);
+		MSG_WriteByte(&cl->reliablebuf, players[i].id);
+		if(sv_gametype != GM_COOP)
+			MSG_WriteShort(&cl->reliablebuf, players[i].fragcount);
+		else
+			MSG_WriteShort(&cl->reliablebuf, players[i].killcount);
+		MSG_WriteShort(&cl->reliablebuf, players[i].deathcount);
+		MSG_WriteShort(&cl->reliablebuf, players[i].points);
+
+		MSG_WriteMarker (&cl->reliablebuf, svc_spectate);
+		MSG_WriteByte (&cl->reliablebuf, players[i].id);
+		MSG_WriteByte (&cl->reliablebuf, players[i].spectator);
+	}
+
+	// [deathz0r] send team frags/captures if teamplay is enabled
+	if(sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF)
+	{
+		MSG_WriteMarker (&cl->reliablebuf, svc_teampoints);
+		for (i = 0; i < NUMTEAMS; i++)
+			MSG_WriteShort (&cl->reliablebuf, TEAMpoints[i]);
+	}
+
+	SV_UpdateHiddenMobj();
+
+	// update flags
+	if(sv_gametype == GM_CTF)
+		CTF_Connect(pl);
+
+	// update sectors
+	SV_UpdateSectors(cl);
+	if (cl->reliablebuf.cursize >= 600)
+		if(!SV_SendPacket(pl))
+			return;
+
+	// update switches
+	for (int l=0; l<numlines; l++)
+	{
+		unsigned state = 0, time = 0;
+		if(P_GetButtonInfo(&lines[l], state, time) || lines[l].wastoggled)
+		{
+			MSG_WriteMarker (&cl->reliablebuf, svc_switch);
+			MSG_WriteLong (&cl->reliablebuf, l);
+			MSG_WriteByte (&cl->reliablebuf, lines[l].wastoggled);
+			MSG_WriteByte (&cl->reliablebuf, state);
+			MSG_WriteLong (&cl->reliablebuf, time);
+		}
+	}
+
+	SV_SendPacket(pl);
+}
 
 //
 //	SV_SendServerSettings
@@ -1970,7 +2292,7 @@ void SV_ConnectClient (void)
 	MSG_WriteMarker   (&cl->reliablebuf, svc_loadmap);
 	MSG_WriteString (&cl->reliablebuf, level.mapname);
 	G_DoReborn (players[n]);
-	P_WriteClientFullUpdate (players[n].client.reliablebuf, players[n]);
+	SV_ClientFullUpdate (players[n]);
 	SV_SendPacket (players[n]);
 
 	// [SL] 2011-05-11 - Register the player with the reconciliation system
@@ -2939,7 +3261,7 @@ void SV_WriteCommands(void)
                 MSG_WriteLong(&cl->netbuf, players[j].powers[pw_invisibility]);
 			}
 
-		P_WriteHiddenMobjUpdate(cl->reliablebuf, players[i]);
+		SV_UpdateHiddenMobj();
 
 		SV_UpdateConsolePlayer(players[i]);
 
@@ -3955,7 +4277,6 @@ void OnActivatedLine (line_t *line, AActor *mo, int side, int activationType)
 		MSG_WriteByte (&cl->reliablebuf, activationType);
 	}
 }
-
 
 // [RH]
 // ClientObituary: Show a message when a player dies

@@ -1022,7 +1022,7 @@ void G_ChangeMap (void)
 		AddCommandString(sv_endmapscript.cstring()/*, true*/);
 }
 
-void P_WriteClientFullUpdate (buf_t &buf, player_t &pl);
+void SV_ClientFullUpdate(player_t &pl);
 void SV_CheckTeam(player_t &pl);
 void G_DoReborn(player_t &playernum);
 void SV_SendServerSettings(client_t *cl);
@@ -1069,7 +1069,7 @@ void G_DoNewGame (void)
 		else
 			players[i].userinfo.color = players[i].prefcolor;
 
-		P_WriteClientFullUpdate (players[i].client.reliablebuf, players[i]);
+		SV_ClientFullUpdate (players[i]);
 	}
 }
 

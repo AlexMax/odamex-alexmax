@@ -56,6 +56,8 @@ CVAR (sv_maxcorpses, "200", CVAR_ARCHIVE | CVAR_SERVERINFO)
 CVAR (sv_clientcount,	"0", CVAR_NOSET | CVAR_NOENABLEDISABLE)
 // Deprecated
 CVAR (sv_cleanmaps, "", CVAR_NULL)
+// Antiwallhack code
+CVAR (sv_antiwallhack,	"0", CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
 // Maximum number of clients that can connect to the server
 CVAR_FUNC_DECL (sv_maxclients, "4", CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_NOENABLEDISABLE)
 // Maximum number of players that can join the game, the rest are spectators

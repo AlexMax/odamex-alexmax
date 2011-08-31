@@ -42,8 +42,6 @@ CVAR (sv_allowexit,		"1", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 CVAR (sv_allowjump,		"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 // Give double ammo regardless of difficulty
 CVAR (sv_doubleammo,		"0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
-// Antiwallhack code
-CVAR (sv_antiwallhack,  "0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
 // Makes water movement more realistic (?)
 CVAR_FUNC_DECL (sv_forcewater, "0", CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
 // Look up/down is allowed
