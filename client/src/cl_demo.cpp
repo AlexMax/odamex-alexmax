@@ -104,7 +104,7 @@ void NetDemo::cleanUp()
 
 
 
-void NetDemo::error(const std::string message)
+void NetDemo::error(const std::string &message)
 {
 	cleanUp();
 	gameaction = ga_nothing;
@@ -243,7 +243,7 @@ bool NetDemo::readIndex()
 //   header is written which will be overwritten with the proper information
 //   in stopRecording().
 
-bool NetDemo::startRecording(const std::string filename)
+bool NetDemo::startRecording(const std::string &filename)
 {
 	this->filename = filename;
 
@@ -289,7 +289,7 @@ bool NetDemo::startRecording(const std::string filename)
 //
 //
 
-bool NetDemo::startPlaying(const std::string filename)
+bool NetDemo::startPlaying(const std::string &filename)
 {
 	this->filename = filename;
 
@@ -393,8 +393,12 @@ bool NetDemo::stopRecording()
 	}
 	state = NetDemo::stopped;
 
+	// write any remaining messages that have been captured
+	writeMessages();
+
 	byte marker = svc_netdemostop;
-	uint32_t len = LONG(sizeof(marker));
+	uint32_t len = sizeof(marker);
+	len = LONG(len);
 	uint32_t tic = LONG(gametic);
 
 	fwrite(&len, sizeof(len), 1, demofp);
@@ -625,7 +629,16 @@ void NetDemo::readMessageBody(buf_t *netbuffer, uint32_t len)
 	if (cnt < len)
 	{
 		error("Can not read netdemo message.");
+
+        delete[] msgdata;
+
 		return;
+	}
+
+	// ensure netbuffer has enough free space to hold this packet
+	if (netbuffer->maxsize() - netbuffer->size() < len)
+	{
+		netbuffer->resize(len + netbuffer->size() + 1, false);
 	}
 
 	netbuffer->WriteChunk(msgdata, len);

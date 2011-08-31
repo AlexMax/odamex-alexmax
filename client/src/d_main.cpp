@@ -130,7 +130,7 @@ extern int NoWipe;			// [RH] Don't wipe when travelling in hubs
 
 std::vector<std::string> wadfiles, wadhashes;		// [RH] remove limit on # of loaded wads
 BOOL devparm;				// started game with -devparm
-char *D_DrawIcon;			// [RH] Patch name of icon to draw on next refresh
+const char *D_DrawIcon;			// [RH] Patch name of icon to draw on next refresh
 int NoWipe;					// [RH] Allow wipe? (Needs to be set each time)
 char startmap[8];
 BOOL autostart;
@@ -449,7 +449,7 @@ void D_DoomLoop (void)
 				CL_RequestConnectInfo();
 
 			// [RH] Use the consoleplayer's camera to update sounds
-			S_UpdateSounds ((consoleplayer().spectator ? displayplayer().mo : consoleplayer().mo));	// move positional sounds
+			S_UpdateSounds (listenplayer().mo);	// move positional sounds
 
 			// Update display, next frame, with current state.
 			D_Display ();
@@ -1415,8 +1415,8 @@ std::vector<size_t> D_DoomWadReboot(
 	return fails;
 }
 
-void CL_NetDemoRecord(std::string filename);
-void CL_NetDemoPlay(std::string filename);
+void CL_NetDemoRecord(const std::string &filename);
+void CL_NetDemoPlay(const std::string &filename);
 
 //
 // D_DoomMain
@@ -1644,7 +1644,7 @@ void D_DoomMain (void)
                     sv_freelook = "1";
                     sv_allowjump = "1";
                     sv_gametype = GM_COOP;
-                    
+
 					players.clear();
 					players.push_back(player_t());
 					players.back().playerstate = PST_REBORN;

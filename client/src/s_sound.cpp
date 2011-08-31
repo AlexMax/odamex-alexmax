@@ -45,8 +45,6 @@
 #include "vectors.h"
 #include "m_fileio.h"
 
-#define S_WHICHEARS (consoleplayer().spectator ? displayplayer() : consoleplayer())
-
 #define NORM_PITCH				128
 #define NORM_PRIORITY				64
 #define NORM_SEP				128
@@ -129,7 +127,6 @@ size_t			numChannels;
 
 static int		nextcleanup;
 
-
 static fixed_t P_AproxDistance2 (fixed_t *listener, fixed_t x, fixed_t y)
 {
 	// calculate the distance to sound origin
@@ -184,10 +181,10 @@ void S_NoiseDebug (void)
 			char temp[16];
 			fixed_t *origin = Channel[i].pt;
 
-			if (Channel[i].attenuation <= 0 && S_WHICHEARS.camera)
+			if (Channel[i].attenuation <= 0 && listenplayer().camera)
 			{
-				ox = S_WHICHEARS.camera->x;
-				oy = S_WHICHEARS.camera->y;
+				ox = listenplayer().camera->x;
+				oy = listenplayer().camera->y;
 			}
 			else if (origin)
 			{
@@ -211,7 +208,7 @@ void S_NoiseDebug (void)
 			screen->DrawText (color, 170, y, temp);
 			sprintf (temp, "%d", Channel[i].priority);
 			screen->DrawText (color, 200, y, temp);
-			sprintf (temp, "%d", P_AproxDistance2 (S_WHICHEARS.camera, ox, oy) / FRACUNIT);
+			sprintf (temp, "%d", P_AproxDistance2 (listenplayer().camera, ox, oy) / FRACUNIT);
 			screen->DrawText (color, 240, y, temp);
 			sprintf (temp, "%d", Channel[i].entchannel);
 			screen->DrawText (color, 280, y, temp);
@@ -318,6 +315,32 @@ void S_Start (void)
 
 
 //
+// S_CompareChannels
+//
+// A comparison function that determines which sound channel should
+// take priority.  Can be used with std::sort.  Returns true if 
+// channel a has less priority than channel b.
+//
+// Note: this implicitly gives preference to channel b if
+// channel a and b are equal.  The more recent sound should
+// therefore be in channel b to give preference to newer sounds.
+//
+bool S_CompareChannels(const channel_t &a, const channel_t &b)
+{
+	if (a.sfxinfo == NULL)	// empty channel
+		return true;
+
+	if (b.sfxinfo == NULL)
+		return false;
+
+	if (a.priority < b.priority || (a.priority == b.priority && a.volume <= b.volume))
+		return true;
+
+	return false;
+}
+
+
+//
 // S_getChannel :
 //   If none available, return -1.  Otherwise channel #.
 //
@@ -326,52 +349,66 @@ int
 		S_getChannel
 		( void*		origin,
 		  sfxinfo_t*	sfxinfo,
+		  float		volume,
 		  int 		priority)
 {
     // channel number to use
 	int cnum = -1;
-	int i;
 
-    // Find an open channel
-	for (i=0; i < (int)numChannels; i++)
+	// not a valid sound	
+	if (!sfxinfo)
+		return -1;
+
+	// Sort the sound channels by ascending priority levels
+	std::sort(Channel, Channel + numChannels, S_CompareChannels);
+
+	// store priority and volume in a temp channel to use with S_CompareChannels
+	channel_t tempchan;
+	tempchan.priority = priority;
+	tempchan.volume = volume;
+	tempchan.sfxinfo = sfxinfo;
+
+	int sound_id = S_FindSound (sfxinfo->name);
+
+	// Limit the number of identical sounds playing at once
+	// tries to keep the plasma rifle from hogging all the channels
+	const int max_duplicates = 3;
+	int duplicates = 0;
+	for (int i = (int)numChannels - 1; i >= 0; i--)
 	{
-		if (!Channel[i].sfxinfo)	// No sfx playing here (sfxinfo == NULL)
+		if (Channel[i].sound_id == sound_id)
 		{
-			if ((i == CHAN_ANNOUNCERF || i == CHAN_ANNOUNCERE) &&
-				sv_gametype == GM_CTF)
-				continue;
-			
-			cnum = i;
-			break;
+			// if we're over our limit, we may kick this channel
+			if (++duplicates >= max_duplicates)
+				cnum = i;
 		}
 	}
 
-	// No open channels, cnum hasn't changed
+	// if the quietest duplicate sound is louder than this
+	// new sound, don't play the new sound
+	if (cnum != -1 && !S_CompareChannels(Channel[cnum], tempchan))
+		return -1;
+
+   	// Find an open channel or a channel with lower priority
 	if (cnum == -1)
 	{
-		// Look for lower priority
-		for (i=0 ; i < (int)numChannels ; i++)
-			if (Channel[i].priority <= priority)
+		for (int i = 0 ; i < (int)numChannels ; i++)
+		{
+			if (S_CompareChannels(Channel[i], tempchan))
 			{
-				if ((i == CHAN_ANNOUNCERF || i == CHAN_ANNOUNCERE) &&
-					sv_gametype == GM_CTF)
-					continue;
-				
+				// Channel[i] is either empty or has a lower priority
 				cnum = i;
 				break;
 			}
-
-		// Still no channels we can use, don't bother with that sound
-		if(cnum == -1)
-		{
-			return -1;
-		}
-		else
-		{
-	    		// Otherwise, kick out lower priority.
-			S_StopChannel(cnum);
 		}
 	}
+
+	// Still no channels we can use, don't bother with that sound
+	if (cnum == -1)
+		return -1;
+	    		
+	// kick out lower priority.
+	S_StopChannel(cnum);
 
     // channel is decided to be cnum.
 	Channel[cnum].sfxinfo = sfxinfo;
@@ -573,9 +610,6 @@ static void S_StartSound (fixed_t *pt, fixed_t x, fixed_t y, int channel,
 		y = pt[1];
 	}
 
-// Remove some duplicate sounds (mainly for plasma)
-	 S_StopSoundID(sfx_id);
-
 	if (sfx->link)
 		sfx = sfx->link;
 
@@ -585,21 +619,19 @@ static void S_StartSound (fixed_t *pt, fixed_t x, fixed_t y, int channel,
 			sfx = sfx->link;
 	}
 	
-	
-	if (S_WHICHEARS.mo && attenuation != ATTN_NONE)
+	if (listenplayer().mo && attenuation != ATTN_NONE)
 	{
-	
   		// Check to see if it is audible, and if not, modify the params
 		if (co_zdoomsoundcurve)
 		{
-			rc = S_AdjustZdoomSoundParams(S_WHICHEARS.mo, x, y, &volume, &sep, &pitch);
+			rc = S_AdjustZdoomSoundParams(listenplayer().mo, x, y, &volume, &sep, &pitch);
 		}
 		else
 		{
-			rc = S_AdjustSoundParams(S_WHICHEARS.mo, x, y, &volume, &sep, &pitch);
+			rc = S_AdjustSoundParams(listenplayer().mo, x, y, &volume, &sep, &pitch);
 		}
 
-		if (x == S_WHICHEARS.mo->x && y == S_WHICHEARS.mo->y)
+		if (x == listenplayer().mo->x && y == listenplayer().mo->y)
 		{
 			sep = NORM_SEP;
 		}
@@ -618,7 +650,11 @@ static void S_StartSound (fixed_t *pt, fixed_t x, fixed_t y, int channel,
 	{
 		basepriority = -1000;
 	}
-	else if (attenuation <= 0)
+	else if (channel == CHAN_ANNOUNCERE || channel == CHAN_ANNOUNCERF)
+	{
+		basepriority = 300;
+	}
+	else if (attenuation <= ATTN_NONE)
 	{
 		basepriority = 200;
 	}
@@ -642,7 +678,7 @@ static void S_StartSound (fixed_t *pt, fixed_t x, fixed_t y, int channel,
 				basepriority = 50;
 				break;
 		}
-		if (attenuation == 1)
+		if (attenuation == ATTN_NORM)
 			basepriority += 50;
 	}
 	priority = basepriority;
@@ -669,18 +705,23 @@ static void S_StartSound (fixed_t *pt, fixed_t x, fixed_t y, int channel,
 
 	// joek - hack for silent bfg
 	if(sfx_id == sfx_noway || sfx_id == sfx_oof)
-		S_StopSound (pt);
+	{
+		for (size_t i = 0; i < numChannels; i++)
+		{
+			if (Channel[i].sfxinfo && (Channel[i].pt == pt) 
+				&& Channel[i].entchannel == CHAN_WEAPON)
+			{
+				S_StopChannel (i);
+			}
+		}
+	}
 
 	S_StopSound (pt, channel);
 
-  // try to find a channel
-	if ((channel == CHAN_ANNOUNCERF || channel == CHAN_ANNOUNCERE) &&
-		 sv_gametype == GM_CTF)
-		cnum = channel;
-	else
-		cnum = S_getChannel(pt, sfx, priority);
+  	// try to find a channel
+	cnum = S_getChannel(pt, sfx, volume, priority);
 
-  // no channel found
+  	// no channel found
 	if (cnum < 0)
 		return;
 
@@ -689,6 +730,16 @@ static void S_StartSound (fixed_t *pt, fixed_t x, fixed_t y, int channel,
 			     sep,
 			     Channel[cnum].pitch,
 			     looping);
+
+	// I_StartSound can not find an empty channel.  Make sure this channel is clear
+	if (handle < 0)
+	{
+		Channel[cnum].handle = -1;
+		Channel[cnum].sfxinfo = NULL;
+		Channel[cnum].pt = NULL;
+		S_StopChannel(cnum);
+		return;
+	}
 
   // Assigns the handle to one of the channels in the
   //  mix/output buffer.
@@ -724,6 +775,9 @@ void S_SoundID (fixed_t x, fixed_t y, int channel, int sound_id, float volume, i
 
 void S_SoundID (AActor *ent, int channel, int sound_id, float volume, int attenuation)
 {
+	if (!ent)
+		return;
+
 	if (ent->subsector->sector->MoreFlags & SECF_SILENT)
 		return;	
 	S_StartSound (&ent->x, 0, 0, channel, sound_id, volume, attenuation, false);
@@ -736,6 +790,9 @@ void S_SoundID (fixed_t *pt, int channel, int sound_id, float volume, int attenu
 
 void S_LoopedSoundID (AActor *ent, int channel, int sound_id, float volume, int attenuation)
 {
+	if (!ent)
+		return;
+
 	if (ent->subsector->sector->MoreFlags & SECF_SILENT)
 		return;	
 	S_StartSound (&ent->x, 0, 0, channel, sound_id, volume, attenuation, true);
@@ -810,7 +867,7 @@ void S_Sound (int channel, const char *name, float volume, int attenuation)
 
 void S_Sound (AActor *ent, int channel, const char *name, float volume, int attenuation)
 {
-	if(channel == CHAN_ITEM && ent != S_WHICHEARS.camera)
+	if(channel == CHAN_ITEM && ent != listenplayer().camera)
 		return;
 
 	S_StartNamedSound (ent, NULL, 0, 0, channel, name, volume, attenuation, false);
@@ -841,9 +898,6 @@ void S_StopSound (fixed_t *pt)
 	for (unsigned int i = 0; i < numChannels; i++)
 		if (Channel[i].sfxinfo && (Channel[i].pt == pt))
 		{
-			if ((i == CHAN_ANNOUNCERF || i == CHAN_ANNOUNCERE) &&
-				 sv_gametype == GM_CTF)
-				return;
 			S_StopChannel (i);
 		}
 }
@@ -871,34 +925,6 @@ void S_StopAllChannels (void)
 			S_StopChannel (i);
 }
 
-//
-// joek - Hexen style S_StopSoundID
-// returns 1 on success (taken out a couple sounds) or 0 on fail
-// Has a limit imposed like hexen one so things don't go quiet all of a sudden
-// when using a plasma rifle or whatever
-
-#define DUPLICATE_LIMIT 2
-
-bool S_StopSoundID(int sound_id)
-{
-	int i;
-	int duplicates = 0;
-
-	for(i = 0; i < (int)numChannels; i++)
-	{
-		if(Channel[i].sound_id == sound_id)
-		{
-			duplicates++;
-
-			// Limit reached so take this one out
-			if(duplicates > DUPLICATE_LIMIT)
-				S_StopChannel(i);
-		}
-	}
-
-	// If we've taken any out, return 1
-	return duplicates>DUPLICATE_LIMIT;
-}
 
 // Moves all the sounds from one thing to another. If the destination is
 // NULL, then the sound becomes a positioned sound.
@@ -1048,7 +1074,6 @@ void S_UpdateSounds (void *listener_p)
 						y = c->y;
 					}
 					
-					
 					if (co_zdoomsoundcurve)
 					{
 						audible = S_AdjustZdoomSoundParams(	listener, 
@@ -1187,7 +1212,7 @@ static void S_StopChannel (unsigned int cnum)
 
 	if(cnum > numChannels - 1 || cnum < 0)
 	{
-		printf("Trying to stop invalid channel %d", cnum);
+		printf("Trying to stop invalid channel %d\n", cnum);
 		return;
 	}
 

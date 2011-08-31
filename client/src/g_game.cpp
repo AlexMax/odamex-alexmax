@@ -256,10 +256,18 @@ player_t		&displayplayer()
 	return idplayer(displayplayer_id);
 }
 
+player_t		&listenplayer()
+{
+	if (netdemo.isPlaying() || consoleplayer().spectator)
+		return displayplayer();
+
+	return consoleplayer();
+}
+
 player_t		&idplayer(size_t id)
 {
 	// attempt a quick cached resolution
-	size_t translation[MAXPLAYERS] = {0};
+	static size_t translation[MAXPLAYERS] = {0};
 	size_t size = players.size();
 
 	if(id >= MAXPLAYERS)
@@ -1284,41 +1292,57 @@ bool G_CheckSpot (player_t &player, mapthing2_t *mthing)
 	player.mo->z = oldz;	// [RH] Restore corpse's height
 	if (!i)
 		return false;
-	
+
 	// spawn a teleport fog
 	if (!player.spectator)	// ONLY IF THEY ARE NOT A SPECTATOR
-	{	
-		// [ML] 7/25/11: Incorporate pr+'s emulation of west-facing spawns being silent
-		an = ( ANG45 * ((signed int)mthing->angle/45) ) >> ANGLETOFINESHIFT;
-		xa = finecosine[an];
-		ya = finesine[an];
-		switch (an) {
-			case -4096: 
-				xa = finetangent[2048];   // finecosine[-4096]
-				ya = finetangent[0];      // finesine[-4096]
-          	break;
-			case -3072: 
-				xa = finetangent[3072];   // finecosine[-3072]
-				ya = finetangent[1024];   // finesine[-3072]
-          	break;
-			case -2048: 
-				xa = finesine[0];   // finecosine[-2048]
-				ya = finetangent[2048];   // finesine[-2048]
-          	break;
-			case -1024:	
-				xa = finesine[1024];     // finecosine[-1024]
-				ya = finetangent[3072];  // finesine[-1024]
-          	break;
-			case 1024:
-			case 2048:
-			case 3072:
-			case 4096:
-			case 0:	break; /* correct angles set above */
-			default:
-				I_Error("G_CheckSpot: unexpected angle %d\n",an);
-			break;
-		}
+	{
+		// emulate out-of-bounds access to finecosine / finesine tables
+		// which cause west-facing player spawns to have the spawn-fog
+		// and its sound located off the map in vanilla Doom.
 		
+		// borrowed from Eternity Engine
+
+		// haleyjd: There was a weird bug with this statement:
+		//
+		// an = (ANG45 * (mthing->angle/45)) >> ANGLETOFINESHIFT;
+		//
+		// Even though this code stores the result into an unsigned variable, most
+		// compilers seem to ignore that fact in the optimizer and use the resulting
+		// value directly in a lea instruction. This causes the signed mapthing_t
+		// angle value to generate an out-of-bounds access into the fine trig
+		// lookups. In vanilla, this accesses the finetangent table and other parts
+		// of the finesine table, and the result is what I call the "ninja spawn,"
+		// which is missing the fog and sound, as it spawns somewhere out in the
+		// far reaches of the void.
+		
+		angle_t mtangle = (angle_t)(mthing->angle / 45);
+     
+		an = ANG45 * mtangle;
+
+		switch(mtangle)
+		{
+			case 4: // 180 degrees (0x80000000 >> 19 == -4096)
+				xa = finetangent[2048];
+				ya = finetangent[0];
+				break;
+			case 5: // 225 degrees (0xA0000000 >> 19 == -3072)
+				xa = finetangent[3072];
+				ya = finetangent[1024];
+				break;
+			case 6: // 270 degrees (0xC0000000 >> 19 == -2048)
+				xa = finesine[0];
+				ya = finetangent[2048];
+				break;
+			case 7: // 315 degrees (0xE0000000 >> 19 == -1024)
+				xa = finesine[1024];
+				ya = finetangent[3072];
+				break;
+			default: // everything else works properly
+				xa = finecosine[an >> ANGLETOFINESHIFT];
+				ya = finesine[an >> ANGLETOFINESHIFT];
+				break;
+		}
+
 		mo = new AActor (x+20*xa, y+20*ya, z, MT_TFOG);
 
 		if (level.time)
@@ -2312,10 +2336,13 @@ void G_DoPlayDemo (bool justStreamInput)
 	if(demo_p[0] >= DOOM_BOOM_DEMO_START ||
 	   demo_p[0] <= DOOM_BOOM_DEMO_END)
 	{
-		demo_p += 6; // xBOOM\0
-		Printf (PRINT_HIGH, "BOOM demos are not supported in this version.\n");
-		gameaction = ga_nothing;
-		return;
+		// [SL] 2011-08-03 - Version 1 of Odamex netdemos get detected by this
+		// code as a Boom format demo.  Since neither can be played using the
+		// -playdemo paramter, inform the user.  This could probably be handled
+		// more robustly.
+		Printf (PRINT_HIGH, "Unsupported demo format.  If you are trying to play an Odamex netdemo, please use the netplay command\n");
+        gameaction = ga_nothing;
+        return;
 	}
 
 	if (ReadLong (&demo_p) != FORM_ID) {

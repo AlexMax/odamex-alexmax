@@ -114,7 +114,7 @@ extern DThinker ThinkerCap;
 
 std::vector<std::string> patchfiles, wadfiles;		// [RH] remove limit on # of loaded wads
 BOOL devparm;				// started game with -devparm
-char *D_DrawIcon;			// [RH] Patch name of icon to draw on next refresh
+const char *D_DrawIcon;			// [RH] Patch name of icon to draw on next refresh
 int NoWipe;					// [RH] Allow wipe? (Needs to be set each time)
 char startmap[8];
 BOOL autostart;
@@ -1041,13 +1041,16 @@ void D_DoomMain (void)
 	if (STARTUP5[0])	Printf (PRINT_HIGH, "%s\n", STARTUP5);
 
 	// Nomonsters
-	sv_nomonsters = Args.CheckParm("-nomonsters");
+	if (Args.CheckParm("-nomonsters"))
+		sv_nomonsters = 1;
 
 	// Respawn
-	sv_monstersrespawn = Args.CheckParm("-respawn");
+	if (Args.CheckParm("-respawn"))
+		sv_monstersrespawn = 1;
 
 	// Fast
-	sv_fastmonsters = Args.CheckParm("-fast");
+	if (Args.CheckParm("-fast"))
+		sv_fastmonsters = 1;
 
 	// developer mode
 	devparm = Args.CheckParm ("-devparm");

@@ -34,6 +34,7 @@
 #include "gi.h"
 #include "i_net.h"
 #include "i_system.h"
+#include "i_video.h"
 #include "c_dispatch.h"
 #include "st_stuff.h"
 #include "m_argv.h"
@@ -83,9 +84,6 @@ BOOL      connected;
 netadr_t  serveraddr; // address of a server
 netadr_t  lastconaddr;
 
-// [SL] 2011-07-06 - not really connected (playing back a netdemo)
-bool		simulated_connection = false;		
-
 int       packetseq[256];
 byte      packetnum;
 
@@ -101,6 +99,8 @@ netid_map_t actor_by_netid;
 
 // [SL] 2011-06-27 - Class to record and playback network recordings
 NetDemo netdemo;
+// [SL] 2011-07-06 - not really connected (playing back a netdemo)
+bool simulated_connection = false;		
 
 EXTERN_CVAR (sv_weaponstay)
 
@@ -150,8 +150,6 @@ void CL_Decompress(int sequence);
 void CL_LocalDemoTic(void);
 void CL_NetDemoStop(void);
 void CL_NetDemoSnapshot(void);
-void CL_NetDemoRecord(std::string filename);
-void CL_NetDemoPlay(std::string filename);
 
 //	[Toke - CTF]
 void CalcTeamFrags (void);
@@ -218,6 +216,20 @@ void CL_QuitNetGame(void)
 	if (netdemo.isPlaying())
 	{
 		netdemo.stopPlaying();
+	}
+
+	// Reset the palette to default
+	if (I_HardwareInitialized())
+	{
+		int lu_palette = W_GetNumForName("PLAYPAL");
+		if (lu_palette != -1)
+		{
+			byte *pal = (byte *)W_CacheLumpNum(lu_palette, PU_CACHE);
+			if (pal)
+			{
+				I_SetOldPalette(pal);
+			}
+		}
 	}
 }
 
@@ -512,13 +524,29 @@ BEGIN_COMMAND (rcon_password)
 {
 	if (connected && argc > 1)
 	{
+		bool login = true;
+
 		MSG_WriteMarker(&net_buffer, clc_rcon_password);
+		MSG_WriteByte(&net_buffer, login);
 
 		std::string password = argv[1];
 		MSG_WriteString(&net_buffer, MD5SUM(password + digest).c_str());
 	}
 }
 END_COMMAND (rcon_password)
+
+BEGIN_COMMAND (rcon_logout)
+{
+	if (connected)
+	{
+		bool login = false;
+
+		MSG_WriteMarker(&net_buffer, clc_rcon_password);
+		MSG_WriteByte(&net_buffer, login);
+		MSG_WriteString(&net_buffer, "");
+	}
+}
+END_COMMAND (rcon_logout)
 
 
 BEGIN_COMMAND (playerteam)
@@ -564,6 +592,40 @@ BEGIN_COMMAND (exit)
 }
 END_COMMAND (exit)
 
+
+//
+// CL_NetDemoStop
+//
+void CL_NetDemoStop()
+{
+	netdemo.stopPlaying();
+}
+
+void CL_NetDemoRecord(const std::string &filename)
+{
+	netdemo.startRecording(filename);
+}
+
+void CL_NetDemoPlay(const std::string &filename)
+{
+	netdemo.startPlaying(filename);
+}
+
+void CL_NetDemoSnapshot()
+{
+/*	// read the length of the snapshot
+	int len = MSG_ReadLong();
+
+
+	// [SL] DEBUG!
+	Printf(PRINT_HIGH, "Skipping over %d bytes of snapshot data\n", len);
+
+	// skip over the snapshot since it is handled elsewhere
+	byte b;
+	while (len--)
+		b = MSG_ReadByte(); */
+}
+
 BEGIN_COMMAND(stopnetdemo)
 {
 	if (netdemo.isRecording())
@@ -585,6 +647,12 @@ BEGIN_COMMAND(netrecord)
 		return;
 	}
 
+	if (!connected || simulated_connection)
+	{
+		Printf(PRINT_HIGH, "You must be connected to a server to record a netdemo.\n");
+		return;
+	}
+
 	std::string filename;
 	if (argc < 2)
 	{
@@ -596,6 +664,8 @@ BEGIN_COMMAND(netrecord)
 			filename = argv[1];
 	}
 
+    M_AppendExtension(filename, ".odd");
+
 	CL_Reconnect();
 	CL_NetDemoRecord(filename);
 }
@@ -603,13 +673,13 @@ END_COMMAND(netrecord)
 
 BEGIN_COMMAND(netpause)
 {
-	if(netdemo.isPaused())
+	if (netdemo.isPaused())
 	{
 		netdemo.resume();
 		paused = false;
 		Printf(PRINT_HIGH, "Demo resumed.\n");
 	} 
-	else 
+	else if (netdemo.isPlaying())
 	{
 		netdemo.pause();
 		paused = true;
@@ -1023,6 +1093,15 @@ bool CL_PrepareConnect(void)
 		// denis - download files
 		missing_file = wadnames[missing_files[0]];
 		missing_hash = wadhashes[missing_files[0]];
+
+		if (netdemo.isPlaying())
+		{
+			// Playing a netdemo and unable to download from the server
+			Printf(PRINT_HIGH, "Unable to find \"%s\".  Cannot download while playing a netdemo.\n", missing_file.c_str());
+			CL_QuitNetGame();
+			return false;
+		}
+
 		gamestate = GS_DOWNLOAD;
 		Printf(PRINT_HIGH, "Will download \"%s\" from server\n", missing_file.c_str());
 	}
@@ -2192,6 +2271,10 @@ void CL_CheckMissedPacket(void)
 	}
 }
 
+// Decompress the packet sequence
+// [Russell] - reason this was failing is because of huffman routines, so just
+// use minilzo for now (cuts a packet size down by roughly 45%), huffman is the
+// if 0'd sections
 void CL_Decompress(int sequence)
 {
 	if(!MSG_BytesLeft() || MSG_NextByte() != svc_compressed)
@@ -2201,9 +2284,7 @@ void CL_Decompress(int sequence)
 
 	byte method = MSG_ReadByte();
 
-	if(method & minilzo_mask)
-		MSG_DecompressMinilzo();
-
+#if 0
 	if(method & adaptive_mask)
 		MSG_DecompressAdaptive(compressor.codec_for_received(method & adaptive_select_mask ? 1 : 0));
 	else
@@ -2211,9 +2292,14 @@ void CL_Decompress(int sequence)
 		// otherwise compressed packets can still contain codec updates
 		compressor.codec_for_received(method & adaptive_select_mask ? 1 : 0);
 	}
+#endif
 
+	if(method & minilzo_mask)
+		MSG_DecompressMinilzo();
+#if 0
 	if(method & adaptive_record_mask)
 		compressor.ack_sent(net_message.ptr(), MSG_BytesLeft());
+#endif
 }
 
 //
@@ -2455,14 +2541,25 @@ struct download_s
 
 		download_s()
 		{
-			filename = "";
-			md5 = "";
 			buf = NULL;
-			got_bytes = 0;
+			this->clear();
 		}
 
 		~download_s()
 		{
+		}
+
+		void clear()
+		{	
+			filename = "";
+			md5 = "";
+			got_bytes = 0;
+        	
+			if (buf != NULL)
+			{
+				delete buf;
+				buf = NULL;
+			}
 		}
 } download;
 
@@ -2483,16 +2580,7 @@ void IntDownloadComplete(void)
 		Printf(PRINT_HIGH, " %s on server\n", download.md5.c_str());
 		Printf(PRINT_HIGH, "Download failed: bad checksum\n");
 
-        download.filename = "";
-        download.md5 = "";
-        download.got_bytes = 0;
-		
-        if (download.buf != NULL)
-        {
-            delete download.buf;
-            download.buf = NULL;
-        }   
-			
+		download.clear();
         CL_QuitNetGame();
         return;
     }
@@ -2540,32 +2628,14 @@ void IntDownloadComplete(void)
     // Unable to write
     if(i == dirs.size())
     {
-        download.filename = "";
-        download.md5 = "";
-        download.got_bytes = 0;
-
-        if (download.buf != NULL)
-        {
-            delete download.buf;
-            download.buf = NULL;
-        }   
-            
+		download.clear();
         CL_QuitNetGame();
         return;            
     }
 
     Printf(PRINT_HIGH, "Saved download as \"%s\"\n", filename.c_str());
 
-    download.filename = "";
-    download.md5 = "";
-    download.got_bytes = 0;
-
-    if (download.buf != NULL)
-    {
-        delete download.buf;
-        download.buf = NULL;
-    }
-
+	download.clear();
     CL_QuitNetGame();
     CL_Reconnect();
 }
@@ -2662,21 +2732,21 @@ void CL_Download()
 	if(gamestate != GS_DOWNLOAD)
 		return;
 
+	if (download.buf == NULL)
+	{
+		// We must have not received the svc_wadinfo message
+		Printf(PRINT_HIGH, "Unable to start download, aborting\n");
+		download.clear();
+		CL_QuitNetGame();
+		return;
+	}
+
 	// check ranges
 	if(offset + len > download.buf->maxsize() || len > left || p == NULL)
 	{
 		Printf(PRINT_HIGH, "Bad download packet (%d, %d) encountered (%d), aborting\n", (int)offset, (int)left, (int)download.buf->size());
-        
-        download.filename = "";
-        download.md5 = "";
-        download.got_bytes = 0;
-        
-        if (download.buf != NULL)
-        {
-            delete download.buf;
-            download.buf = NULL;
-        }
-        
+    	
+		download.clear();    
 		CL_QuitNetGame();
 		return;
 	}
@@ -3127,45 +3197,7 @@ void CL_LocalDemoTic()
 
 }
 
-void CL_NetDemoStop()
-{
-	netdemo.stopPlaying();
-}
-
-void CL_NetDemoRecord(std::string filename)
-{
-	filename.append(".odd");
-	netdemo.startRecording(filename);
-}
-
-void CL_NetDemoPlay(std::string filename)
-{
-	netdemo.startPlaying(filename);
-}
-
-void CL_NetDemoSnapshot()
-{
-/*	// read the length of the snapshot
-	int len = MSG_ReadLong();
-
-
-	// [SL] DEBUG!
-	Printf(PRINT_HIGH, "Skipping over %d bytes of snapshot data\n", len);
-
-	// skip over the snapshot since it is handled elsewhere
-	byte b;
-	while (len--)
-		b = MSG_ReadByte(); */
-}
-
-
 void OnChangedSwitchTexture (line_t *line, int useAgain) {}
 void OnActivatedLine (line_t *line, AActor *mo, int side, int activationType) {}
 
 VERSION_CONTROL (cl_main_cpp, "$Id$")
-
-
-
-
-
-
