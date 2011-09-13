@@ -611,21 +611,6 @@ void CL_NetDemoPlay(const std::string &filename)
 	netdemo.startPlaying(filename);
 }
 
-void CL_NetDemoSnapshot()
-{
-/*	// read the length of the snapshot
-	int len = MSG_ReadLong();
-
-
-	// [SL] DEBUG!
-	Printf(PRINT_HIGH, "Skipping over %d bytes of snapshot data\n", len);
-
-	// skip over the snapshot since it is handled elsewhere
-	byte b;
-	while (len--)
-		b = MSG_ReadByte(); */
-}
-
 BEGIN_COMMAND(stopnetdemo)
 {
 	if (netdemo.isRecording())
@@ -666,7 +651,6 @@ BEGIN_COMMAND(netrecord)
 
     M_AppendExtension(filename, ".odd");
 
-	CL_Reconnect();
 	CL_NetDemoRecord(filename);
 }
 END_COMMAND(netrecord)
@@ -708,20 +692,44 @@ END_COMMAND(netplay)
 
 BEGIN_COMMAND(ff)
 {
+	int ticnum = gametic;
+
+	if (argc < 1)
+	{
+		// no arg so just go to the next snapshot
+		ticnum += netdemo.getSpacing();
+	}
+	else
+	{
+		// go forward X seconds
+		ticnum += TICRATE * atoi(argv[1]);
+	}
+
 	if (netdemo.isPlaying())
 	{
-		netdemo.skipTo(&net_message, gametic + netdemo.getSpacing());
-
+		netdemo.skipTo(&net_message, ticnum);
 	}
 }
 END_COMMAND(ff)
 
 BEGIN_COMMAND(rew)
 {
+	int ticnum = gametic;
+
+	if (argc < 1)
+	{
+		// no arg so just go to the next snapshot
+		ticnum -= netdemo.getSpacing();
+	}
+	else
+	{
+		// go forward X seconds
+		ticnum -= TICRATE * atoi(argv[1]);
+	}
+
 	if (netdemo.isPlaying())
 	{
-		netdemo.skipTo(&net_message, gametic - netdemo.getSpacing());
-
+		netdemo.skipTo(&net_message, ticnum);
 	}
 }
 END_COMMAND(rew)
@@ -1078,8 +1086,7 @@ bool CL_PrepareConnect(void)
     Printf(PRINT_HIGH, "\n");
 
     // DEH/BEX Patch files
-    std::vector<std::string> PatchFiles;
-
+	std::vector<std::string> PatchFiles;
     size_t PatchCount = MSG_ReadByte();
     
     for (i = 0; i < PatchCount; ++i)
@@ -1662,7 +1669,7 @@ void CL_PlayerInfo(void)
 	p->armorpoints = MSG_ReadByte ();
 	p->armortype = MSG_ReadByte ();
 	newweapon = MSG_ReadByte ();
-	
+
 	// GhostlyDeath <July 17, 2008> -- what weapon do we change to?
 	if (newweapon & 64)		// Server sent our readyweapon (gun we have up)
 	{
@@ -1689,7 +1696,7 @@ void CL_PlayerInfo(void)
 	if (newpending)
 		if (p->pendingweapon > NUMWEAPONS)
 			p->pendingweapon = wp_pistol;
-	
+
 	p->backpack = MSG_ReadByte () ? true : false;
 }
 
@@ -2018,6 +2025,7 @@ void CL_UpdateSector(void)
 		cp = numflats;
 
 	sec->ceilingpic = cp;
+	sec->moveable = true;
 
 	P_ChangeSector (sec, false);
 }
@@ -2421,6 +2429,18 @@ void CL_Actor_Tracer()
 
 	actor->tracer = tracer->ptr();
 }
+
+//
+// CL_MobjTranslation
+//
+void CL_MobjTranslation()
+{
+	AActor *mo = CL_FindThingById(MSG_ReadShort());
+	byte table = MSG_ReadByte();
+
+	mo->translation = translationtables + 256 * table;
+}
+
 
 //
 // CL_Switch
@@ -2881,6 +2901,7 @@ void CL_InitCommands(void)
     cmds[svc_midprint]          = &CL_MidPrint;
     cmds[svc_pingrequest]       = &CL_SendPingReply;
 	cmds[svc_svgametic]			= &CL_SaveSvGametic;
+	cmds[svc_mobjtranslation]	= &CL_MobjTranslation;
 
 	cmds[svc_startsound]		= &CL_Sound;
 	cmds[svc_soundorigin]		= &CL_SoundOrigin;
@@ -2910,7 +2931,6 @@ void CL_InitCommands(void)
 
 	cmds[svc_netdemocap]        = &CL_LocalDemoTic;
 	cmds[svc_netdemostop]       = &CL_NetDemoStop;
-	cmds[svc_netdemosnapshot]	= &CL_NetDemoSnapshot;
 }
 
 //
@@ -2929,7 +2949,7 @@ void CL_ParseCommands(void)
 	{
 		cmd = (svc_t)MSG_ReadByte();
 		history.push_back(cmd);
-
+		
 		if(cmd == (svc_t)-1)
 			break;
 
