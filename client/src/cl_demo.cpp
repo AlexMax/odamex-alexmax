@@ -550,6 +550,17 @@ bool NetDemo::stopPlaying()
 
 void NetDemo::writeSnapshotData(buf_t *netbuffer)
 {
+	// Make sure the gamestate will be correct when loading a snapshot
+	if (gamestate == GS_LEVEL)
+	{
+		MSG_WriteMarker		(netbuffer, svc_loadmap);
+		MSG_WriteString		(netbuffer, level.mapname);
+	}
+	else if (gamestate == GS_INTERMISSION)
+	{
+		MSG_WriteMarker		(netbuffer, svc_exitlevel);
+	}
+
 	for (size_t i = 0; i < players.size(); i++)
 	{
 		if (players[i].mo)
