@@ -54,7 +54,8 @@
 typedef int SOCKET;
 #endif
 
-const size_t MAX_PAYLOAD = 8192;
+// Max packet size to send and receive, in bytes
+const size_t MAX_PAYLOAD = 1400;
 
 typedef unsigned char byte;
 
@@ -71,7 +72,7 @@ public:
 	static void ShutdownSocketAPI();
 
 	// Set the outgoing address
-	void SetRemoteAddress(const std::string &Address, const int16_t &Port);
+	void SetRemoteAddress(const std::string &Address, const uint16_t &Port);
 	// Set the outgoing address in "address:port" format
 	bool SetRemoteAddress(const std::string &Address);
 	// Gets the outgoing address

@@ -381,6 +381,12 @@ bool NetDemo::startRecording(const std::string &filename)
 bool NetDemo::startPlaying(const std::string &filename)
 {
 	this->filename = filename;
+	
+	if (filename.empty())
+	{
+		error("No netdemo filename specified.");
+		return false;
+	}	
 
 	if (isPlaying())
 	{

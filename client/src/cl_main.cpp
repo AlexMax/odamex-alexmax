@@ -119,6 +119,14 @@ CVAR_FUNC_IMPL (cl_autoaim)
 		var.Set(5000.0f);
 }
 
+CVAR_FUNC_IMPL (cl_updaterate)
+{
+	if (var < 1.0f)
+		var.Set(1.0f);
+	else if (var > 3.0f)
+		var.Set(3.0f);
+}
+
 EXTERN_CVAR (sv_maxplayers)
 EXTERN_CVAR (sv_maxclients)
 EXTERN_CVAR (sv_infiniteammo)
@@ -129,6 +137,7 @@ EXTERN_CVAR (sv_fastmonsters)
 EXTERN_CVAR (sv_allowexit)
 EXTERN_CVAR (sv_fragexitswitch)
 EXTERN_CVAR (sv_allowjump)
+EXTERN_CVAR (sv_allowredscreen)
 EXTERN_CVAR (sv_scorelimit)
 EXTERN_CVAR (sv_monstersrespawn)
 EXTERN_CVAR (sv_itemsrespawn)
@@ -205,6 +214,7 @@ void CL_QuitNetGame(void)
 	sv_freelook = 1;
 	sv_allowjump = 1;
 	sv_allowexit = 1;
+	sv_allowredscreen = 1;
 
 	actor_by_netid.clear();
 	players.clear();
@@ -421,15 +431,16 @@ BEGIN_COMMAND (playerinfo)
 	}
 
 	Printf (PRINT_HIGH, "---------------[player info]----------- \n");
-	Printf (PRINT_HIGH, " userinfo.netname   - %s \n",		  player->userinfo.netname);
-	Printf (PRINT_HIGH, " userinfo.team      - %d \n",		  player->userinfo.team);
-	Printf (PRINT_HIGH, " userinfo.aimdist   - %d \n",		  player->userinfo.aimdist);
-    Printf (PRINT_HIGH, " userinfo.unlag     - %d \n",        player->userinfo.unlag);
-	Printf (PRINT_HIGH, " userinfo.color     - %d \n",		  player->userinfo.color);
-	Printf (PRINT_HIGH, " userinfo.skin      - %s \n",		  skins[player->userinfo.skin].name);
-	Printf (PRINT_HIGH, " userinfo.gender    - %d \n",		  player->userinfo.gender);
-	Printf (PRINT_HIGH, " spectator          - %d \n",		  player->spectator);
-	Printf (PRINT_HIGH, " time               - %d \n",		  player->GameTime);
+	Printf (PRINT_HIGH, " userinfo.netname     - %s \n",	player->userinfo.netname);
+	Printf (PRINT_HIGH, " userinfo.team        - %d \n",	player->userinfo.team);
+	Printf (PRINT_HIGH, " userinfo.aimdist     - %d \n",	player->userinfo.aimdist);
+    Printf (PRINT_HIGH, " userinfo.unlag       - %d \n",	player->userinfo.unlag);
+	Printf (PRINT_HIGH, " userinfo.update_rate - %d \n",	player->userinfo.update_rate);
+	Printf (PRINT_HIGH, " userinfo.color       - %d \n",	player->userinfo.color);
+	Printf (PRINT_HIGH, " userinfo.skin        - %s \n",	skins[player->userinfo.skin].name);
+	Printf (PRINT_HIGH, " userinfo.gender      - %d \n",	player->userinfo.gender);
+	Printf (PRINT_HIGH, " spectator            - %d \n",	player->spectator);
+	Printf (PRINT_HIGH, " time                 - %d \n",	player->GameTime);
 	Printf (PRINT_HIGH, "--------------------------------------- \n");
 }
 END_COMMAND (playerinfo)
@@ -447,6 +458,8 @@ END_COMMAND (kill)
 
 BEGIN_COMMAND (serverinfo)
 {   
+	std::vector<std::string> server_cvars;
+
     cvar_t *Cvar = GetFirstCvar();
     size_t MaxFieldLength = 0;
     
@@ -459,39 +472,48 @@ BEGIN_COMMAND (serverinfo)
             
             if (FieldLength > MaxFieldLength)
                 MaxFieldLength = FieldLength;                
+
+			// store this cvar name in our vector to be sorted later
+			server_cvars.push_back(Cvar->name());
         }
         
         Cvar = Cvar->GetNext();
     }
 
-    // [Russell] - Formatted output
-    Cvar = GetFirstCvar();
+	// sort the list of cvars
+	std::sort(server_cvars.begin(), server_cvars.end());
 
     // Heading
     Printf (PRINT_HIGH,	"\n%*s - Value\n", MaxFieldLength, "Name");
     
     // Data
-    while (Cvar)
-	{			
-        if (Cvar->flags() & CVAR_SERVERINFO)
-        {
-            Printf(PRINT_HIGH, 
-                   "%*s - %s\n", 
-                   MaxFieldLength,
-                   Cvar->name(), 
-                   Cvar->cstring());          
-        }
-        
-        Cvar = Cvar->GetNext();
-    }
+	for (size_t i = 0; i < server_cvars.size(); i++)
+	{
+		cvar_t *dummy;
+		Cvar = cvar_t::FindCVar(server_cvars[i].c_str(), &dummy);
+
+		Printf(PRINT_HIGH, 
+				"%*s - %s\n", 
+				MaxFieldLength,
+				Cvar->name(), 
+				Cvar->cstring());          
+	}
     
     Printf (PRINT_HIGH,	"\n");
 }
 END_COMMAND (serverinfo)
 
-// rate: takes a bps value
+// rate: takes a kbps value
 CVAR_FUNC_IMPL (rate)
 {
+/*  // [SL] 2011-09-02 - Commented out this code as it would force clients with
+	// a version that has rate in kbps to have a rate of < 5000 bps on an older
+	// server version that has rate in bps, resulting in an unplayable connection.
+
+	const int max_rate = 5000;	// 40Mbps, likely set erroneously
+	if (var > max_rate)
+		var.RestoreDefault();		
+*/
 	if (connected)
 	{
 		MSG_WriteMarker(&net_buffer, clc_rate);
@@ -766,6 +788,7 @@ void CL_SendUserInfo(void)
 	coninfo->gender  = D_GenderByName (cl_gender.cstring());
 	coninfo->aimdist = (fixed_t)(cl_autoaim * 16384.0);
 	coninfo->unlag   = cl_unlag;  // [SL] 2011-05-11
+	coninfo->update_rate = cl_updaterate;
 	MSG_WriteMarker	(&net_buffer, clc_userinfo);
 	MSG_WriteString	(&net_buffer, coninfo->netname);
 	MSG_WriteByte	(&net_buffer, coninfo->team); // [Toke]
@@ -774,6 +797,7 @@ void CL_SendUserInfo(void)
 	MSG_WriteString	(&net_buffer, (char *)skins[coninfo->skin].name); // [Toke - skins]
 	MSG_WriteLong	(&net_buffer, coninfo->aimdist);
 	MSG_WriteByte	(&net_buffer, (char)coninfo->unlag);  // [SL] 2011-05-11
+	MSG_WriteByte	(&net_buffer, (char)coninfo->update_rate);
 }
 
 
@@ -1375,7 +1399,7 @@ void CL_UpdateLocalPlayer(void)
 
     p.mo->waterlevel = MSG_ReadByte();
 
-	real_plats.Clear();
+//	real_plats.Clear();
 }
 
 
@@ -1929,8 +1953,16 @@ player_t* player = &players[consoleplayer];
 //
 void CL_ChangeWeapon (void)
 {
-	player_t *p = &consoleplayer();
-	p->pendingweapon = (weapontype_t)MSG_ReadByte();
+	player_t *player = &consoleplayer();
+	weapontype_t newweapon = (weapontype_t)MSG_ReadByte();
+
+	// ensure that the client has the weapon
+	player->weaponowned[newweapon] = true;
+
+	// [SL] 2011-09-22 - Only change the weapon if the client doesn't already
+	// have that weapon up.
+	if (player->readyweapon != newweapon)
+		player->pendingweapon = newweapon;
 }
 
 
@@ -2347,7 +2379,7 @@ void CL_GetServerSettings(void)
         {
             // [Russell] - create a new "temporary" cvar, CVAR_AUTO marks it
             // for cleanup on program termination
-            var = new cvar_t (CvarName.c_str(), NULL,
+            var = new cvar_t (CvarName.c_str(), NULL, "",
                 CVAR_SERVERINFO | CVAR_AUTO | CVAR_UNSETTABLE);
                                   
             var->Set(CvarValue.c_str());

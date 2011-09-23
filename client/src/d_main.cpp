@@ -153,6 +153,7 @@ EXTERN_CVAR (sv_monstersrespawn)
 EXTERN_CVAR (sv_fastmonsters)
 EXTERN_CVAR (sv_freelook)
 EXTERN_CVAR (sv_allowjump)
+EXTERN_CVAR (sv_allowredscreen)
 EXTERN_CVAR (waddirs)
 EXTERN_CVAR (snd_sfxvolume)				// maximum volume for sound
 EXTERN_CVAR (snd_musicvolume)			// maximum volume for music
@@ -1621,10 +1622,17 @@ void D_DoomMain (void)
     //gamestate = GS_FULLCONSOLE;
 
 	p = Args.CheckParm("-netplay");
-	if(p){
-		std::string demoname = Args.GetArg (p+1);
-		CL_NetDemoPlay(demoname);
-		//D_DoomLoop();
+	if (p)
+	{
+		if (Args.GetArg(p + 1))
+		{
+			std::string filename = Args.GetArg(p + 1);
+			CL_NetDemoPlay(filename);
+		}
+		else
+		{
+			Printf(PRINT_HIGH, "No netdemo filename specified.\n");
+		}
 	}
 
 	// denis - bring back the demos
@@ -1643,6 +1651,7 @@ void D_DoomMain (void)
                     sv_allowexit = "1";
                     sv_freelook = "1";
                     sv_allowjump = "1";
+                    sv_allowredscreen = "1";
                     sv_gametype = GM_COOP;
 
 					players.clear();
