@@ -3175,7 +3175,7 @@ void CL_LocalDemoTic()
 	byte waterlevel;
 	
 	clientPlayer->cmd.ucmd.buttons = MSG_ReadByte();
-	
+	clientPlayer->cmd.ucmd.impulse = MSG_ReadByte();	
 	clientPlayer->cmd.ucmd.yaw = MSG_ReadShort();
 	clientPlayer->cmd.ucmd.forwardmove = MSG_ReadShort();
 	clientPlayer->cmd.ucmd.sidemove = MSG_ReadShort();

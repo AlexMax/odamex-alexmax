@@ -791,6 +791,7 @@ void NetDemo::writeLocalCmd(buf_t *netbuffer) const
 
 	MSG_WriteByte(netbuffer, svc_netdemocap);
 	MSG_WriteByte(netbuffer, player->cmd.ucmd.buttons);
+	MSG_WriteByte(netbuffer, player->cmd.ucmd.impulse);
 	MSG_WriteShort(netbuffer, player->cmd.ucmd.yaw);
 	MSG_WriteShort(netbuffer, player->cmd.ucmd.forwardmove);
 	MSG_WriteShort(netbuffer, player->cmd.ucmd.sidemove);
