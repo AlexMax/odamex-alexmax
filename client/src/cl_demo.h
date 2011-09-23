@@ -70,6 +70,9 @@ private:
 	void readMessageBody(buf_t *netbuffer, uint32_t len);
 	void writeFullUpdate(int ticnum);
 
+	int calculateTimeElapsed();
+	int calculateTotalTime();
+
 	typedef struct
 	{
 		uint32_t	ticnum;
@@ -92,7 +95,8 @@ private:
 		uint32_t	snapshot_index_size;	// gametic filepos index follows header
 		uint16_t	snapshot_spacing;		// number of gametics between indices
 		uint32_t	starting_gametic;		// the gametic the demo starts at
-		byte		reserved[44];   		// for future use
+		uint32_t	ending_gametic;			// the last gametic of the demo
+		byte		reserved[40];   		// for future use
 	} netdemo_header_t;
 	
 	static const size_t HEADER_SIZE = 64;

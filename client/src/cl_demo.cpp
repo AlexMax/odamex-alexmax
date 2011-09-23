@@ -150,6 +150,7 @@ bool NetDemo::writeHeader()
 	tmpheader.snapshot_index_size = LONG(tmpheader.snapshot_index_size);
 	tmpheader.snapshot_spacing = SHORT(tmpheader.snapshot_spacing);
 	tmpheader.starting_gametic = LONG(tmpheader.starting_gametic);
+	tmpheader.ending_gametic = LONG(tmpheader.ending_gametic);
 	
 	fseek(demofp, 0, SEEK_SET);
 	size_t cnt = 0;
@@ -167,6 +168,8 @@ bool NetDemo::writeHeader()
 		fwrite(&tmpheader.snapshot_spacing, sizeof(tmpheader.snapshot_spacing), 1, demofp);
 	cnt += sizeof(tmpheader.starting_gametic) *
 		fwrite(&tmpheader.starting_gametic, sizeof(tmpheader.starting_gametic), 1, demofp);
+	cnt += sizeof(tmpheader.ending_gametic) *
+		fwrite(&tmpheader.ending_gametic, sizeof(tmpheader.ending_gametic), 1, demofp);
 	cnt += sizeof(tmpheader.reserved) *
 		fwrite(&tmpheader.reserved, sizeof(tmpheader.reserved), 1, demofp);
 	
@@ -205,6 +208,8 @@ bool NetDemo::readHeader()
 		fread(&header.snapshot_spacing, sizeof(header.snapshot_spacing), 1, demofp);
 	cnt += sizeof(header.starting_gametic) *
 		fread(&header.starting_gametic, sizeof(header.starting_gametic), 1, demofp);
+	cnt += sizeof(header.ending_gametic) *
+		fread(&header.ending_gametic, sizeof(header.ending_gametic), 1, demofp);
 	cnt += sizeof(header.reserved) *
 		fread(&header.reserved, sizeof(header.reserved), 1, demofp);
 	
@@ -218,6 +223,7 @@ bool NetDemo::readHeader()
 	header.snapshot_index_size 		= LONG(header.snapshot_index_size);
 	header.snapshot_spacing 		= SHORT(header.snapshot_spacing);
 	header.starting_gametic 		= LONG(header.starting_gametic);
+	header.ending_gametic			= LONG(header.ending_gametic);
 	
 	return true;
 }
@@ -484,6 +490,9 @@ bool NetDemo::stopRecording()
 	// write the end-of-demo marker
 	byte marker = svc_netdemostop;
 	writeChunk(&marker, sizeof(marker), NetDemo::msg_packet);
+
+	// write the number of the last gametic in the recording
+	header.ending_gametic = gametic;
 
 	// tack the snapshot index onto the end of the recording
 	fflush(demofp);
@@ -1320,5 +1329,32 @@ void NetDemo::readSnapshot(buf_t *netbuffer, size_t index)
 	delete [] data;
 }
 
+
+//
+// calculateTotalTime()
+//
+//   Returns the total length of the demo in seconds
+//
+int NetDemo::calculateTotalTime()
+{
+	if (!isPlaying())
+		return 0;
+
+	return ((header.ending_gametic - header.starting_gametic) / TICRATE);
+}
+
+
+//
+// calculateTimeElapsed()
+//
+//   Returns the number of seconds since the demo started playing
+//
+int NetDemo::calculateTimeElapsed()
+{
+	if (!isPlaying())
+		return 0;
+
+	return ((gametic - header.starting_gametic) / TICRATE);	
+}
 
 VERSION_CONTROL (cl_demo_cpp, "$Id: cl_demo.cpp 2290 2011-06-27 05:05:38Z dr_sean $")
