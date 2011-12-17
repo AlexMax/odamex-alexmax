@@ -46,6 +46,7 @@ EXTERN_CVAR (cl_mouselook)
 EXTERN_CVAR (sv_freelook)
 EXTERN_CVAR (co_zdoomphys)
 EXTERN_CVAR (cl_deathcam)
+EXTERN_CVAR (sv_forcerespawn)
 
 extern bool predicting, step_mode;
 
@@ -474,9 +475,11 @@ void P_DeathThink (player_t *player)
 	if(serverside)
 	{
 		// [Toke - dmflags] Old location of DF_FORCE_RESPAWN
-		if (player->ingame() && (player->cmd.ucmd.buttons & BT_USE
-								 || (!clientside && level.time >= player->respawn_time))) // forced respawn
+		if (player->ingame() && (player->cmd.ucmd.buttons & BT_USE 
+			|| (!clientside && sv_forcerespawn && level.time >= player->respawn_time)))
+		{
 			player->playerstate = PST_REBORN;
+		}
 	}
 }
 
@@ -488,9 +491,16 @@ void P_PlayerThink (player_t *player)
 	ticcmd_t *cmd;
 	weapontype_t newweapon;
 
-	// [RH] Error out if player doesn't have an mobj, but just make
-	//		it a warning if the player trying to spawn is a bot
-	if (!player->mo)
+	// [SL] 2011-10-31 - Thinker called before the client has received a message
+	// to spawn a mobj from the server.  Just bail from this function and
+	// hope the client receives the spawn message at a later time.
+	if (!player->mo && clientside && multiplayer)
+	{
+		DPrintf("Warning: P_PlayerThink called for player %s without a valid Actor.\n",
+				player->userinfo.netname);
+		return;
+	}
+	else if (!player->mo)
 		I_Error ("No player %d start\n", player->id);
 		
 	client_t *cl = &player->client;

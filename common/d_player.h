@@ -129,7 +129,8 @@ public:
 
 	AActor::AActorPtr	mo;
 
-	struct ticcmd_t	cmd;
+	struct ticcmd_t cmd;	// the ticcmd currently being processed
+	std::queue<struct ticcmd_t> cmds;	// all received ticcmds
 
 	// [RH] who is this?
 	userinfo_t	userinfo;
@@ -198,7 +199,7 @@ public:
 	
 	int			xviewshift;				// [RH] view shift (for earthquakes)
 
-	
+	int         psprnum;
 	pspdef_t	psprites[NUMPSPRITES];	// Overlay view sprites (gun, etc).
 	
 	int			jumpTics;				// delay the next jump for a moment
@@ -527,6 +528,7 @@ extern std::vector<player_t> players;
 // Player taking events, and displaying.
 player_t		&consoleplayer();
 player_t		&displayplayer();
+player_t		&listenplayer();
 player_t		&idplayer(size_t id);
 bool			validplayer(player_t &ref);
 
