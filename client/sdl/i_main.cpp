@@ -62,6 +62,8 @@ typedef BOOL (WINAPI *SetAffinityFunc)(HANDLE hProcess, DWORD mask);
 #include "i_sound.h"
 #include "r_main.h"
 
+#include <agar/core.h>
+
 #ifdef _XBOX
 #include "i_xbox.h"
 #endif
@@ -175,6 +177,9 @@ int main(int argc, char *argv[])
 			I_FatalError("Could not initialize SDL:\n%s\n", SDL_GetError());
 
 		atterm (SDL_Quit);
+
+		if (AG_InitCore("Odamex", AG_VERBOSE) == -1)
+			I_FatalError("Could not initialize Agar");
 
 		/*
 		killough 1/98:
