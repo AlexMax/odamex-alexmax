@@ -43,6 +43,9 @@
 #include "m_argv.h"
 #include "m_memio.h"
 
+#include <agar/core.h>
+#include <agar/gui.h>
+
 #ifdef _XBOX
 #include "i_xbox.h"
 #endif
@@ -258,6 +261,8 @@ bool SDLVideo::SetMode (int width, int height, int bits, bool fs)
 
    if(!(sdlScreen = SDL_SetVideoMode(width, height, sbits, flags)))
       return false;
+
+   AG_InitVideoSDL(sdlScreen, AG_VIDEO_SDL);
 
    screenw = width;
    screenh = height;

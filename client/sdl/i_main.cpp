@@ -181,6 +181,8 @@ int main(int argc, char *argv[])
 		if (AG_InitCore("Odamex", AG_VERBOSE) == -1)
 			I_FatalError("Could not initialize Agar");
 
+		atterm(AG_Destroy);
+
 		/*
 		killough 1/98:
 

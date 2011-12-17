@@ -40,16 +40,26 @@ else()
 	message(WARNING "SDL_mixer not found, client target not generated.")
 endif()
 
+# Freetype configuration
+set(FREETYPE_DIR $ENV{FREETYPE_DIR} CACHE PATH "Path to Freetype base directory.")
+set(ENV{FREETYPE_DIR} ${FREETYPE_DIR})
+find_package(Freetype)
+if(FREETYPE_FOUND)
+	include_directories(${FREETYPE_INCLUDE_DIRS})
+else()
+	message(WARNING "Freetype not found, client target not generated.")
+endif()
+
 # Agar configuration
 # Here be dragons.  I can almost guarantee you this will not work on your system.
 set(AGAR_INCLUDE_DIR "C:/Users/Alex Mayfield/Documents/Workspace/lib/mingw/agar-1.4.1-mingw32/include/agar")
-set(AGAR_LIBRARY "C:/Users/Alex Mayfield/Documents/Workspace/lib/mingw/agar-1.4.1-mingw32/lib/libag_core.a")
+set(AGAR_LIBRARY "C:/Users/Alex Mayfield/Documents/Workspace/lib/mingw/agar-1.4.1-mingw32/lib/libag_core.a;C:/Users/Alex Mayfield/Documents/Workspace/lib/mingw/agar-1.4.1-mingw32/lib/libag_gui.a")
 include_directories(${AGAR_INCLUDE_DIR})
 
 # Client target
-if(SDL_FOUND AND SDLMIXER_FOUND)
+if(SDL_FOUND AND SDLMIXER_FOUND AND FREETYPE_FOUND)
 	add_executable(odamex WIN32 ${COMMON_SOURCES} ${COMMON_HEADERS} ${TEXTSCREEN_SOURCES} ${TEXTSCREEN_HEADERS} ${CLIENT_SOURCES} ${CLIENT_HEADERS} ${CLIENT_WIN32_RESOURCES})
-	target_link_libraries(odamex ${AGAR_LIBRARY} ${SDL_LIBRARY} ${SDLMIXER_LIBRARY})
+	target_link_libraries(odamex ${AGAR_LIBRARY} ${SDL_LIBRARY} ${SDLMIXER_LIBRARY} ${FREETYPE_LIBRARIES})
 	if(WIN32)
 		target_link_libraries(odamex winmm wsock32)
 	endif()
