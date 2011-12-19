@@ -52,8 +52,8 @@ endif()
 
 # Agar configuration
 # Here be dragons.  I can almost guarantee you this will not work on your system.
-set(AGAR_INCLUDE_DIR "C:/Users/Alex Mayfield/Documents/Workspace/lib/mingw/agar-1.4.1-mingw32/include/agar")
-set(AGAR_LIBRARY "C:/Users/Alex Mayfield/Documents/Workspace/lib/mingw/agar-1.4.1-mingw32/lib/libag_core.a;C:/Users/Alex Mayfield/Documents/Workspace/lib/mingw/agar-1.4.1-mingw32/lib/libag_gui.a")
+set(AGAR_INCLUDE_DIR "C:/MinGW/msys/1.0/local/include/agar")
+set(AGAR_LIBRARY "C:/MinGW/msys/1.0/local/lib/libag_gui.a;C:/MinGW/msys/1.0/local/lib/libag_core.a")
 include_directories(${AGAR_INCLUDE_DIR})
 
 # Client target
