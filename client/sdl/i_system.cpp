@@ -26,6 +26,7 @@
 
 #include <SDL.h>
 #include <stdlib.h>
+#include <agar/core.h>
 
 #ifdef OSX
 #include <Carbon/Carbon.h>
@@ -544,7 +545,7 @@ void STACK_ARGS I_FatalError (const char *error, ...)
 		va_list argptr;
 		va_start (argptr, error);
 		index = vsprintf (errortext, error, argptr);
-		sprintf (errortext + index, "\nSDL_GetError = %s", SDL_GetError());
+		sprintf (errortext + index, "\nSDL_GetError = %s\nAG_GetError = %s", SDL_GetError(), AG_GetError());
 		va_end (argptr);
 
 		throw CFatalError (errortext);

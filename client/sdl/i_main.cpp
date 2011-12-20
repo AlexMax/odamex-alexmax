@@ -181,6 +181,11 @@ int main(int argc, char *argv[])
 		if (AG_InitCore("Odamex", AG_VERBOSE) == -1)
 			I_FatalError("Could not initialize Agar");
 
+		// Default timing function segfaults on Win32, so use SDL's
+		// NOTE: Possibly dangerous to use unless we extern agar/gui.h
+		extern const AG_TimeOps agTimeOps_SDL;
+		AG_SetTimeOps(&agTimeOps_SDL);
+
 		atterm(AG_Destroy);
 
 		/*

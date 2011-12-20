@@ -262,7 +262,12 @@ bool SDLVideo::SetMode (int width, int height, int bits, bool fs)
    if(!(sdlScreen = SDL_SetVideoMode(width, height, sbits, flags)))
       return false;
 
-   AG_InitVideoSDL(sdlScreen, AG_VIDEO_SDL);
+   if (AG_InitVideoSDL(sdlScreen, AG_VIDEO_SDL) == -1) {
+      return false;
+   }
+
+   // FIXME: This is just a little test
+   AG_TextMsg(AG_MSG_INFO, "Hello, world!");
 
    screenw = width;
    screenh = height;
