@@ -271,7 +271,6 @@ bool SDLVideo::SetMode (int width, int height, int bits, bool fs)
       int entropy;
       AG_TextMsg(AG_MSG_INFO, "Hello, world! %i", entropy);
    } else {
-      AG_ResizeDisplay(width, height);
       if (AG_SetVideoSurfaceSDL(sdlScreen) == -1) {
          return false;
       }
