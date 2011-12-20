@@ -262,12 +262,20 @@ bool SDLVideo::SetMode (int width, int height, int bits, bool fs)
    if(!(sdlScreen = SDL_SetVideoMode(width, height, sbits, flags)))
       return false;
 
-   if (AG_InitVideoSDL(sdlScreen, AG_VIDEO_SDL) == -1) {
-      return false;
-   }
+   if (agDriverSw == NULL) {
+      if (AG_InitVideoSDL(sdlScreen, AG_VIDEO_SDL) == -1) {
+         return false;
+      }
 
-   // FIXME: This is just a little test
-   AG_TextMsg(AG_MSG_INFO, "Hello, world!");
+      // FIXME: This is just a little test
+      int entropy;
+      AG_TextMsg(AG_MSG_INFO, "Hello, world! %i", entropy);
+   } else {
+      AG_ResizeDisplay(width, height);
+      if (AG_SetVideoSurfaceSDL(sdlScreen) == -1) {
+         return false;
+      }
+   }
 
    screenw = width;
    screenh = height;
