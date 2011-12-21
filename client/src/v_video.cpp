@@ -63,6 +63,8 @@
 #include "c_dispatch.h"
 #include "cmdlib.h"
 
+#include "og_main.h"
+
 IMPLEMENT_CLASS (DCanvas, DObject)
 
 int DisplayWidth, DisplayHeight, DisplayBits;
@@ -697,6 +699,7 @@ void V_Init (void)
 
 	V_InitConChars (0xf7);
 	C_InitConsole (screen->width, screen->height, true);
+	cl::odagui::init(screen->width, screen->height);
 
 	V_InitPalette ();
 }

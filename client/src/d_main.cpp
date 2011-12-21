@@ -246,6 +246,8 @@ void D_Display (void)
 		st_scale.Callback ();
 		// Refresh the console.
 		C_NewModeAdjust ();
+		// Refresh the GUI
+		cl::odagui::resize();
 		// denis - redraw border
 		borderdrawcount = 3;
 	}

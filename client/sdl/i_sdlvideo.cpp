@@ -43,9 +43,6 @@
 #include "m_argv.h"
 #include "m_memio.h"
 
-#include <agar/core.h>
-#include <agar/gui.h>
-
 #ifdef _XBOX
 #include "i_xbox.h"
 #endif
@@ -261,20 +258,6 @@ bool SDLVideo::SetMode (int width, int height, int bits, bool fs)
 
    if(!(sdlScreen = SDL_SetVideoMode(width, height, sbits, flags)))
       return false;
-
-   if (agDriverSw == NULL) {
-      if (AG_InitVideoSDL(sdlScreen, AG_VIDEO_SDL) == -1) {
-         return false;
-      }
-
-      // FIXME: This is just a little test
-      int entropy;
-      AG_TextMsg(AG_MSG_INFO, "Hello, world! %i", entropy);
-   } else {
-      if (AG_SetVideoSurfaceSDL(sdlScreen) == -1) {
-         return false;
-      }
-   }
 
    screenw = width;
    screenh = height;

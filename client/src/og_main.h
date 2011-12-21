@@ -26,6 +26,8 @@
 namespace cl {
 namespace odagui {
 
+void resize();
+void init(int width, int height);
 void draw();
 
 }

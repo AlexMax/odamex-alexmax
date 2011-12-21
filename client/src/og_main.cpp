@@ -20,16 +20,48 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <SDL.h>
+
 #include <agar/core.h>
 #include <agar/gui.h>
+
+#include "i_system.h"
+#include "i_video.h"
 
 namespace cl {
 namespace odagui {
 
+DCanvas *gui_canvas = NULL;
+
+// Initialize canvas for a particular size
+void init(int width, int height) {
+	if (agDriverSw == NULL) {
+		if (AG_InitVideoSDL((SDL_Surface *)screen->m_Private,
+							AG_VIDEO_SDL) == -1) {
+			I_FatalError("GUI could not attach to surface.");
+		}
+
+		// FIXME: This is just a little test
+		AG_TextMsg(AG_MSG_INFO, "Hello, world!");
+	} else {
+		if (AG_SetVideoSurfaceSDL((SDL_Surface *)screen->m_Private) == -1) {
+			I_FatalError("GUI could not re-attach to new surface.");
+		}
+	}
+}
+
+// Resize canvas for new video modes
+void resize() {
+	init(screen->width, screen->height);
+}
+
 // Draw every gui widget to the screen
 void draw() {
-	AG_Window *win;
+	if (agDriverSw == NULL) {
+		I_FatalError("GUI can't draw if GUI driver is null pointer.");
+	}
 
+	AG_Window *win;
 	AG_BeginRendering(agDriverSw);
 	AG_FOREACH_WINDOW(win, agDriverSw) {
 		AG_ObjectLock(win);
