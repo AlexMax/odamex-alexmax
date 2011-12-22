@@ -190,6 +190,8 @@ void D_ProcessEvents (void)
 	for (; eventtail != eventhead ; eventtail = ++eventtail<MAXEVENTS ? eventtail : 0)
 	{
 		ev = &events[eventtail];
+		if (cl::odagui::responder(ev))
+			continue;               // GUI ate the event
 		if (C_Responder (ev))
 			continue;				// console ate the event
 		if (M_Responder (ev))

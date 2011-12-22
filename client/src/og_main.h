@@ -29,6 +29,7 @@ namespace odagui {
 void resize();
 void init(int width, int height);
 void draw();
+bool responder(event_t *ev);
 
 }
 }

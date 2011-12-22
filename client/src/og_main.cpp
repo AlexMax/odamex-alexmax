@@ -24,14 +24,18 @@
 
 #include <agar/core.h>
 #include <agar/gui.h>
+#include <agar/gui/sdl.h>
 
+#include "d_event.h"
 #include "i_system.h"
 #include "i_video.h"
 
 namespace cl {
 namespace odagui {
 
-DCanvas *gui_canvas = NULL;
+// Used to keep track of the mouse between mouse move events
+unsigned int mouse_x;
+unsigned int mouse_y;
 
 // Initialize canvas for a particular size
 void init(int width, int height) {
@@ -69,6 +73,46 @@ void draw() {
 		AG_ObjectUnlock(win);
 	}
 	AG_EndRendering(agDriverSw);
+}
+
+// Handle events
+bool responder(event_t *ev) {
+	// We can't use Agar's event handler because Doom swallows nearly all the
+	// events.  Thus, we need to take the raw SDL events and translate them.
+	AG_DriverEvent dev;
+	AG_SDL_TranslateEvent(NULL, (SDL_Event*)ev->raw, &dev);
+
+	// If we've gotten this far, we have an event to process.
+	if (AG_ProcessEvent(NULL, &dev) == -1) {
+		I_FatalError("GUI event has crashed.");
+	}
+
+	return true;
+
+	/*int pending = AG_PendingEvents(NULL);
+
+	if (pending == 0) {
+		// No events, so we pass through to the next event handler
+		return false;
+	}
+
+	// Process all of our events
+	while (pending == 1) {
+		Printf(PRINT_HIGH, "AGAR Event\n");
+		if (AG_GetNextEvent(NULL, &dev) == 1) {
+			if (AG_ProcessEvent(NULL, &dev) == -1) {
+				I_FatalError("GUI event has crashed.");
+			}
+			Printf(PRINT_HIGH, "Agar event processed...");
+		} else {
+			Printf(PRINT_HIGH, "Agar event ignored...");
+		}
+
+		pending = AG_PendingEvents(NULL);
+	}
+
+	// Done processing all events
+	return true;*/
 }
 
 }

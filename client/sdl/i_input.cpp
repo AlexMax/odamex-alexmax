@@ -568,6 +568,7 @@ void I_GetEvent (void)
    while(SDL_PollEvent(&ev))
    {
       event.data1 = event.data2 = event.data3 = 0;
+      event.raw = &ev;
       switch(ev.type)
       {
          case SDL_QUIT:
