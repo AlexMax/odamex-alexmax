@@ -81,6 +81,7 @@ bool responder(event_t *ev) {
 	// events.  Thus, we need to take the raw SDL events and translate them.
 	AG_DriverEvent dev;
 	AG_SDL_TranslateEvent(NULL, (SDL_Event*)ev->raw, &dev);
+	M_Free(ev->raw);
 
 	// If we've gotten this far, we have an event to process.
 	if (AG_ProcessEvent(NULL, &dev) == -1) {
