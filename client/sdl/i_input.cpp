@@ -567,12 +567,7 @@ void I_GetEvent (void)
 
    while(SDL_PollEvent(&ev))
    {
-      // Store the raw SDL event.  We need this for AGAR
-      event.raw = M_Malloc(sizeof(SDL_Event));
-      memcpy(event.raw, &ev, sizeof(SDL_Event));
-
       event.data1 = event.data2 = event.data3 = 0;
-      event.raw = &ev;
       switch(ev.type)
       {
          case SDL_QUIT:
@@ -794,6 +789,8 @@ void I_GetEvent (void)
        if(sendmouseevent)
        {
           mouseevent.data1 = mbuttons;
+          mouseevent.raw = M_Malloc(sizeof(SDL_Event));
+          memcpy(mouseevent.raw, &ev, sizeof(SDL_Event));
           D_PostEvent(&mouseevent);
        }
 

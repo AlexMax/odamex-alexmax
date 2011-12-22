@@ -78,7 +78,12 @@ void draw() {
 // Handle events
 bool responder(event_t *ev) {
 	// We can't use Agar's event handler because Doom swallows nearly all the
-	// events.  Thus, we need to take the raw SDL events and translate them.
+	// events.  So we grab the raw SDL events out of the event_t and use them
+	// instead.
+	if (ev->raw == NULL) {
+		return false;
+	}
+
 	AG_DriverEvent dev;
 	AG_SDL_TranslateEvent(NULL, (SDL_Event*)ev->raw, &dev);
 	M_Free(ev->raw);
