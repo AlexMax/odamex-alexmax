@@ -30,18 +30,37 @@
 #include "i_system.h"
 #include "i_video.h"
 
+extern DWORD IndexedPalette[256];
+
 namespace cl {
 namespace odagui {
 
-// Used to keep track of the mouse between mouse move events
-unsigned int mouse_x;
-unsigned int mouse_y;
+// SDL Surface that stores the GUI
+SDL_Surface *surface;
+
+// Set the correct palette for the GUI.
+void set_palette() {
+	SDL_Color colors[256];
+	DWORD *palette = IndexedPalette;
+	for (int i = 0;i < 256;i+=1, palette++) {
+		colors[i].r = i; //RPART(*palette);
+		colors[i].g = i; //GPART(*palette);
+		colors[i].b = i; //BPART(*palette);
+		colors[i].unused = 0;
+	}
+	SDL_SetColors(surface, colors, 0, 256);
+}
 
 // Initialize canvas for a particular size
 void init(int width, int height) {
 	if (agDriverSw == NULL) {
-		if (AG_InitVideoSDL((SDL_Surface *)screen->m_Private,
-							AG_VIDEO_SDL) == -1) {
+		surface = SDL_CreateRGBSurface(0, width, height, 8, 0, 0, 0, 0);
+		if (surface == NULL) {
+			I_FatalError("GUI surface could not be created.");
+		}
+		set_palette();
+
+		if (AG_InitVideoSDL(surface, AG_VIDEO_SDL) == -1) {
 			I_FatalError("GUI could not attach to surface.");
 		}
 
@@ -62,7 +81,7 @@ void resize() {
 // Draw every gui widget to the screen
 void draw() {
 	if (agDriverSw == NULL) {
-		I_FatalError("GUI can't draw if GUI driver is null pointer.");
+		I_FatalError("GUI can't draw if GUI driver is null.");
 	}
 
 	AG_Window *win;
@@ -73,6 +92,12 @@ void draw() {
 		AG_ObjectUnlock(win);
 	}
 	AG_EndRendering(agDriverSw);
+
+	// Blit from the GUI surface to Odamex's primary surface.
+	if (SDL_BlitSurface(surface, NULL, (SDL_Surface*)screen->m_Private,
+						NULL) == -1) {
+		I_FatalError("GUI blit failed.");
+	}
 }
 
 // Handle events
