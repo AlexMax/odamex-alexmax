@@ -91,7 +91,7 @@
 #include "stats.h"
 #include "p_ctf.h"
 #include "cl_main.h"
-#include "og_main.h"
+#include "og_interface.h"
 
 #ifdef GEKKO
 #include "i_wii.h"

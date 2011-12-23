@@ -20,8 +20,8 @@
 //
 //-----------------------------------------------------------------------------
 
-#ifndef __OGMAIN_H__
-#define __OGMAIN_H__
+#ifndef __OGINTERFACE_H__
+#define __OGINTERFACE_H__
 
 namespace cl {
 namespace odagui {

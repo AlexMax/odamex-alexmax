@@ -63,7 +63,7 @@
 #include "c_dispatch.h"
 #include "cmdlib.h"
 
-#include "og_main.h"
+#include "og_interface.h"
 
 IMPLEMENT_CLASS (DCanvas, DObject)
 
