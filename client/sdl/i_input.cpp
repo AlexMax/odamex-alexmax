@@ -552,7 +552,7 @@ void I_ResumeMouse (void)
 void I_GetEvent (void)
 {
    event_t event;
-   event_t mouseevent = {ev_mouse, 0, 0, 0};
+   event_t mouseevent = {ev_mouse, 0, 0, 0, NULL};
    static int mbuttons = 0;
    int sendmouseevent = 0;
 
@@ -568,6 +568,7 @@ void I_GetEvent (void)
    while(SDL_PollEvent(&ev))
    {
       event.data1 = event.data2 = event.data3 = 0;
+      event.raw = NULL;
       switch(ev.type)
       {
          case SDL_QUIT:
@@ -693,6 +694,8 @@ void I_GetEvent (void)
             else if(ev.button.button == SDL_BUTTON_WHEELDOWN)
                event.data1 = KEY_MWHEELDOWN;
 
+        event.raw = M_Malloc(sizeof(SDL_Event));
+        memcpy(event.raw, &ev, sizeof(SDL_Event));
 		D_PostEvent(&event);
 		break;
 
@@ -729,6 +732,8 @@ void I_GetEvent (void)
             else if(ev.button.button == SDL_BUTTON_WHEELDOWN)
                event.data1 = KEY_MWHEELDOWN;
 
+        event.raw = M_Malloc(sizeof(SDL_Event));
+        memcpy(event.raw, &ev, sizeof(SDL_Event));
 		D_PostEvent(&event);
 		break;
 	case SDL_JOYBUTTONDOWN:
