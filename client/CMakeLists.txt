@@ -52,9 +52,15 @@ endif()
 
 # Agar configuration
 # Here be dragons.  I can almost guarantee you this will not work on your system.
-set(AGAR_INCLUDE_DIR "C:/MinGW/msys/1.0/local/include/agar")
-set(AGAR_LIBRARY "C:/MinGW/msys/1.0/local/lib/libag_gui.a;C:/MinGW/msys/1.0/local/lib/libag_core.a")
-include_directories(${AGAR_INCLUDE_DIR})
+if(WIN32)
+	set(AGAR_INCLUDE_DIR "C:/MinGW/msys/1.0/local/include/agar")
+	set(AGAR_LIBRARY "C:/MinGW/msys/1.0/local/lib/libag_gui.a;C:/MinGW/msys/1.0/local/lib/libag_core.a")
+	include_directories(${AGAR_INCLUDE_DIR})
+else()
+	set(AGAR_INCLUDE_DIR "/Users/alexmax/local/include/agar")
+	set(AGAR_LIBRARY "/Users/alexmax/local/lib/libag_gui.a;/Users/alexmax/local/lib/libag_core.a")
+	include_directories(${AGAR_INCLUDE_DIR})
+endif()
 
 # Client target
 if(SDL_FOUND AND SDLMIXER_FOUND AND FREETYPE_FOUND)
