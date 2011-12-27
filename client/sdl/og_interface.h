@@ -26,8 +26,9 @@
 namespace cl {
 namespace odagui {
 
-void resize();
+void set_palette(DWORD *palette);
 void init(int width, int height);
+void resize();
 void draw();
 bool responder(event_t *ev);
 

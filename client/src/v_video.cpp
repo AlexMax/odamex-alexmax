@@ -639,6 +639,8 @@ void V_InitPalette (void)
 
 	if(DisplayBits == 8)
 		RefreshPalettes ();
+
+	cl::odagui::set_palette(DefaultPalette->colors);
 }
 
 //

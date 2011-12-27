@@ -30,25 +30,21 @@
 #include "i_system.h"
 #include "i_video.h"
 
-extern DWORD IndexedPalette[256];
-
 namespace cl {
 namespace odagui {
 
 // SDL Surface that stores the GUI
+SDL_Color colors[256];
 SDL_Surface *surface;
 
 // Set the correct palette for the GUI.
-void set_palette() {
-	SDL_Color colors[256];
-	DWORD *palette = IndexedPalette;
+void set_palette(DWORD *palette) {
 	for (int i = 0;i < 256;i+=1, palette++) {
-		colors[i].r = i; //RPART(*palette);
-		colors[i].g = i; //GPART(*palette);
-		colors[i].b = i; //BPART(*palette);
+		colors[i].r = RPART(*palette);
+		colors[i].g = GPART(*palette);
+		colors[i].b = BPART(*palette);
 		colors[i].unused = 0;
 	}
-	SDL_SetColors(surface, colors, 0, 256);
 }
 
 // Initialize canvas for a particular size
@@ -58,7 +54,6 @@ void init(int width, int height) {
 		if (surface == NULL) {
 			I_FatalError("GUI surface could not be created.");
 		}
-		set_palette();
 
 		if (AG_InitVideoSDL(surface, AG_VIDEO_SDL) == -1) {
 			I_FatalError("GUI could not attach to surface.");
@@ -67,7 +62,7 @@ void init(int width, int height) {
 		// FIXME: This is just a little test
 		AG_TextMsg(AG_MSG_INFO, "Hello, world!");
 	} else {
-		if (AG_SetVideoSurfaceSDL((SDL_Surface *)screen->m_Private) == -1) {
+		if (AG_SetVideoSurfaceSDL(surface) == -1) {
 			I_FatalError("GUI could not re-attach to new surface.");
 		}
 	}
@@ -93,11 +88,15 @@ void draw() {
 	}
 	AG_EndRendering(agDriverSw);
 
-	// Blit from the GUI surface to Odamex's primary surface.
+	// Blit from the GUI surface to Odamex's primary surface.  If the primary
+	// surface is using a different palette, change to it, blit, then go back.
+	SDL_Color *scolors = ((SDL_Surface*)screen->m_Private)->format->palette->colors;
+	SDL_SetColors(surface, scolors, 0, 256);
 	if (SDL_BlitSurface(surface, NULL, (SDL_Surface*)screen->m_Private,
 						NULL) == -1) {
 		I_FatalError("GUI blit failed.");
 	}
+	SDL_SetColors(surface, colors, 0, 256);
 }
 
 // Handle events

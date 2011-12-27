@@ -35,6 +35,7 @@
 #include "c_dispatch.h"
 #include "g_level.h"
 #include "st_stuff.h"
+#include "og_main.h"
 
 // [Russell] - Implement proper gamma table, taken from chocolate-doom
 // Now where did these came from?
@@ -174,6 +175,7 @@ CVAR_FUNC_IMPL (gammalevel)
 			DoBlending (DefPal.colors, IndexedPalette, DefPal.numcolors,
 						newgamma[BlendR], newgamma[BlendG], newgamma[BlendB], BlendA);
 			I_SetPalette (IndexedPalette);
+			cl::odagui::set_palette(IndexedPalette);
 		}
 	}
 }
