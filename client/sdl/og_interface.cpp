@@ -88,14 +88,17 @@ void draw() {
 	}
 	AG_EndRendering(agDriverSw);
 
-	// Blit from the GUI surface to Odamex's primary surface.  If the primary
-	// surface is using a different palette, change to it, blit, then go back.
+	// Primary surface might be using a translated palette.  Switch to it.
 	SDL_Color *scolors = ((SDL_Surface*)screen->m_Private)->format->palette->colors;
 	SDL_SetColors(surface, scolors, 0, 256);
+
+	// Blit from the GUI surface to Odamex's primary surface.
 	if (SDL_BlitSurface(surface, NULL, (SDL_Surface*)screen->m_Private,
 						NULL) == -1) {
 		I_FatalError("GUI blit failed.");
 	}
+
+	// Primary surface might be using a translated palette.  Switch back.
 	SDL_SetColors(surface, colors, 0, 256);
 }
 
