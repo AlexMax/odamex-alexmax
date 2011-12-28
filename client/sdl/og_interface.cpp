@@ -115,8 +115,16 @@ void draw() {
 	}
 
 	AG_Window *win;
+	SDL_Rect *rect;
 	AG_BeginRendering(agDriverSw);
 	AG_FOREACH_WINDOW(win, agDriverSw) {
+		// Copy the rView to an SDL_Rect for future blitting.
+		// FIXME: Right now we're just writing to the same SDL_Rect
+		//        over and over again.
+		rect->x = win->wid.rView.x1;
+		rect->y = win->wid.rView.y1;
+		rect->w = win->wid.rView.w;
+		rect->h = win->wid.rView.h;
 		AG_ObjectLock(win);
 		AG_WindowDraw(win);
 		AG_ObjectUnlock(win);
@@ -128,8 +136,8 @@ void draw() {
 	SDL_SetColors(surface, scolors, 0, 256);
 
 	// Blit from the GUI surface to Odamex's primary surface.
-	if (SDL_BlitSurface(surface, NULL, (SDL_Surface*)screen->m_Private,
-						NULL) == -1) {
+	if (SDL_BlitSurface(surface, rect, (SDL_Surface*)screen->m_Private,
+						rect) == -1) {
 		I_FatalError("GUI blit failed.");
 	}
 
