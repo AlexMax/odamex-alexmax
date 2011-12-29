@@ -20,6 +20,8 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <list>
+
 #include <SDL.h>
 
 #include <agar/core.h>
@@ -115,16 +117,17 @@ void draw() {
 	}
 
 	AG_Window *win;
-	SDL_Rect *rect;
+	std::list<SDL_Rect> rects;
+
 	AG_BeginRendering(agDriverSw);
 	AG_FOREACH_WINDOW(win, agDriverSw) {
 		// Copy the rView to an SDL_Rect for future blitting.
-		// FIXME: Right now we're just writing to the same SDL_Rect
-		//        over and over again.
-		rect->x = win->wid.rView.x1;
-		rect->y = win->wid.rView.y1;
-		rect->w = win->wid.rView.w;
-		rect->h = win->wid.rView.h;
+		SDL_Rect rect = {win->wid.rView.x1,
+						 win->wid.rView.y1,
+						 win->wid.rView.w,
+						 win->wid.rView.h};
+		rects.push_back(rect);
+		// Render the window to the GUI surface.
 		AG_ObjectLock(win);
 		AG_WindowDraw(win);
 		AG_ObjectUnlock(win);
@@ -136,9 +139,13 @@ void draw() {
 	SDL_SetColors(surface, scolors, 0, 256);
 
 	// Blit from the GUI surface to Odamex's primary surface.
-	if (SDL_BlitSurface(surface, rect, (SDL_Surface*)screen->m_Private,
-						rect) == -1) {
+	for (std::list<SDL_Rect>::iterator it = rects.begin();
+		 it != rects.end();++it) {
+		if (SDL_BlitSurface(surface, (SDL_Rect*)&(*it),
+							(SDL_Surface*)screen->m_Private,
+							(SDL_Rect*)&(*it)) == -1) {
 		I_FatalError("GUI blit failed.");
+		}
 	}
 
 	// Primary surface might be using a translated palette.  Switch back.
