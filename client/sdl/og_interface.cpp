@@ -35,9 +35,18 @@
 namespace cl {
 namespace odagui {
 
+// AGAR color index references to use when defining color schemes
+const unsigned color_indices[24] = {
+	BG_COLOR, FRAME_COLOR, LINE_COLOR, TEXT_COLOR, WINDOW_BG_COLOR,
+	WINDOW_HI_COLOR, WINDOW_LO_COLOR, TITLEBAR_FOCUSED_COLOR,
+	TITLEBAR_UNFOCUSED_COLOR, TITLEBAR_CAPTION_COLOR, BUTTON_COLOR,
+	DISABLED_COLOR, MENU_UNSEL_COLOR, MENU_SEL_COLOR, MENU_OPTION_COLOR,
+	MENU_TXT_COLOR, MENU_SEP1_COLOR, MENU_SEP2_COLOR, TEXTBOX_COLOR,
+	TEXTBOX_TXT_COLOR, TEXTBOX_CURSOR_COLOR, PANE_COLOR, TABLE_COLOR,
+	TABLE_LINE_COLOR
+};
+
 // Default AGAR color scheme palette indexes.
-// FIXME: Come up with a different approach for this.  The AGAR docs are
-//        hideously out of date, and there are way more than 20-odd colors.
 // TODO: Unindent any non-placeholder colors
 // TODO: Assumes Doom palette, should probably support Heretic/Hexen/etc.
 const unsigned char colorscheme_default[LAST_COLOR] = {
@@ -61,11 +70,10 @@ const unsigned char colorscheme_default[LAST_COLOR] = {
 	  199, // Menu separator #2
 	  215, // Text control background
 	  231, // Text control foreground
-	  251, // Text cursor
-	NULL, // Transparent color, ignored
-	21, // Movable pane separators
-	22, // Background of table widgets
-	23, // Lines of table widgets
+	112, // Text cursor
+	  250, // Movable pane separators
+	  255, // Background of table widgets
+	  192, // Lines of table widgets
 };
 
 // True if the GUI is visible in any capacity.  A visible GUI also means
@@ -80,12 +88,10 @@ SDL_Color colors[256];
 
 // Set AGAR color scheme based on doom palette indexes
 void set_colorscheme(const unsigned char cs[]) {
-	for (unsigned i = 0;i < LAST_COLOR;i++) {
-		if (i == TRANSPARENT_COLOR) {
-			continue;
-		}
+	for (unsigned i = 0;i < 24;i++) {
+		size_t ci = color_indices[i];
 		size_t pi = cs[i];
-		AG_ColorsSetRGB(i, colors[pi].r, colors[pi].g, colors[pi].b);
+		AG_ColorsSetRGB(ci, colors[pi].r, colors[pi].g, colors[pi].b);
 	}
 }
 
