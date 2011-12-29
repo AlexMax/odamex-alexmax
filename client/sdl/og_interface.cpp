@@ -35,6 +35,10 @@
 namespace cl {
 namespace odagui {
 
+// True if the GUI is visible in any capacity.  A visible GUI also means
+// that the event handler is running and has priority over Doom events.
+bool visible = false;
+
 // SDL Surface that stores the GUI
 SDL_Surface *surface;
 
@@ -113,6 +117,10 @@ void resize() {
 
 // Draw every gui widget to the screen
 void draw() {
+	if (!visible) {
+		return;
+	}
+
 	if (agDriverSw == NULL) {
 		I_FatalError("GUI can't draw if GUI driver is null.");
 	}
@@ -158,7 +166,7 @@ bool responder(event_t *ev) {
 	// We can't use Agar's event handler because Doom swallows nearly all the
 	// events.  So we grab the raw SDL events out of the event_t and use them
 	// instead.
-	if (ev->raw == NULL) {
+	if (!visible || ev->raw == NULL) {
 		return false;
 	}
 
@@ -166,7 +174,6 @@ bool responder(event_t *ev) {
 	AG_SDL_TranslateEvent(AGDRIVER(agDriverSw), (SDL_Event*)ev->raw, &dev);
 	M_Free(ev->raw);
 
-	// If we've gotten this far, we have an event to process.
 	if (AG_ProcessEvent(NULL, &dev) == -1) {
 		I_FatalError("GUI event has crashed.");
 	}

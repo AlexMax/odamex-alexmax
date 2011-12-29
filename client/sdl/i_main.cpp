@@ -178,7 +178,7 @@ int main(int argc, char *argv[])
 
 		atterm (SDL_Quit);
 
-		if (AG_InitCore("Odamex", AG_VERBOSE) == -1)
+		if (AG_InitCore("Odamex", AG_VERBOSE | AG_NO_CFG_AUTOLOAD) == -1)
 			I_FatalError("Could not initialize Agar");
 
 		// Default timing function segfaults on Win32, so use SDL's
