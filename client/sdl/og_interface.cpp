@@ -53,12 +53,13 @@ void set_palette(DWORD *palette) {
 
 // Initialize canvas for a particular size
 void init(int width, int height) {
-	if (agDriverSw == NULL) {
-		surface = SDL_CreateRGBSurface(0, width, height, 8, 0, 0, 0, 0);
-		if (surface == NULL) {
-			I_FatalError("GUI surface could not be created.");
-		}
+	SDL_FreeSurface(surface); // Safely does nothing if surface is NULL.
+	surface = SDL_CreateRGBSurface(0, width, height, 8, 0, 0, 0, 0);
+	if (surface == NULL) {
+		I_FatalError("GUI surface could not be created.");
+	}
 
+	if (agDriverSw == NULL) {
 		if (AG_InitVideoSDL(surface, AG_VIDEO_SDL) == -1) {
 			I_FatalError("GUI could not attach to surface.");
 		}
