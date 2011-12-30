@@ -35,7 +35,7 @@
 #include "c_dispatch.h"
 #include "g_level.h"
 #include "st_stuff.h"
-#include "og_main.h"
+#include "og_interface.h"
 
 // [Russell] - Implement proper gamma table, taken from chocolate-doom
 // Now where did these came from?
