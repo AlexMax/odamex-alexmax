@@ -31,6 +31,7 @@
 #include "d_event.h"
 #include "i_system.h"
 #include "i_video.h"
+#include "c_dispatch.h" // BEGIN_COMMAND
 
 namespace cl {
 namespace odagui {
@@ -236,3 +237,12 @@ bool responder(event_t *ev) {
 
 }
 }
+
+BEGIN_COMMAND(gui_toggle) {
+	if (cl::odagui::visible == true) {
+		cl::odagui::visible = false;
+	} else {
+		cl::odagui::visible = true;
+	}
+	return;
+} END_COMMAND(gui_toggle)
