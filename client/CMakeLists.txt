@@ -43,6 +43,14 @@ endif()
 # Freetype configuration
 set(FREETYPE_DIR $ENV{FREETYPE_DIR} CACHE PATH "Path to Freetype base directory.")
 set(ENV{FREETYPE_DIR} ${FREETYPE_DIR})
+if(WIN32)
+	# FindFreetype makes bad assumptions on where to find things if you just
+	# compile the library and point FREETYPE_DIR at the basedir on Windows.
+	# TODO: Only tested with MinGW, what does MSVC do?  Or an installer?
+	find_path(FREETYPE_INCLUDE_DIR_ft2build ft2build.h HINTS ${FREETYPE_DIR}/include)
+	find_path(FREETYPE_INCLUDE_DIR_freetype2 freetype/config/ftheader.h HINTS ${FREETYPE_DIR}/include)
+	find_library(FREETYPE_LIBRARY NAMES freetype HINTS ${FREETYPE_DIR}/objs)
+endif()
 find_package(Freetype)
 if(FREETYPE_FOUND)
 	include_directories(${FREETYPE_INCLUDE_DIRS})
