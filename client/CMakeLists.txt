@@ -61,8 +61,10 @@ endif()
 # Agar configuration
 # Here be dragons.  I can almost guarantee you this will not work on your system.
 if(WIN32)
-	set(AGAR_INCLUDE_DIR "C:/MinGW/msys/1.0/local/include/agar")
-	set(AGAR_LIBRARY "C:/MinGW/msys/1.0/local/lib/libag_gui.a;C:/MinGW/msys/1.0/local/lib/libag_core.a")
+	set(AGAR_DIR $ENV{AGAR_DIR} CACHE PATH "Path to AGAR base directory.")
+	set(ENV{AGAR_DIR} ${AGAR_DIR})
+	set(AGAR_INCLUDE_DIR "${AGAR_DIR}/include/agar")
+	set(AGAR_LIBRARY "${AGAR_DIR}/lib/libag_gui.a;${AGAR_DIR}/lib/libag_core.a")
 	include_directories(${AGAR_INCLUDE_DIR})
 else()
 	set(AGAR_INCLUDE_DIR "$ENV{HOME}/local/include/agar")
