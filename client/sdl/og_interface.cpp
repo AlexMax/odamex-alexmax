@@ -122,9 +122,16 @@ void init(int width, int height) {
 
 		// FIXME: Test widgets
 		AG_Window *win;
-		AG_HSVPal *pal;
 		AG_Menu *menu;
 		AG_MenuItem *item;
+
+		AG_VBox *vbox;
+		AG_Textbox *name;
+		AG_Tlist *team, *gender;
+		AG_TlistItem *team_auto, *team_red, *team_blue;
+		AG_Slider *color_red, *color_green, *color_blue;
+		AG_TlistItem *gender_male, *gender_female, *gender_cyborg;
+		AG_Button *save, *cancel;
 
 		menu = AG_MenuNewGlobal(AG_MENU_HFILL);
 		item = AG_MenuNode(menu->root, "Game", NULL); {
@@ -153,7 +160,21 @@ void init(int width, int height) {
 		}
 
 		win = AG_WindowNew(0);
-		pal = AG_HSVPalNew(win, 0);
+		vbox = AG_VBoxNew(win, AG_VBOX_HFILL);
+		name = AG_TextboxNewS(vbox, AG_TEXTBOX_HFILL, "Name");
+		team = AG_TlistNew(vbox, AG_TLIST_HFILL);
+		team_auto = AG_TlistAddS(team, NULL, "Auto");
+		team_red = AG_TlistAddS(team, NULL, "Red");
+		team_blue = AG_TlistAddS(team, NULL, "Blue");
+		color_red = AG_SliderNew(vbox, AG_SLIDER_HORIZ, AG_SLIDER_HFILL);
+		color_green = AG_SliderNew(vbox, AG_SLIDER_HORIZ, AG_SLIDER_HFILL);
+		color_blue = AG_SliderNew(vbox, AG_SLIDER_HORIZ, AG_SLIDER_HFILL);
+		gender = AG_TlistNew(vbox, AG_TLIST_HFILL);
+		gender_male = AG_TlistAddS(gender, NULL, "Male");
+		gender_female = AG_TlistAddS(gender, NULL, "Female");
+		gender_cyborg = AG_TlistAddS(gender, NULL, "Cyborg");
+		cancel = AG_ButtonNewS(vbox, 0, "Cancel");
+		save = AG_ButtonNewS(vbox, 0, "Save");
 		AG_WindowShow(win);
 	} else {
 		if (AG_SetVideoSurfaceSDL(surface) == -1) {
