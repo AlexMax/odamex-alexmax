@@ -36,6 +36,125 @@
 namespace cl {
 namespace odagui {
 
+namespace window {
+
+// Creates the global menu
+void create_menu() {
+	AG_Menu *menu;
+	AG_MenuItem *item;
+
+	menu = AG_MenuNewGlobal(AG_MENU_HFILL);
+	item = AG_MenuNode(menu->root, "Game", NULL); {
+		AG_MenuNode(item, "New Game", NULL);
+		AG_MenuNode(item, "Load Game", NULL);
+		AG_MenuNode(item, "Save Game", NULL);
+		AG_MenuNode(item, "Quit Game", NULL);
+	}
+	item = AG_MenuNode(menu->root, "Options", NULL); {
+		AG_MenuNode(item, "Player Setup", NULL);
+		AG_MenuNode(item, "Customize Controls", NULL);
+		AG_MenuNode(item, "Mouse Setup", NULL);
+		AG_MenuNode(item, "Joystick Setup", NULL);
+		AG_MenuNode(item, "Compatibility Options", NULL);
+		AG_MenuNode(item, "Network Options", NULL);
+		AG_MenuNode(item, "Sound Options", NULL);
+		AG_MenuNode(item, "Display Options", NULL);
+		AG_MenuNode(item, "Console", NULL);
+		AG_MenuNode(item, "Always Run", NULL);
+		AG_MenuNode(item, "Lookspring", NULL);
+		AG_MenuNode(item, "Reset to Last Saved", NULL);
+		AG_MenuNode(item, "Reset to Defaults", NULL);
+	}
+	item = AG_MenuNode(menu->root, "Help", NULL); {
+		AG_MenuNode(item, "About", NULL);
+	}
+}
+
+void create_player_setup() {
+	// Main window
+	AG_Window *win;
+	win = AG_WindowNew(0);
+	AG_WindowSetCaption(win, "Player Setup");
+
+	// Base layout is a vertically-stacked box
+	AG_VBox *vbox;
+	vbox = AG_VBoxNew(win, AG_VBOX_EXPAND); {
+		// Name
+		AG_Textbox *textbox;
+		textbox = AG_TextboxNewS(vbox, AG_TEXTBOX_HFILL, "Name");
+		AG_TextboxSizeHint(textbox, "mmmmmmmmmmmmmmm");
+	} {
+		// Gender
+		AG_Combo *combo;
+		combo = AG_ComboNewS(vbox, AG_COMBO_HFILL, "Gender");
+		AG_TlistAdd(combo->list, NULL, "Male");
+		AG_TlistAdd(combo->list, NULL, "Female");
+		AG_TlistAdd(combo->list, NULL, "Cyborg");
+	} {
+		// Color
+		AG_Label *label;
+		label = AG_LabelNewS(vbox, 0, "Color");
+		AG_HBox *color_hbox;
+		color_hbox = AG_HBoxNew(vbox, AG_HBOX_HFILL); {
+			// Color controls
+			AG_VBox *color_vbox;
+			color_vbox = AG_VBoxNew(color_hbox, 0);
+			AG_HBox *red_hbox, *green_hbox, *blue_hbox;
+			unsigned char cval, cmin, cmax;
+			cval = 128; cmin = 0; cmax = 255;
+			red_hbox = AG_HBoxNew(color_vbox, AG_HBOX_HFILL); {
+				// Red controls
+				AG_Textbox *textbox;
+				textbox = AG_TextboxNewS(red_hbox, AG_TEXTBOX_INT_ONLY, "Red");
+				AG_TextboxSizeHint(textbox, "mmm");
+				AG_Slider *slider;
+				slider = AG_SliderNewUint8(red_hbox, AG_SLIDER_HORIZ,
+										   AG_SLIDER_HFILL,
+										   &cval, &cmin, &cmax);
+			}
+			green_hbox = AG_HBoxNew(color_vbox, AG_HBOX_HFILL); {
+				// Green controls
+				AG_Textbox *textbox;
+				textbox = AG_TextboxNewS(green_hbox, AG_TEXTBOX_INT_ONLY,
+										 "Green");
+				AG_TextboxSizeHint(textbox, "mmm");
+				AG_Slider *slider;
+				slider = AG_SliderNewUint8(green_hbox, AG_SLIDER_HORIZ,
+										   AG_SLIDER_HFILL,
+										   &cval, &cmin, &cmax);
+			}
+			blue_hbox = AG_HBoxNew(color_vbox, AG_HBOX_HFILL);  {
+				// Blue controls
+				AG_Textbox *textbox;
+				textbox = AG_TextboxNewS(blue_hbox, AG_TEXTBOX_INT_ONLY,
+										 "Blue");
+				AG_TextboxSizeHint(textbox, "mmm");
+				AG_Slider *slider;
+				slider = AG_SliderNewUint8(blue_hbox, AG_SLIDER_HORIZ,
+										   AG_SLIDER_HFILL,
+										   &cval, &cmin, &cmax);
+			}
+		} {
+			AG_Pixmap *pixmap;
+			pixmap = AG_PixmapNew(color_hbox, 0, 50, 50);
+		}
+	} {
+		// Skin
+		AG_Combo *combo;
+		combo = AG_ComboNewS(vbox, AG_COMBO_HFILL, "Skin");
+		AG_TlistAdd(combo->list, NULL, "Base");
+	} {
+		// Buttons
+		AG_HBox *buttons_hbox;
+		buttons_hbox = AG_HBoxNew(vbox, 0);
+		AG_Button *save, *cancel;
+		cancel = AG_ButtonNewS(buttons_hbox, 0, "Cancel");
+		save = AG_ButtonNewS(buttons_hbox, 0, "Save");
+	}
+	AG_WindowShow(win);
+}
+}
+
 // AGAR color index references to use when defining color schemes
 const unsigned color_indices[24] = {
 	BG_COLOR, FRAME_COLOR, LINE_COLOR, TEXT_COLOR, WINDOW_BG_COLOR,
@@ -121,61 +240,8 @@ void init(int width, int height) {
 		}
 
 		// FIXME: Test widgets
-		AG_Window *win;
-		AG_Menu *menu;
-		AG_MenuItem *item;
-
-		AG_VBox *vbox;
-		AG_Textbox *name;
-		AG_Tlist *team, *gender;
-		AG_TlistItem *team_auto, *team_red, *team_blue;
-		AG_Slider *color_red, *color_green, *color_blue;
-		AG_TlistItem *gender_male, *gender_female, *gender_cyborg;
-		AG_Button *save, *cancel;
-
-		menu = AG_MenuNewGlobal(AG_MENU_HFILL);
-		item = AG_MenuNode(menu->root, "Game", NULL); {
-			AG_MenuNode(item, "New Game", NULL);
-			AG_MenuNode(item, "Load Game", NULL);
-			AG_MenuNode(item, "Save Game", NULL);
-			AG_MenuNode(item, "Quit Game", NULL);
-		}
-		item = AG_MenuNode(menu->root, "Options", NULL); {
-			AG_MenuNode(item, "Player Setup", NULL);
-			AG_MenuNode(item, "Customize Controls", NULL);
-			AG_MenuNode(item, "Mouse Setup", NULL);
-			AG_MenuNode(item, "Joystick Setup", NULL);
-			AG_MenuNode(item, "Compatibility Options", NULL);
-			AG_MenuNode(item, "Network Options", NULL);
-			AG_MenuNode(item, "Sound Options", NULL);
-			AG_MenuNode(item, "Display Options", NULL);
-			AG_MenuNode(item, "Console", NULL);
-			AG_MenuNode(item, "Always Run", NULL);
-			AG_MenuNode(item, "Lookspring", NULL);
-			AG_MenuNode(item, "Reset to Last Saved", NULL);
-			AG_MenuNode(item, "Reset to Defaults", NULL);
-		}
-		item = AG_MenuNode(menu->root, "Help", NULL); {
-			AG_MenuNode(item, "About", NULL);
-		}
-
-		win = AG_WindowNew(0);
-		vbox = AG_VBoxNew(win, AG_VBOX_HFILL);
-		name = AG_TextboxNewS(vbox, AG_TEXTBOX_HFILL, "Name");
-		team = AG_TlistNew(vbox, AG_TLIST_HFILL);
-		team_auto = AG_TlistAddS(team, NULL, "Auto");
-		team_red = AG_TlistAddS(team, NULL, "Red");
-		team_blue = AG_TlistAddS(team, NULL, "Blue");
-		color_red = AG_SliderNew(vbox, AG_SLIDER_HORIZ, AG_SLIDER_HFILL);
-		color_green = AG_SliderNew(vbox, AG_SLIDER_HORIZ, AG_SLIDER_HFILL);
-		color_blue = AG_SliderNew(vbox, AG_SLIDER_HORIZ, AG_SLIDER_HFILL);
-		gender = AG_TlistNew(vbox, AG_TLIST_HFILL);
-		gender_male = AG_TlistAddS(gender, NULL, "Male");
-		gender_female = AG_TlistAddS(gender, NULL, "Female");
-		gender_cyborg = AG_TlistAddS(gender, NULL, "Cyborg");
-		cancel = AG_ButtonNewS(vbox, 0, "Cancel");
-		save = AG_ButtonNewS(vbox, 0, "Save");
-		AG_WindowShow(win);
+		cl::odagui::window::create_menu();
+		cl::odagui::window::create_player_setup();
 	} else {
 		if (AG_SetVideoSurfaceSDL(surface) == -1) {
 			I_FatalError("GUI could not re-attach to new surface.");
