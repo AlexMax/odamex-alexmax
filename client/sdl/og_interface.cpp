@@ -38,38 +38,6 @@ namespace odagui {
 
 namespace window {
 
-// Creates the global menu
-void create_menu() {
-	AG_Menu *menu;
-	AG_MenuItem *item;
-
-	menu = AG_MenuNewGlobal(AG_MENU_HFILL);
-	item = AG_MenuNode(menu->root, "Game", NULL); {
-		AG_MenuNode(item, "New Game", NULL);
-		AG_MenuNode(item, "Load Game", NULL);
-		AG_MenuNode(item, "Save Game", NULL);
-		AG_MenuNode(item, "Quit Game", NULL);
-	}
-	item = AG_MenuNode(menu->root, "Options", NULL); {
-		AG_MenuNode(item, "Player Setup", NULL);
-		AG_MenuNode(item, "Customize Controls", NULL);
-		AG_MenuNode(item, "Mouse Setup", NULL);
-		AG_MenuNode(item, "Joystick Setup", NULL);
-		AG_MenuNode(item, "Compatibility Options", NULL);
-		AG_MenuNode(item, "Network Options", NULL);
-		AG_MenuNode(item, "Sound Options", NULL);
-		AG_MenuNode(item, "Display Options", NULL);
-		AG_MenuNode(item, "Console", NULL);
-		AG_MenuNode(item, "Always Run", NULL);
-		AG_MenuNode(item, "Lookspring", NULL);
-		AG_MenuNode(item, "Reset to Last Saved", NULL);
-		AG_MenuNode(item, "Reset to Defaults", NULL);
-	}
-	item = AG_MenuNode(menu->root, "Help", NULL); {
-		AG_MenuNode(item, "About", NULL);
-	}
-}
-
 void create_player_setup() {
 	// Main window
 	AG_Window *win;
@@ -166,36 +134,6 @@ const unsigned color_indices[24] = {
 	TABLE_LINE_COLOR
 };
 
-// Default AGAR color scheme palette indexes.
-// TODO: Unindent any non-placeholder colors
-// TODO: Assumes Doom palette, should probably support Heretic/Hexen/etc.
-const unsigned char colorscheme_default[LAST_COLOR] = {
-	0, // Global background
-	  9, // Standard container background
-	  23, // Lines (eg. in tables)
-	4, // Text
-	240, // Window background
-	  39, // Window highlight #1
-	  55, // Window highlight #2
-	  71, // Focused titlebar color
-	  87, // Unfocused titlebar color
-	4, // Titlebar text color
-	  103, // For button-like controls
-	  119, // For "disabled" controls
-	  135, // Non-selected menu item
-	  151, // Selected menu item
-	  167, // Boolean option for menu item
-	4, // Text of menu item
-	  183, // Menu separator #1
-	  199, // Menu separator #2
-	  215, // Text control background
-	  231, // Text control foreground
-	112, // Text cursor
-	  250, // Movable pane separators
-	  255, // Background of table widgets
-	  192, // Lines of table widgets
-};
-
 // True if the GUI is visible in any capacity.  A visible GUI also means
 // that the event handler is running and has priority over Doom events.
 bool visible = true;
@@ -207,13 +145,13 @@ SDL_Surface *surface;
 SDL_Color colors[256];
 
 // Set AGAR color scheme based on doom palette indexes
-void set_colorscheme(const unsigned char cs[]) {
+/*void set_colorscheme(const unsigned char cs[]) {
 	for (unsigned i = 0;i < 24;i++) {
 		size_t ci = color_indices[i];
 		size_t pi = cs[i];
 		AG_ColorsSetRGB(ci, colors[pi].r, colors[pi].g, colors[pi].b);
 	}
-}
+}*/
 
 // Set the correct palette for the GUI.
 void set_palette(DWORD *palette) {
@@ -223,7 +161,6 @@ void set_palette(DWORD *palette) {
 		colors[i].b = BPART(*palette);
 		colors[i].unused = 0;
 	}
-	set_colorscheme(colorscheme_default);
 }
 
 // Initialize canvas for a particular size
@@ -240,7 +177,7 @@ void init(int width, int height) {
 		}
 
 		// FIXME: Test widgets
-		cl::odagui::window::create_menu();
+		cl::odagui::MainMenu();
 		cl::odagui::window::create_player_setup();
 	} else {
 		if (AG_SetVideoSurfaceSDL(surface) == -1) {

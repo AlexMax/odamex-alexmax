@@ -81,6 +81,61 @@ CVAR_FUNC_DECL (msg3color, "3", "", CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 CVAR_FUNC_DECL (msg4color, "3", "", CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 CVAR_FUNC_DECL (msgmidcolor, "5", "", CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 
+// GUI
+// ---
+
+CVAR(gui_doommenus, "1", "Show classic Doom menus", CVAR_ARCHIVE)
+
+// GUI Colors
+// ----------
+
+CVAR(gui_bgcolor, "00 00 00", "GUI global background color", CVAR_ARCHIVE |
+	 CVAR_NOENABLEDISABLE)
+CVAR(gui_framecolor, "00 00 00", "GUI standard container background color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_linecolor, "00 00 00", "GUI line color", CVAR_ARCHIVE |
+	 CVAR_NOENABLEDISABLE)
+CVAR(gui_textcolor, "00 00 00", "GUI text color", CVAR_ARCHIVE |
+	 CVAR_NOENABLEDISABLE)
+CVAR(gui_windowbgcolor, "00 00 00", "GUI window background color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_windowhicolor, "00 00 00", "GUI window highlight color #1",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_windowlocolor, "00 00 00", "GUI window highlight color #2",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_titlebarfocusedcolor, "00 00 00", "GUI focused titlebar color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_titlebarunfocusedcolor, "00 00 00", "GUI unfocused titlebar color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_titlebarcaptioncolor, "00 00 00", "GUI titlebar text color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_buttoncolor, "00 00 00", "GUI button color", CVAR_ARCHIVE |
+	 CVAR_NOENABLEDISABLE)
+CVAR(gui_buttondisabledcolor, "00 00 00", "GUI disabled control color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_menuunselcolor, "00 00 00", "GUI non-selected menu item color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_menuselcolor, "00 00 00", "GUI selected menu item color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_menuoptioncolor, "00 00 00", "GUI boolean option menu item color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_menusep1color, "00 00 00", "GUI menu separator #1 color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_menusep2color, "00 00 00", "GUI menu separator #2 color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_textboxcolor, "00 00 00", "GUI text control background color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_textboxtxtcolor, "00 00 00", "GUI text control foreground color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_textboxcursorcolor, "00 00 00", "GUI text cursor color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_panecolor, "00 00 00", "GUI movable pane separators color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_tablecolor, "00 00 00", "GUI table color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR(gui_tablelinecolor, "00 00 00", "GUI table line color",
+	 CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+
 // Intermission
 // ------------
 
