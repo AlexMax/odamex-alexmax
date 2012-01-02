@@ -28,6 +28,8 @@
 #include <agar/gui.h>
 #include <agar/gui/sdl.h>
 
+#include "og_mainmenu.h"
+
 #include "d_event.h"
 #include "i_system.h"
 #include "i_video.h"

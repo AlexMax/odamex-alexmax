@@ -28,13 +28,6 @@
 namespace cl {
 namespace odagui {
 
-// The global menu that appears at the top of the screen
-class MainMenu {
-public:
-	MainMenu();
-	~MainMenu();
-}
-
 MainMenu::MainMenu() {
 	AG_Menu *menu;
 	AG_MenuItem *item;
@@ -66,7 +59,7 @@ MainMenu::MainMenu() {
 	}
 }
 
-MainMenu::MainMenu() {}
+MainMenu::~MainMenu() {}
 
 }
 }

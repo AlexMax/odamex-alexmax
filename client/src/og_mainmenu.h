@@ -27,11 +27,11 @@ namespace cl {
 namespace odagui {
 
 // The global menu that appears at the top of the screen
-class GlobalMenu {
+class MainMenu {
 public:
-	GlobalMenu();
-	~GlobalMenu();
-}
+	MainMenu();
+	~MainMenu();
+};
 
 }
 }
