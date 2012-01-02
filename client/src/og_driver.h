@@ -23,12 +23,12 @@
 #ifndef __OGINTERFACE_H__
 #define __OGINTERFACE_H__
 
-#include <agar/core.h>
+#include "v_video.h"
 
 namespace cl {
 namespace odagui {
 
-extern AG_DriverSwClass agDriverDCanvas;
+int init_video_dcanvas(DCanvas *cv);
 
 }
 }

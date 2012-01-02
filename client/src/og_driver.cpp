@@ -29,14 +29,16 @@ namespace cl {
 namespace odagui {
 
 // AGAR driver struct
+extern "C" {
 typedef struct ag_driver_dcanvas {
 	struct ag_driver_sw _inherit;
 	DCanvas *canvas;
 } AG_DriverDCanvas;
+}
 
 // Driver struct initialization
 static void Init(void *obj) {
-	AG_DriverDCanvas *dc = obj;
+	AG_DriverDCanvas *dc = (AG_DriverDCanvas*)obj;
 	dc->canvas = NULL;
 }
 
@@ -142,6 +144,29 @@ AG_DriverSwClass agDriverDCanvas = {
 		NULL // void (*deleteList)(void *, Uint);
 	}
 };
+
+// Initialize AGAR to render to the passed DCanvas.
+int init_video_dcanvas(DCanvas *cv) {
+	AG_Driver *drv = NULL;
+	AG_DriverClass *dc = NULL;
+
+	if (AG_InitGUIGlobals() == -1) {
+		return -1;
+	}
+
+	dc = (AG_DriverClass*)&agDriverDCanvas;
+	drv = AG_DriverOpen(dc);
+
+	if (AG_InitGUI(0) == -1) {
+		AG_DriverClose(drv);
+		AG_DestroyGUIGlobals();
+		return -1;
+	}
+
+	agDriverOps = dc;
+	agDriverSw = AGDRIVER_SW(drv);
+	return 0;
+}
 
 }
 }

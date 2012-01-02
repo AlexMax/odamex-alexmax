@@ -168,12 +168,11 @@ void set_palette(DWORD *palette) {
 
 // Initialize canvas for a particular size
 void init(int width, int height) {
-	AG_Driver *drv = NULL;
-	AG_DriverClass *dc = NULL;
-
-	dc = &agDriverDCanvas;
-	drv = AG_DriverOpen(dc);
-	AG_DriverClose(drv);
+	if (agDriverSw == NULL) {
+		if (cl::odagui::init_video_dcanvas(screen) == -1) {
+			I_FatalError("GUI could not attach to DCanvas.");
+		}
+	}
 
 /*	SDL_FreeSurface(surface); // Safely does nothing if surface is NULL.
 	surface = SDL_CreateRGBSurface(0, width, height, 8, 0, 0, 0, 0);
