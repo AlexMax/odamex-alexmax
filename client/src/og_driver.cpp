@@ -36,14 +36,23 @@ typedef struct ag_driver_dcanvas {
 } AG_DriverDCanvas;
 }
 
-// Driver struct initialization
+/// Single Window driver interface
+
 static void Init(void *obj) {
 	AG_DriverDCanvas *dc = (AG_DriverDCanvas*)obj;
 	dc->canvas = NULL;
 }
 
-// Driver struct destruction
 static void Destroy(void *obj) { }
+
+/// DCanvas driver interface
+
+static int dcanvas_open(void *obj, const char *spec) {
+	AG_Driver *drv = (AG_Driver*)obj;
+	AG_DriverDCanvas *dc = (AG_DriverDCanvas*)obj;
+
+	return 0;
+}
 
 // Create the driver itself, mapping functions to the driver interface.
 AG_DriverSwClass agDriverDCanvas = {
@@ -64,7 +73,7 @@ AG_DriverSwClass agDriverDCanvas = {
 		AG_WM_SINGLE, // Window manager type
 		0, // Flags
 		// Initialization
-		NULL, // int  (*open)(void *, const char *spec);
+		dcanvas_open,
 		NULL, // void (*close)(void *);
 		NULL, // int  (*getDisplaySize)(Uint *w, Uint *h);
 		// Event processing
@@ -146,7 +155,7 @@ AG_DriverSwClass agDriverDCanvas = {
 };
 
 // Initialize AGAR to render to the passed DCanvas.
-int init_video_dcanvas(DCanvas *cv) {
+int init_video_dcanvas(DCanvas *display, unsigned int flags) {
 	AG_Driver *drv = NULL;
 	AG_DriverClass *dc = NULL;
 
@@ -154,18 +163,28 @@ int init_video_dcanvas(DCanvas *cv) {
 		return -1;
 	}
 
+	AG_RegisterClass(&agDriverDCanvas);
 	dc = (AG_DriverClass*)&agDriverDCanvas;
 	drv = AG_DriverOpen(dc);
 
+	if (AGDRIVER_SW_CLASS(drv)->openVideoContext(drv, (void *)display,
+												 flags) == -1) {
+		AG_DriverClose(drv);
+		goto fail;
+	}
+
 	if (AG_InitGUI(0) == -1) {
 		AG_DriverClose(drv);
-		AG_DestroyGUIGlobals();
-		return -1;
 	}
 
 	agDriverOps = dc;
 	agDriverSw = AGDRIVER_SW(drv);
 	return 0;
+
+	fail:
+	AG_DestroyGUIGlobals();
+	AG_UnregisterClass(&agDriverDCanvas);
+	return -1;
 }
 
 }

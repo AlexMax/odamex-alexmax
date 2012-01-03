@@ -28,7 +28,7 @@
 namespace cl {
 namespace odagui {
 
-int init_video_dcanvas(DCanvas *cv);
+int init_video_dcanvas(DCanvas *display, unsigned int flags);
 
 }
 }

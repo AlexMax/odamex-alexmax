@@ -169,7 +169,7 @@ void set_palette(DWORD *palette) {
 // Initialize canvas for a particular size
 void init(int width, int height) {
 	if (agDriverSw == NULL) {
-		if (cl::odagui::init_video_dcanvas(screen) == -1) {
+		if (init_video_dcanvas(screen, 0) == -1) {
 			I_FatalError("GUI could not attach to DCanvas.");
 		}
 	}
