@@ -170,11 +170,12 @@ int init_video_dcanvas(DCanvas *display, unsigned int flags) {
 	if (AGDRIVER_SW_CLASS(drv)->openVideoContext(drv, (void *)display,
 												 flags) == -1) {
 		AG_DriverClose(drv);
-		goto fail;
+		goto fail; // error cleanup
 	}
 
 	if (AG_InitGUI(0) == -1) {
 		AG_DriverClose(drv);
+		goto fail; // error cleanup
 	}
 
 	agDriverOps = dc;
