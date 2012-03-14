@@ -56,7 +56,6 @@ int	P_TranslateSectorSpecial (int);
 
 extern unsigned int R_OldBlend;
 
-extern std::set<sector_t*> movable_sectors;
 //
 // MAP related Lookup tables.
 // Store VERTEXES, LINEDEFS, SIDEDEFS, etc.
@@ -1352,14 +1351,17 @@ void P_SetMovableSectors()
 			for (int s = 0; s < numsectors; s++)
 			{
 				if (sectors[s].tag == li->id)
-					movable_sectors.insert(&sectors[s]);
+					movable_sectors.insert(s);
 			}
 		}
 		else if (li->special && li->backsector)
 		{
 			// No tag is used with this special (eg, door).
 			// Add the sector on the backside of the line.
-			movable_sectors.insert(li->backsector);
+		
+			// get sector number for backside of line
+			int s = (li->backsector - sectors) / sizeof(sector_t);
+			movable_sectors.insert(s);
 		}
 	}
 }

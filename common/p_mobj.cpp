@@ -334,13 +334,155 @@ void AActor::Destroy ()
 
 
 //
+// P_MoveActor
+//
+// Tries to move an actor based on its momentum while performing
+// clipping against other actors and walls.
+//
+// [SL] 2012-03-10 - Factored out from AActor::RunThink() to allow other
+// functions to utilize the movement clipping code.
+//
+void P_MoveActor(AActor *mo)
+{
+	if (!mo || !mo->subsector)
+		return;
+	
+	AActor *onmo = NULL;
+    fixed_t minmom;
+	
+	// Handle X and Y momemtums
+    BlockingMobj = NULL;
+	if (mo->momx || mo->momy || (mo->flags & MF_SKULLFLY))
+	{
+		P_XYMovement(mo);
+
+		if (mo->ObjectFlags & OF_MassDestruction)
+			return;		// actor was destroyed
+	}
+
+	if (mo->flags2 & MF2_FLOATBOB)
+	{ // Floating item bobbing motion (special1 is height)
+		mo->z = mo->floorz + mo->special1;
+	}
+	else if ((mo->z != mo->floorz) || mo->momz || BlockingMobj)
+	{
+	    // Handle Z momentum and gravity
+		if (co_realactorheight && (mo->flags2 & MF2_PASSMOBJ))
+		{
+		    if (!(onmo = P_CheckOnmobj(mo)))
+			{
+				P_ZMovement(mo);
+				if (mo->player && mo->flags2 & MF2_ONMOBJ)
+				{
+					mo->flags2 &= ~MF2_ONMOBJ;
+				}
+			}
+			else
+			{
+			    if (mo->player)
+				{
+					minmom = (co_zdoomphys ? (fixed_t)(level.gravity * mo->subsector->sector->gravity * -655.36f) :
+											 (fixed_t)(GRAVITY*mo->subsector->sector->gravity*-8));
+
+					if (mo->momz < minmom && !(mo->flags2&MF2_FLY))
+					{
+						PlayerLandedOnThing(mo, onmo);
+					}
+				}
+				if (onmo->z + onmo->height - mo->z <= 24 * FRACUNIT)
+				{
+					if (mo->player)
+					{
+						mo->player->viewheight -= onmo->z + onmo->height - mo->z;
+						mo->player->deltaviewheight =
+							(VIEWHEIGHT - mo->player->viewheight)>>3;
+					}
+					mo->z = onmo->z + onmo->height;
+				}
+
+				mo->flags2 |= MF2_ONMOBJ;
+				mo->momz = 0;
+			}
+		}
+	    else
+	    {
+            P_ZMovement(mo);
+	    }
+
+        if (mo->ObjectFlags & OF_MassDestruction)
+            return;		// actor was destroyed
+	}
+
+	if (mo->subsector)
+	{
+		//byte lastwaterlevel = waterlevel;
+		mo->waterlevel = 0;
+		if (mo->subsector->sector->waterzone)
+			mo->waterlevel = 3;
+			
+		sector_t *hsec = mo->subsector->sector->heightsec;
+		if (hsec && hsec->waterzone && !mo->subsector->sector->waterzone)
+		{
+			if (mo->z < hsec->floorheight)
+			{
+				mo->waterlevel = 1;
+				if (mo->z + mo->height/2 < hsec->floorheight)
+				{
+					mo->waterlevel = 2;
+					if (mo->z + mo->height <= hsec->floorheight)
+						mo->waterlevel = 3;
+				}
+			}
+			else if (mo->z + mo->height > hsec->ceilingheight)
+			{
+				mo->waterlevel = 3;
+			}
+		}
+	}
+}
+
+
+//
+// P_TestActorMovement
+//
+// [SL] 2012-03-10 - Performs collision testing to see if an actor can move
+// to (tryx, tryy, tryz).  (destx, desty, destz) is the location the actor
+// would be moved to with wall and actor collsion taken into account.
+//
+void P_TestActorMovement(AActor *mo, fixed_t tryx, fixed_t tryy, fixed_t tryz,
+						fixed_t &destx, fixed_t &desty, fixed_t &destz)
+{
+	// Make a fake copy of the real actor
+	AActor *fakemo = new AActor(mo->x, mo->y, mo->z, mo->type);
+	fakemo->height = mo->height;
+	fakemo->flags = mo->flags;
+	fakemo->flags2 = mo->flags2;
+	fakemo->momx = tryx - mo->x;
+	fakemo->momy = tryy - mo->y;
+	fakemo->momz = tryz - mo->z;	
+		
+	// Make the real actor non-solid so it doesn't interfere with fakemo
+	bool oldsolid = mo->flags & MF_SOLID;
+	mo->flags &= ~MF_SOLID;
+	
+	// Perform collision testing with the fake actor
+	P_MoveActor(fakemo);
+	
+	destx = fakemo->x;
+	desty = fakemo->y;
+	destz = fakemo->z;
+	
+	// Make the real actor solid again
+	mo->flags |= oldsolid;
+	
+	fakemo->Destroy();
+}
+
+//
 // P_MobjThinker
 //
 void AActor::RunThink ()
 {
-    AActor *onmo;
-    fixed_t minmom;
-
 	if(!subsector)
 		return;
 
@@ -385,97 +527,7 @@ void AActor::RunThink ()
 		}
 	}
 
-	// Handle X and Y momemtums
-    BlockingMobj = NULL;
-	if (momx || momy || (flags & MF_SKULLFLY))
-	{
-		P_XYMovement (this);
-
-		if (ObjectFlags & OF_MassDestruction)
-			return;		// actor was destroyed
-	}
-
-	if (flags2 & MF2_FLOATBOB)
-	{ // Floating item bobbing motion (special1 is height)
-		z = floorz + special1;
-	}
-	else if ((z != floorz) || momz || BlockingMobj)
-	{
-	    // Handle Z momentum and gravity
-		if (co_realactorheight && (flags2 & MF2_PASSMOBJ))
-		{
-		    if (!(onmo = P_CheckOnmobj (this)))
-			{
-				P_ZMovement (this);
-				if (player && flags2 & MF2_ONMOBJ)
-				{
-					flags2 &= ~MF2_ONMOBJ;
-				}
-			}
-			else
-			{
-			    if (player)
-				{
-					minmom = (co_zdoomphys ? (fixed_t)(level.gravity * subsector->sector->gravity * -655.36f) :
-											 (fixed_t)(GRAVITY*subsector->sector->gravity*-8));
-
-					if (momz < minmom && !(flags2&MF2_FLY))
-					{
-						PlayerLandedOnThing (this, onmo);
-					}
-				}
-				if (onmo->z + onmo->height - z <= 24 * FRACUNIT)
-				{
-					if (player)
-					{
-						player->viewheight -= onmo->z + onmo->height - z;
-						player->deltaviewheight =
-							(VIEWHEIGHT - player->viewheight)>>3;
-					}
-					z = onmo->z + onmo->height;
-				}
-
-				flags2 |= MF2_ONMOBJ;
-				momz = 0;
-			}
-		}
-	    else
-	    {
-            P_ZMovement (this);
-	    }
-
-        if (ObjectFlags & OF_MassDestruction)
-            return;		// actor was destroyed
-	}
-
-	if(subsector)
-	{
-		//byte lastwaterlevel = waterlevel;
-		waterlevel = 0;
-		if (subsector->sector->waterzone)
-			waterlevel = 3;
-		sector_t *hsec;
-		if ( (hsec = subsector->sector->heightsec) )
-		{
-			if (hsec->waterzone && !subsector->sector->waterzone)
-			{
-				if (z < hsec->floorheight)
-				{
-					waterlevel = 1;
-					if (z + height/2 < hsec->floorheight)
-					{
-						waterlevel = 2;
-						if (z + height <= hsec->floorheight)
-							waterlevel = 3;
-					}
-				}
-				else if (z + height > hsec->ceilingheight)
-				{
-					waterlevel = 3;
-				}
-			}
-		}
-	}
+	P_MoveActor(this);
 
 	if(predicting)
 		return;
