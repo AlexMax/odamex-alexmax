@@ -358,6 +358,9 @@ void CL_PredictWorld(void)
 
 	CL_PredictSectors(gametic);
 	CL_PredictLocalPlayer(gametic);
+
+	if (consoleplayer().id != displayplayer().id)
+		P_CalcHeight(&displayplayer());
 	
 	// Player is on the ground?
 	if (p->mo->z <= p->mo->floorz)
