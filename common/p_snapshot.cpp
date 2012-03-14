@@ -674,9 +674,8 @@ void P_SetPlayerSnapshotNoPosition(player_t *player, const PlayerSnapshot &snap)
 	player->mo->LinkToWorld();
 		
 	player->mo->angle = snap.getAngle();
+	player->mo->pitch = snap.getPitch();
 }
-
-
 
 VERSION_CONTROL (p_snapshot_cpp, "$Id: p_snapshot.cpp 2785 2012-02-18 23:22:07Z dr_sean $")
 
