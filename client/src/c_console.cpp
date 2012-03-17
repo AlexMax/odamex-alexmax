@@ -26,7 +26,7 @@
 
 #include "m_alloc.h"
 #include "version.h"
-#include "dstrings.h"
+#include "gstrings.h"
 #include "g_game.h"
 #include "c_console.h"
 #include "c_cvars.h"
@@ -52,6 +52,8 @@
 #include <string>
 #include <vector>
 #include <algorithm>
+
+std::string DownloadStr;
 
 static void C_TabComplete (void);
 static BOOL TabbedLast;		// Last key pressed was tab
@@ -118,7 +120,16 @@ static int HistSize;
 #define NUMNOTIFIES 4
 
 EXTERN_CVAR (con_notifytime)
-EXTERN_CVAR (con_scaletext)
+CVAR_FUNC_IMPL (hud_scaletext)
+{
+	if (var < 1.0f)
+		var.Set(1.0f);
+	if (var > 4.0f)
+		var.Set(4.0f);
+}
+
+int V_TextScaleXAmount();
+int V_TextScaleYAmount();
 
 static struct NotifyText
 {
@@ -135,7 +146,7 @@ static void setmsgcolor (int index, const char *color);
 
 BOOL C_HandleKey (event_t *ev, byte *buffer, int len);
 
-cvar_t msglevel ("msg", "0", "", CVAR_ARCHIVE);
+cvar_t msglevel ("msg", "0", "", CVARTYPE_STRING, CVAR_ARCHIVE);
 
 CVAR_FUNC_IMPL (msg0color)
 {
@@ -179,7 +190,7 @@ EXTERN_CVAR (con_scrlock)
 //
 // C_Close
 //
-void C_Close()
+void STACK_ARGS C_Close()
 {
 	if(altconback)
 	{
@@ -388,10 +399,7 @@ void C_AddNotifyString (int printlevel, const char *source)
 		(gamestate != GS_LEVEL && gamestate != GS_INTERMISSION) )
 		return;
 
-	if (con_scaletext)
-		width = DisplayWidth / CleanXfac;
-	else
-		width = DisplayWidth;
+	width = DisplayWidth / V_TextScaleXAmount();
 
 	if (addtype == APPENDLINE && NotifyStrings[NUMNOTIFIES-1].printlevel == printlevel)
 	{
@@ -773,16 +781,9 @@ static void C_DrawNotifyText (void)
 			else
 				color = PrintColors[NotifyStrings[i].printlevel];
 
-			if (con_scaletext)
-			{
-				screen->DrawTextClean (color, 0, line, NotifyStrings[i].text);
-				line += 8 * CleanYfac;
-			}
-			else
-			{
-				screen->DrawText (color, 0, line, NotifyStrings[i].text);
-				line += 8;
-			}
+			screen->DrawTextStretched (color, 0, line, NotifyStrings[i].text,
+										V_TextScaleXAmount(), V_TextScaleYAmount());
+			line += 8 * V_TextScaleYAmount();
 		}
 	}
 }
@@ -803,7 +804,6 @@ void C_DrawConsole (void)
 {
 	unsigned char *zap;
 	int lines, left, offset;
-	static int oldbottom = 0;
 
 	left = 8;
 	lines = (ConBottom-12)/8;
@@ -812,8 +812,6 @@ void C_DrawConsole (void)
 	else
 		offset = -12;
 	zap = Last - (SkipRows + RowAdjust) * (ConCols + 2);
-
-	oldbottom = ConBottom;
 
 	if (ConsoleState == c_up)
 	{
@@ -852,6 +850,15 @@ void C_DrawConsole (void)
 			screen->PrintStr (screen->width - 8 - strlen(VersionString) * 8,
 						ConBottom - 12,
 						VersionString, strlen (VersionString));
+
+            // Download progress bar hack
+            if (gamestate == GS_DOWNLOAD)
+            {
+                screen->PrintStr (left + 2,
+						ConBottom - 10,
+						DownloadStr.c_str(), DownloadStr.length());
+            }
+
 			if (TickerMax)
 			{
 				char tickstr[256];
@@ -1545,7 +1552,7 @@ void C_MidPrint (const char *msg, player_t *p, int msgtime)
 		Printf (PRINT_HIGH, "%s\n", newmsg);
 		midprinting = false;
 
-		if ( (MidMsg = V_BreakLines (con_scaletext ? screen->width / CleanXfac : screen->width, (byte *)newmsg)) )
+		if ( (MidMsg = V_BreakLines(screen->width / V_TextScaleXAmount(), (byte *)newmsg)) )
 		{
 			MidTicker = (int)(msgtime * TICRATE) + gametic;
 
@@ -1567,34 +1574,16 @@ void C_DrawMid (void)
 	{
 		int i, line, x, y, xscale, yscale;
 
-		if (con_scaletext)
-		{
-			xscale = CleanXfac;
-			yscale = CleanYfac;
-		}
-		else
-		{
-			xscale = yscale = 1;
-		}
+		xscale = V_TextScaleXAmount();
+		yscale = V_TextScaleYAmount();
 
 		y = 8 * yscale;
 		x = screen->width >> 1;
 		for (i = 0, line = (ST_Y * 3) / 8 - MidLines * 4 * yscale; i < MidLines; i++, line += y)
 		{
-			if (con_scaletext)
-			{
-				screen->DrawTextClean (PrintColors[PRINTLEVELS],
+			screen->DrawTextStretched (PrintColors[PRINTLEVELS],
 					x - (MidMsg[i].width >> 1) * xscale,
-					line,
-					(byte *)MidMsg[i].string);
-			}
-			else
-			{
-				screen->DrawText (PrintColors[PRINTLEVELS],
-					x - (MidMsg[i].width >> 1) * xscale,
-					line,
-					(byte *)MidMsg[i].string);
-			}
+					line, (byte *)MidMsg[i].string, xscale, yscale);
 		}
 
 		if (gametic >= MidTicker)
@@ -1613,7 +1602,7 @@ void C_RevealSecret()
 		return;                      // NES - Also check for deathmatch
 
 	C_MidPrint ("A secret is revealed!");
-	S_Sound (CHAN_AUTO, "misc/secret", 1, ATTN_NONE);
+	S_Sound (CHAN_INTERFACE, "misc/secret", 1, ATTN_NONE);
 }
 
 /****** Tab completion code ******/

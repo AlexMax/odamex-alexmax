@@ -1,4 +1,4 @@
-// Emacs style mode select   -*- C++ -*- 
+// Emacs style mode select   -*- C++ -*-
 //-----------------------------------------------------------------------------
 //
 // $Id$
@@ -32,7 +32,7 @@
 #include "c_dispatch.h"
 #include "c_bind.h"
 #include "g_level.h"
-#include "dstrings.h"
+#include "gstrings.h"
 #include "hu_stuff.h"
 
 /* Most of these bindings are equivalent
@@ -103,7 +103,9 @@ char DefBindings[] =
 	"bind t messagemode; "
 	"bind \\ +showscores; "				// <- Another new command
 	"bind f11 bumpgamma; "
-	"bind f12 spynext";
+	"bind f12 spynext; "
+	"bind pgup vote_yes; "				// <- New for voting
+	"bind pgdn vote_no";				// <- New for voting
 
 
 // SoM: ok... I hate randy heit I have no idea how to translate between ascii codes to these
@@ -147,7 +149,7 @@ const char *KeyNames[NUM_KEYS] = {
    NULL,    NULL,    NULL,    NULL,    NULL,    NULL,    NULL,    NULL, // F8 - FF
 // :: End world keycodes
   "kp0",   "kp1",   "kp2",   "kp3",   "kp4",   "kp5",   "kp6",   "kp7", // 0100 - 0107
-  "kp8",   "kp9",   "kp.",   "kp/",   "kp*",   "kp-",   "kp+", "enter", // 0108 - 010F
+  "kp8",   "kp9",   "kp.",   "kp/",   "kp*",   "kp-",   "kp+", "kpenter", // 0108 - 010F
   "kp=","uparrow","downarrow","rightarrow","leftarrow","ins","home","end", // 0110 - 0117
  "pgup",  "pgdn",    "f1",    "f2",    "f3",    "f4",    "f5",    "f6", // 0118 - 011F
    "f7",    "f8",    "f9",   "f10",   "f11",   "f12",   "f13",   "f14", // 0120 - 0127
@@ -259,7 +261,7 @@ BEGIN_COMMAND (bind)
 		}
 	} else {
 		Printf (PRINT_HIGH, "Current key bindings:\n");
-		
+
 		for (i = 0; i < NUM_KEYS; i++) {
 			if (Bindings[i].length())
 				Printf (PRINT_HIGH, "%s \"%s\"\n", KeyName (i), Bindings[i].c_str());
@@ -306,7 +308,7 @@ BEGIN_COMMAND (doublebind)
 	else
 	{
 		Printf (PRINT_HIGH, "Current key doublebindings:\n");
-		
+
 		for (i = 0; i < NUM_KEYS; i++)
 		{
 			if (DoubleBindings[i].length())

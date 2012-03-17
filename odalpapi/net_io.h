@@ -32,6 +32,7 @@
 #elif _WIN32
     #include <windows.h>
     #include <winsock.h>
+    #include <ws2tcpip.h>
 #else
     #include <sys/socket.h>
     #include <netinet/in.h>
@@ -55,7 +56,7 @@ typedef int SOCKET;
 #endif
 
 // Max packet size to send and receive, in bytes
-const size_t MAX_PAYLOAD = 1400;
+const size_t MAX_PAYLOAD = 8192;
 
 typedef unsigned char byte;
 
@@ -70,6 +71,9 @@ public:
 	// using the sockets api)
 	static bool InitializeSocketAPI();
 	static void ShutdownSocketAPI();
+
+    // Set network-wide broadcast ability
+    void SetBroadcast(bool enabled);
 
 	// Set the outgoing address
 	void SetRemoteAddress(const std::string &Address, const uint16_t &Port);
@@ -142,6 +146,9 @@ private:
         
 	// the socket
 	SOCKET  m_Socket;
+
+    // broadcast mode
+    bool m_Broadcast;
         
 	// local address
 	struct sockaddr_in m_LocalAddress;

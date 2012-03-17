@@ -44,7 +44,8 @@ extern int				viewheight;
 extern int				viewwindowx;
 extern int				viewwindowy;
 
-
+extern bool				r_fakingunderwater;
+extern bool				r_underwater;
 
 extern int				centerx;
 extern "C" int			centery;
@@ -179,7 +180,7 @@ void R_RenderPlayerView (player_t *player);
 void R_Init (void);
 
 // Called by exit code.
-void R_Shutdown (void);
+void STACK_ARGS R_Shutdown (void);
 
 // Called by M_Responder.
 void R_SetViewSize (int blocks);

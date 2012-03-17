@@ -26,6 +26,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <set>
 
 #include "m_alloc.h"
 #include "m_argv.h"
@@ -37,6 +38,7 @@
 #include "w_wad.h"
 #include "doomdef.h"
 #include "p_local.h"
+#include "p_acs.h"
 #include "s_sound.h"
 #include "doomstat.h"
 #include "p_lnspec.h"
@@ -54,6 +56,7 @@ int	P_TranslateSectorSpecial (int);
 
 extern unsigned int R_OldBlend;
 
+extern std::set<sector_t*> movable_sectors;
 //
 // MAP related Lookup tables.
 // Store VERTEXES, LINEDEFS, SIDEDEFS, etc.
@@ -1334,33 +1337,173 @@ void P_GroupLines (void)
 
 }
 
+static void P_AddStairSector(sector_t *sector, int special)
+{
+	movable_sectors.insert(sector);
+					
+	for (int i = 0; i < sector->linecount; i++)
+	{
+		if (!sector->lines[i]->backsector)
+			continue;
+
+		// Vanilla Doom Stairs: line is facing the current sector and the
+		// adjoining sector has the same floor texture
+		if ((special == Stairs_BuildUpDoom || special == Generic_Stairs) &&
+			 sector->lines[i]->frontsector == sector &&
+			 sector->floorpic == sector->lines[i]->backsector->floorpic)
+		{
+			P_AddStairSector(sector->lines[i]->backsector, special);
+		}
+		
+		// ZDoom Stairs: line is facing current sector and the adjoining
+		// sector has the Stair_Special1/2 special
+		if ((special == Stairs_BuildUp || special == Stairs_BuildDown ||
+			 special == Stairs_BuildUpSync || special == Stairs_BuildDownSync) &&
+			 sector->lines[i]->frontsector == sector &&
+			(sector->lines[i]->backsector->special == Stairs_Special1 ||
+			 sector->lines[i]->backsector->special == Stairs_Special2))
+		{
+			P_AddStairSector(sector->lines[i]->backsector, special);		
+		}		  
+	}
+}
+
+void P_SetMovableSectors()
+{
+	// clear the old list of movable sectors
+	movable_sectors.clear();
+
+	for (int i = 0; i < numlines; i++)
+	{
+		line_t *li = &lines[i];
+
+		// quickly reject any line without a special
+		if (!li->special)
+			continue;
+			
+		if (li->special == Door_Close ||
+			li->special == Door_Open ||
+			li->special == Door_Raise ||
+			li->special == Door_LockedRaise ||
+			li->special == Floor_LowerByValue ||
+			li->special == Floor_LowerToLowest ||
+			li->special == Floor_LowerToNearest ||
+			li->special == Floor_RaiseByValue ||
+			li->special == Floor_RaiseToHighest ||
+			li->special == Floor_RaiseToNearest ||
+			li->special == Stairs_BuildDown ||
+			li->special == Stairs_BuildUp ||
+			li->special == Floor_RaiseAndCrush ||
+			li->special == Pillar_Build ||
+			li->special == Pillar_Open ||
+			li->special == Stairs_BuildDownSync ||
+			li->special == Stairs_BuildUpSync ||
+			li->special == Floor_RaiseByValueTimes8 ||
+			li->special == Floor_LowerByValueTimes8 ||
+			li->special == Ceiling_LowerByValue ||
+			li->special == Ceiling_RaiseByValue ||
+			li->special == Ceiling_CrushAndRaise ||
+			li->special == Ceiling_LowerAndCrush ||
+			li->special == Ceiling_CrushStop ||
+			li->special == Ceiling_CrushRaiseAndStay ||
+			li->special == Floor_CrushStop ||
+			li->special == Plat_PerpetualRaise ||
+			li->special == Plat_Stop ||
+			li->special == Plat_DownWaitUpStay ||
+			li->special == Plat_DownByValue ||
+			li->special == Plat_UpWaitDownStay ||
+			li->special == Plat_UpByValue ||
+			li->special == Floor_LowerInstant ||
+			li->special == Floor_RaiseInstant ||
+			li->special == Floor_MoveToValueTimes8 ||
+			li->special == Ceiling_MoveToValueTimes8 ||
+			li->special == Pillar_BuildAndCrush ||
+			li->special == FloorAndCeiling_LowerByValue ||
+			li->special == FloorAndCeiling_RaiseByValue ||
+			li->special == Ceiling_LowerToHighestFloor ||
+			li->special == Ceiling_LowerInstant ||
+			li->special == Ceiling_RaiseInstant ||
+			li->special == Ceiling_CrushRaiseAndStayA ||
+			li->special == Ceiling_CrushAndRaiseA ||
+			li->special == Ceiling_CrushAndRaiseSilentA ||
+			li->special == Ceiling_RaiseByValueTimes8 ||
+			li->special == Ceiling_LowerByValueTimes8 ||
+			li->special == Generic_Floor ||
+			li->special == Generic_Ceiling ||
+			li->special == Generic_Door ||
+			li->special == Generic_Lift ||
+			li->special == Generic_Stairs ||
+			li->special == Generic_Crusher ||
+			li->special == Plat_DownWaitUpStayLip ||
+			li->special == Plat_PerpetualRaiseLip ||
+			li->special == Stairs_BuildUpDoom ||
+			li->special == Plat_RaiseAndStayTx0 ||
+			li->special == Plat_UpByValueStayTx ||
+			li->special == Plat_ToggleCeiling ||
+			li->special == Floor_RaiseToLowestCeiling ||
+			li->special == Floor_RaiseByValueTxTy ||
+			li->special == Floor_RaiseByTexture ||
+			li->special == Floor_LowerToLowestTxTy ||
+			li->special == Floor_LowerToHighest ||
+			li->special == Elevator_RaiseToNearest ||
+			li->special == Elevator_MoveToFloor ||
+			li->special == Elevator_LowerToNearest ||
+			li->special == Door_CloseWaitOpen ||
+			li->special == Floor_Donut ||
+			li->special == FloorAndCeiling_LowerRaise ||
+			li->special == Ceiling_RaiseToNearest ||
+			li->special == Ceiling_LowerToLowest ||
+			li->special == Ceiling_LowerToFloor ||
+			li->special == Ceiling_CrushRaiseAndStaySilA)
+		{
+			if (li->special && li->id)
+			{
+				// The line special is tagged.  Add all sectors with same tag.
+				for (int s = 0; s < numsectors; s++)
+				{
+					sector_t *sector = &sectors[s];
+					
+					if (sector->tag != li->id)
+						continue;
+
+					// Handle stair-builders
+					if (li->special == Stairs_BuildUpDoom ||
+						li->special == Generic_Stairs ||
+						li->special == Stairs_BuildDown ||
+						li->special == Stairs_BuildUp ||
+						li->special == Stairs_BuildDownSync ||
+						li->special == Stairs_BuildUpSync)
+					{
+						P_AddStairSector(sector, li->special);
+					}
+
+					movable_sectors.insert(sector);
+				}
+			}
+			else if (li->special && li->backsector)
+			{
+				// No tag is used with this special (eg, door).
+				// Add the sector on the backside of the line.
+				movable_sectors.insert(li->backsector);
+			}
+		}
+	}
+}
+
 //
 // [RH] P_LoadBehavior
 //
-static int STACK_ARGS sortscripts (const void *a, const void *b)
-{
-	return ((*(int *)a)%1000 - (*(int *)b)%1000);
-}
-
 void P_LoadBehavior (int lumpnum)
 {
 	byte *behavior = (byte *)W_CacheLumpNum (lumpnum, PU_LEVEL);
 
-	if (behavior[0] != 'A' || behavior[1] != 'C' ||
-		behavior[2] != 'S' || behavior[3] != 0)
+	level.behavior = new FBehavior (behavior, lumpinfo[lumpnum].size);
+
+	if (!level.behavior->IsGood ())
 	{
-		Z_Free (behavior);
-		return;
+		delete level.behavior;
+		level.behavior = NULL;
 	}
-
-	level.behavior = behavior;
-	level.scripts = (int *)(behavior + ((int *)behavior)[1]);
-	level.strings = &level.scripts[level.scripts[0]*3+1];
-
-	// Make sure scripts are listed in order (to make finding them quicker)
-	qsort (&level.scripts[1], level.scripts[0], 3*sizeof(int), sortscripts);
-
-	DPrintf ("Loaded %d scripts, %d strings\n", level.scripts[0], level.strings[0]);
 }
 
 //
@@ -1411,7 +1554,7 @@ void P_SetupLevel (char *lumpname, int position)
 	{
 		for (i = 0; i < players.size(); i++)
 		{
-			players[i].killcount = players[i].secretcount 
+			players[i].killcount = players[i].secretcount
 				= players[i].itemcount = 0;
 		}
 	}
@@ -1427,7 +1570,7 @@ void P_SetupLevel (char *lumpname, int position)
 
 	// [RH] clear out the mid-screen message
 	C_MidPrint (NULL);
-	
+
 	PolyBlockMap = NULL;
 
 	DThinker::DestroyAllThinkers ();
@@ -1445,9 +1588,21 @@ void P_SetupLevel (char *lumpname, int position)
 	HasBehavior = W_CheckLumpName (lumpnum+ML_BEHAVIOR, "BEHAVIOR");
 	//oldshootactivation = !HasBehavior;
 
+	// note: most of this ordering is important
+
+	// [RH] Load in the BEHAVIOR lump
+	if (level.behavior != NULL)
+	{
+		delete level.behavior;
+		level.behavior = NULL;
+	}
+	if (HasBehavior)
+	{
+		P_LoadBehavior (lumpnum+ML_BEHAVIOR);
+	}
+
     level.time = 0;
 
-	// note: most of this ordering is important
 	P_LoadVertexes (lumpnum+ML_VERTEXES);
 	P_LoadSectors (lumpnum+ML_SECTORS);
 	P_LoadSideDefs (lumpnum+ML_SIDEDEFS);
@@ -1465,7 +1620,7 @@ void P_SetupLevel (char *lumpname, int position)
 	rejectmatrix = (byte *)W_CacheLumpNum (lumpnum+ML_REJECT, PU_LEVEL);
 	{
 		// [SL] 2011-07-01 - Check to see if the reject table is of the proper size
-		// If it's too short, the reject table should be ignored when 
+		// If it's too short, the reject table should be ignored when
 		// calling P_CheckSight
 		if (W_LumpLength(lumpnum + ML_REJECT) < ((unsigned int)ceil((float)(numsectors * numsectors / 8))))
 		{
@@ -1474,7 +1629,7 @@ void P_SetupLevel (char *lumpname, int position)
 		}
 	}
 	P_GroupLines ();
-	
+
     po_NumPolyobjs = 0;
 
 	P_AllocStarts();
@@ -1486,14 +1641,10 @@ void P_SetupLevel (char *lumpname, int position)
 
 	if (!HasBehavior)
 		P_TranslateTeleportThings ();	// [RH] Assign teleport destination TIDs
-    
-    PO_Init ();
 
-	// [RH] Load in the BEHAVIOR lump
-	level.behavior = NULL;
-	level.scripts = level.strings = NULL;
-	if (HasBehavior)
-		P_LoadBehavior (lumpnum+ML_BEHAVIOR);
+	P_SetMovableSectors();
+
+    PO_Init ();
 
     if (serverside)
     {
@@ -1541,20 +1692,32 @@ void P_Init (void)
 
 // [ML] Do stuff when the timelimit is reset
 // Where else can I put this??
-EXTERN_CVAR(sv_timeleft)
 CVAR_FUNC_IMPL (sv_timelimit)
 {
-	if (var == 0)
-	{
-		level.time = 0;
-		sv_timeleft = "0";	
-	}
-	else
-	{
-		if (!sv_timeleft)
-			level.time = 0;
-	}
+	if (var < 0)
+		var.Set(0.0f);
+
+	// timeleft is transmitted as a short so cap the sv_timelimit at the maximum
+	// for timeleft, which is 9.1 hours
+	if (var > MAXSHORT / 60)
+		var.Set(MAXSHORT / 60);
+
+	level.timeleft = var * TICRATE * 60;
 }
+
+CVAR_FUNC_IMPL (sv_intermissionlimit)
+{
+	if (var < 0)
+		var.Set(0.0f);
+
+	// intermissionleft is transmitted as a short so cap the sv_timelimit at the maximum
+	// for timeleft, which is 9.1 hours
+	if (var > MAXSHORT)
+		var.Set(MAXSHORT);
+
+	level.inttimeleft = (var < 1 ? DEFINTSECS : var);
+}
+
 
 
 

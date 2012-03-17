@@ -35,9 +35,9 @@
 #define GAME_TEAMPLAY	2
 #define GAME_CTF		3
 
-extern int shotclock;
+#include <json/json.h>
 
-extern bool	unnatural_level_progression;
+extern int shotclock;
 
 class client_c
 {
@@ -61,6 +61,7 @@ byte SV_PlayerHearingLoss(player_t &cl, fixed_t &x, fixed_t &y);
 
 void STACK_ARGS SV_BroadcastPrintf (int level, const char *fmt, ...);
 void STACK_ARGS SV_SpectatorPrintf (int level, const char *fmt, ...);
+void STACK_ARGS SV_PlayerPrintf (int level, int who, const char *fmt, ...);
 void SV_CheckTimeouts (void);
 void SV_ConnectClient(void);
 void SV_WriteCommands(void);
@@ -99,5 +100,14 @@ void SV_SendDamageMobj(AActor *target, int pain);
 // Tells clients to remove an actor from the world as it doesn't exist anymore
 void SV_SendDestroyActor(AActor *mo);
 
-#endif
+bool M_ReadJSON(Json::Value &json, const char *filename);
+bool M_WriteJSON(const char *filename, Json::Value &value, bool styled);
 
+// [AM] Kick vote functions.
+bool cmd_kick_check(const std::vector<std::string> &arguments,
+					std::string &error, size_t &pid, std::string &reason);
+bool cmd_kick(const size_t &pid, const std::string &reason);
+
+extern bool unnatural_level_progression;
+
+#endif

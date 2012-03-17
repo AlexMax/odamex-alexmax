@@ -28,6 +28,7 @@
 #include "doomdef.h"
 #include "p_local.h"
 #include "p_lnspec.h"
+#include "c_effect.h"
 #include "s_sound.h"
 #include "doomstat.h"
 #include "v_video.h"
@@ -100,7 +101,7 @@ AActor::AActor () :
     validcount(0), type(MT_UNKNOWNTHING), info(NULL), tics(0), state(NULL),
     flags(0), flags2(0), special1(0), special2(0), health(0), movedir(0), movecount(0),
     visdir(0), reactiontime(0), threshold(0), player(NULL), lastlook(0), special(0), inext(NULL),
-    iprev(NULL), translation(NULL), translucency(0), waterlevel(0), onground(0),
+    iprev(NULL), translation(NULL), translucency(0), waterlevel(0), onground(false),
     touching_sectorlist(NULL), deadtic(0), oldframe(0), rndindex(0), netid(0),
     tid(0)
 {
@@ -198,8 +199,8 @@ AActor::AActor (fixed_t ix, fixed_t iy, fixed_t iz, mobjtype_t itype) :
     floorz(0), ceilingz(0), radius(0), height(0), momx(0), momy(0), momz(0),
     validcount(0), type(MT_UNKNOWNTHING), info(NULL), tics(0), state(NULL), flags(0), flags2(0),
     special1(0), special2(0), health(0), movedir(0), movecount(0), visdir(0),
-    reactiontime(0), threshold(0), player(NULL), lastlook(0), inext(NULL),
-    iprev(NULL), translation(NULL), translucency(0), waterlevel(0), onground(0),
+    reactiontime(0), threshold(0), player(NULL), lastlook(0), special(0), inext(NULL),
+    iprev(NULL), translation(NULL), translucency(0), waterlevel(0), onground(false),
     touching_sectorlist(NULL), deadtic(0), oldframe(0), rndindex(0), netid(0),
     tid(0)
 {
@@ -524,7 +525,7 @@ void AActor::Serialize (FArchive &arc)
 			<< pitch
 			<< angle
 			<< roll
-			<< (int)sprite
+			<< sprite
 			<< frame
 			<< effects
 			<< floorz
@@ -534,7 +535,7 @@ void AActor::Serialize (FArchive &arc)
 			<< momx
 			<< momy
 			<< momz
-			<< (int)type
+			<< type
 			<< tics
 			<< state
 			<< flags
@@ -580,7 +581,7 @@ void AActor::Serialize (FArchive &arc)
 			>> pitch
 			>> angle
 			>> roll
-			>> (int&)sprite
+			>> sprite
 			>> frame
 			>> effects
 			>> floorz
@@ -590,7 +591,7 @@ void AActor::Serialize (FArchive &arc)
 			>> momx
 			>> momy
 			>> momz
-			>> (int&)type
+			>> type
 			>> tics
 			>> state
 			>> flags
@@ -696,8 +697,8 @@ bool P_SetMobjState(AActor *mobj, statenum_t state)
 
 		// Modified handling.
 		// Call action functions when the state is set
-		if (st->action.acp1)
-			st->action.acp1(mobj);
+		if (st->action)
+			st->action(mobj);
 
 		state = st->nextstate;
     } while (!mobj->tics);
@@ -711,14 +712,13 @@ bool P_SetMobjState(AActor *mobj, statenum_t state)
 //
 void P_XYMovement(AActor *mo)
 {
-//	angle_t angle;
 	fixed_t ptryx, ptryy;
 	player_t *player = NULL;
 	fixed_t xmove, ymove;
 	fixed_t maxmove;
 	static const int windTab[3] = {2048*5, 2048*10, 2048*25};
 
-	if (!mo->subsector)
+	if (!mo || !mo->subsector)
 		return;
 
 	if (!mo->momx && !mo->momy)
@@ -799,6 +799,7 @@ void P_XYMovement(AActor *mo)
 					{
 						mo->momz = WATER_JUMP_SPEED;
 					}
+					
 					P_SlideMove (mo);
 				}
 				else
@@ -819,6 +820,14 @@ void P_XYMovement(AActor *mo)
 			}
 			else if (mo->flags & MF_MISSILE)
 			{
+				// [SL] 2012-01-25 - Don't explode missiles on horizon line
+				if (BlockingLine && BlockingLine->special == Line_Horizon &&
+					co_fixweaponimpacts)
+				{
+					mo->Destroy();
+					return;
+				}
+
 				// explode a missile
 				if (ceilingline &&
 					ceilingline->backsector &&
@@ -853,7 +862,7 @@ void P_XYMovement(AActor *mo)
 		}
 	} while (xmove || ymove);
 
-    // slow down
+	// slow down
 	if (player && player->mo == mo && player->cheats & CF_NOMOMENTUM)
 	{
 		// debug option for no sliding at all
@@ -862,9 +871,9 @@ void P_XYMovement(AActor *mo)
 	}
 
 	if (mo->flags & (MF_MISSILE | MF_SKULLFLY))
-    {
+	{
 		return; 	// no friction for missiles ever
-    }
+	}
 
 	// [ML] From ZDoom 1.23...
 	if (mo->z > mo->floorz && !(mo->flags2 & MF2_ONMOBJ) &&
@@ -943,28 +952,27 @@ void P_XYMovement(AActor *mo)
 //
 void P_ZMovement(AActor *mo)
 {
-   fixed_t	dist;
-   fixed_t	delta;
+	fixed_t	dist;
+	fixed_t	delta;
 
-    // check for smooth step up
-   if (mo->player && mo->z < mo->floorz)
-   {
-	  mo->player->viewheight -= mo->floorz-mo->z;
+		// check for smooth step up
+	if (mo->player && mo->z < mo->floorz)
+	{
+		mo->player->viewheight -= mo->floorz-mo->z;
 
-	  mo->player->deltaviewheight
-			= (VIEWHEIGHT - mo->player->viewheight)>>3;
-   }
+		mo->player->deltaviewheight	= (VIEWHEIGHT - mo->player->viewheight)>>3;
+	}
 
-// apply gravity (if in zdoomland)
-   if (co_zdoomphys && (mo->z > mo->floorz && !(mo->flags & MF_NOGRAVITY)))
-   {
+	// apply gravity (if in zdoomland)
+	if (co_zdoomphys && (mo->z > mo->floorz && !(mo->flags & MF_NOGRAVITY)))
+	{
 		fixed_t startmomz = mo->momz;
 
-		if (!mo->waterlevel || mo->flags & MF_CORPSE || (mo->player &&
-			!(mo->player->cmd.ucmd.forwardmove | mo->player->cmd.ucmd.sidemove)))
+		if (!mo->waterlevel || mo->flags & MF_CORPSE ||
+			(mo->player && !(mo->player->cmd.ucmd.forwardmove | mo->player->cmd.ucmd.sidemove)))
 		{
 			mo->momz -= (fixed_t)(level.gravity * mo->subsector->sector->gravity *
-				(mo->flags2 & MF2_LOGRAV ? 10.24 : 81.92));
+						(mo->flags2 & MF2_LOGRAV ? 10.24 : 81.92));
 		}
 		if (mo->waterlevel > 1)
 		{
@@ -977,33 +985,33 @@ void P_ZMovement(AActor *mo)
 			else
 			{
 				mo->momz = startmomz + ((mo->momz - startmomz) >>
-					(mo->waterlevel == 1 ? WATER_SINK_SMALL_FACTOR : WATER_SINK_FACTOR));
+						   (mo->waterlevel == 1 ? WATER_SINK_SMALL_FACTOR : WATER_SINK_FACTOR));
 			}
 		}
-   }
-    // adjust height
-    // GhostlyDeath <Jun, 4 2008> -- Floating monsters shouldn't adjust to spectator height
-   mo->z += mo->momz;
+	}
+	
+	// adjust height
+	mo->z += mo->momz;
+	
+	// GhostlyDeath <Jun, 4 2008> -- Floating monsters shouldn't adjust to spectator height
 
-   if ( mo->flags & MF_FLOAT
-        && mo->target && !(mo->target->player && mo->target->player->spectator))
-   {
-	// float down towards target if too close
-      if ( !(mo->flags & MF_SKULLFLY)
-             && !(mo->flags & MF_INFLOAT) )
-      {
-         dist = P_AproxDistance (mo->x - mo->target->x,
-                                 mo->y - mo->target->y);
+	if (mo->flags & MF_FLOAT && mo->target &&
+	  !(mo->target->player && mo->target->player->spectator))
+	{
+		// float down towards target if too close
+		if ( !(mo->flags & MF_SKULLFLY) && !(mo->flags & MF_INFLOAT) )
+		{
+			dist = P_AproxDistance(mo->x - mo->target->x, mo->y - mo->target->y);
 
-		delta =(mo->target->z + (mo->height>>1)) - mo->z;
+			delta = (mo->target->z + (mo->height>>1)) - mo->z;
 
-         if (delta<0 && dist < -(delta*3) )
-            mo->z -= FLOATSPEED;
-         else if (delta>0 && dist < (delta*3) )
-            mo->z += FLOATSPEED;
-      }
-
-   }
+			if (delta<0 && dist < -(delta*3))
+				mo->z -= FLOATSPEED;
+			else if (delta>0 && dist < (delta*3) )
+				mo->z += FLOATSPEED;
+		}
+	}
+	
 	if (mo->player && (mo->flags2 & MF2_FLY) && (mo->z > mo->floorz))
 	{
 		mo->z += finesine[(FINEANGLES/80*level.time)&FINEMASK]/8;
@@ -1015,114 +1023,114 @@ void P_ZMovement(AActor *mo)
 		mo->momz = FixedMul (mo->momz, mo->subsector->sector->friction);
 	}
 
-    // clip movement
-   if (mo->z <= mo->floorz)
-   {
-	// hit the floor
+	// clip movement
+	if (mo->z <= mo->floorz)
+	{
+		// hit the floor
 
-	// Note (id):
-	//  somebody left this after the setting momz to 0,
-	//  kinda useless there.
-      //
-	// cph - This was the a bug in the linuxdoom-1.10 source which
-	//  caused it not to sync Doom 2 v1.9 demos. Someone
-	//  added the above comment and moved up the following code. So
-	//  demos would desync in close lost soul fights.
-	// Note that this only applies to original Doom 1 or Doom2 demos - not
-	//  Final Doom and Ultimate Doom.  So we test demo_compatibility *and*
-	//  gamemission. (Note we assume that Doom1 is always Ult Doom, which
-	//  seems to hold for most published demos.)
-      //
-        //  fraggle - cph got the logic here slightly wrong.  There are three
-        //  versions of Doom 1.9:
-      //
-        //  * The version used in registered doom 1.9 + doom2 - no bounce
-        //  * The version used in ultimate doom - has bounce
-        //  * The version used in final doom - has bounce
-      //
-        // So we need to check that this is either retail or commercial
-        // (but not doom2)
+		// Note (id):
+		//  somebody left this after the setting momz to 0,
+		//  kinda useless there.
+		//
+		// cph - This was the a bug in the linuxdoom-1.10 source which
+		//  caused it not to sync Doom 2 v1.9 demos. Someone
+		//  added the above comment and moved up the following code. So
+		//  demos would desync in close lost soul fights.
+		// Note that this only applies to original Doom 1 or Doom2 demos - not
+		//  Final Doom and Ultimate Doom.  So we test demo_compatibility *and*
+		//  gamemission. (Note we assume that Doom1 is always Ult Doom, which
+		//  seems to hold for most published demos.)
+		//
+		//  fraggle - cph got the logic here slightly wrong.  There are three
+		//  versions of Doom 1.9:
+		//
+		//  * The version used in registered doom 1.9 + doom2 - no bounce
+		//  * The version used in ultimate doom - has bounce
+		//  * The version used in final doom - has bounce
+		//
+		// So we need to check that this is either retail or commercial
+		// (but not doom2)
 
-      int correct_lost_soul_bounce = co_zdoomphys || (gamemode == retail) ||
+		int correct_lost_soul_bounce = co_zdoomphys || (gamemode == retail) ||
                                      ((gamemode == commercial
-                                     && (gamemission == pack_tnt ||
-                                         gamemission == pack_plut)));
+                                     && (gamemission == pack_tnt || gamemission == pack_plut)));
 
-      if (correct_lost_soul_bounce && mo->flags & MF_SKULLFLY)
-      {
-	    // the skull slammed into something
-        mo->momz = -mo->momz;
-      }
+		if (correct_lost_soul_bounce && mo->flags & MF_SKULLFLY)
+		{
+			// the skull slammed into something
+			mo->momz = -mo->momz;
+		}
+		
 		mo->z = mo->floorz;
-      if (mo->momz < 0)
-      {
-		 
-         if (mo->player)
-         {
-         	bool momsquat = false;
-
-			if (co_zdoomphys)
+		
+		if (mo->momz < 0)
+		{
+			if (mo->player)
 			{
-				float minmom = level.gravity * mo->subsector->sector->gravity * -655.36f;
-				float mom = (float)mo->momz;
+				bool momsquat = false;
 
-				if (mom < minmom)
-					momsquat = true;
+				if (co_zdoomphys)
+				{
+					float minmom = level.gravity * 
+								   mo->subsector->sector->gravity * -655.36f;
+					float mom = (float)mo->momz;
+
+					if (mom < minmom)
+						momsquat = true;
+				}
+				else
+				{
+					fixed_t minmom = (fixed_t)(GRAVITY*mo->subsector->sector->gravity*-8);
+					fixed_t mom = mo->momz;
+
+					if (mom < minmom)
+						momsquat = true;
+				}
+
+				mo->player->jumpTics = 7;	// delay any jumping for a short while
+				if (momsquat && !(mo->player->spectator) && !(mo->flags2 & MF2_FLY))
+				{
+					// Squat down.
+					// Decrease viewheight for a moment
+					// after hitting the ground (hard),
+					// and utter appropriate sound.
+
+					if (clientside && !predicting)
+						PlayerLandedOnThing(mo, NULL);
+				}
 			}
-			else
-			{
-				fixed_t minmom = (fixed_t)(GRAVITY*mo->subsector->sector->gravity*-8);
-				fixed_t mom = mo->momz;
 
-				if (mom < minmom)
-					momsquat = true;
-			}
+			mo->momz = 0;
+		}
 
-             mo->player->jumpTics = 7;	// delay any jumping for a short while
-             if (momsquat && !(mo->player->spectator) && !(mo->flags2 & MF2_FLY))
-             {
-                // Squat down.
-                // Decrease viewheight for a moment
-                // after hitting the ground (hard),
-                // and utter appropriate sound.
+		// cph 2001/05/26 -
+		// See lost soul bouncing comment above. We need this here for bug
+		// compatibility with original Doom2 v1.9 - if a soul is charging and
+		// hit by a raising floor this incorrectly reverses its Y momentum.
+		//
 
-				if (clientside && !predicting)
-					PlayerLandedOnThing(mo, NULL);
-            }
-         }
+		if (!correct_lost_soul_bounce && mo->flags & MF_SKULLFLY)
+			mo->momz = -mo->momz;
 
-          mo->momz = 0;
-      }
-      //mo->z = mo->floorz;
-
-
-	// cph 2001/05/26 -
-	// See lost soul bouncing comment above. We need this here for bug
-	// compatibility with original Doom2 v1.9 - if a soul is charging and
-	// hit by a raising floor this incorrectly reverses its Y momentum.
-      //
-
-      if (!correct_lost_soul_bounce && mo->flags & MF_SKULLFLY)
-         mo->momz = -mo->momz;
-
-      if ( (mo->flags & MF_MISSILE)
-            && !(mo->flags & MF_NOCLIP) )
-      {
-		// [SL] 2011-06-02 - Only server should control explosions
-		if (serverside)
-			P_ExplodeMissile (mo);
-         return;
-      }
-   }
-   else
-   {
+		if ((mo->flags & MF_MISSILE) && !(mo->flags & MF_NOCLIP))
+		{
+			// [SL] 2011-06-02 - Only server should control explosions
+			if (serverside)
+				P_ExplodeMissile (mo);
+			return;
+		}
+	}
+	else
+	{
+		// actor is above the floor
+		
 		// apply gravity (if standard or boom)
 		if (!co_zdoomphys)
 		{
 			fixed_t startmomz = mo->momz;
 
 			if (!mo->waterlevel || (mo->player &&
-				!(mo->player->cmd.ucmd.forwardmove | mo->player->cmd.ucmd.sidemove)))
+			   !(mo->player->cmd.ucmd.forwardmove | mo->player->cmd.ucmd.sidemove)))
 			{
 				if (mo->flags2 & MF2_LOGRAV)
 				{
@@ -1138,61 +1146,61 @@ void P_ZMovement(AActor *mo)
 					else
 						mo->momz -= (fixed_t)(GRAVITY * mo->subsector->sector->gravity);
 				}
+				
 				if (mo->waterlevel > 1)
 				{
 					fixed_t sinkspeed = mo->flags & MF_CORPSE ? -WATER_SINK_SPEED/3 : -WATER_SINK_SPEED;
 
 					if (mo->momz < sinkspeed)
-					{
 						mo->momz = (startmomz < sinkspeed) ? startmomz : sinkspeed;
-					}
 					else
-					{
 						mo->momz = startmomz + ((mo->momz - startmomz) >>
 							(mo->waterlevel == 1 ? WATER_SINK_SMALL_FACTOR : WATER_SINK_FACTOR));
-					}
 				}
 			}
 		}
-   }
+	}
 
-   if (mo->z + mo->height > mo->ceilingz)
-   {
+	if (mo->z + mo->height > mo->ceilingz)
+	{
 		// hit the ceiling
 		if (mo->flags2 & MF2_FLOORBOUNCE)
 		{
 			// reverse momentum here for ceiling bounce
 			mo->momz = FixedMul (mo->momz, (fixed_t)(-0.75*FRACUNIT));
 			if (mo->info->seesound)
-			{
-				S_Sound (mo, CHAN_BODY, mo->info->seesound, 1, ATTN_IDLE);
-			}
+				S_Sound(mo, CHAN_BODY, mo->info->seesound, 1, ATTN_IDLE);
+
 			return;
 		}
+		
 		if (mo->momz > 0)
 			mo->momz = 0;
 
 		mo->z = mo->ceilingz - mo->height;
 
 		if (mo->flags & MF_SKULLFLY)
-		{	// the skull slammed into something
+		{
+			// the skull slammed into something
 			mo->momz = -mo->momz;
 		}
 
 		if (mo->flags & MF_MISSILE && !(mo->flags & MF_NOCLIP))
 		{
-			if (((HasBehavior || co_fixweaponimpacts) && 
-				mo->subsector->sector->ceilingpic == skyflatnum))
+			if ((HasBehavior || co_fixweaponimpacts) && 
+				 mo->subsector->sector->ceilingpic == skyflatnum)
 			{
 				mo->Destroy ();
 				return;
 			}
+			
 			// [SL] 2011-06-02 - Only server should control explosions
 			if (serverside)
 				P_ExplodeMissile (mo);
 			return;
 		}
 	}
+	
 	/*  [ML] 7/13/11: This isn't going to be used just yet - no need...
 	if (mo->subsector->sector->heightsec != NULL && mo->subsector->sector->SecActTarget != NULL)
 	{
@@ -1256,14 +1264,14 @@ void PlayerLandedOnThing(AActor *mo, AActor *onmobj)
 			}
 			if (onmobj != NULL)
 			{
-				S_Sound (mo, CHAN_AUTO, "*land1", 1, ATTN_NORM);
+				S_Sound (mo, CHAN_VOICE, "*land1", 1, ATTN_NORM);
 			}
 		}
 	}
 	else
 	{
 		// [SL] 2011-06-16 - Vanilla Doom Oomphiness
-		S_Sound (mo, CHAN_AUTO, "*land1", 1, ATTN_NORM);
+		S_Sound (mo, CHAN_VOICE, "*land1", 1, ATTN_NORM);
 	}
 //	mo->player->centering = true;
 }
@@ -1699,18 +1707,18 @@ void P_SpawnPlayerMissile (AActor *source, mobjtype_t type)
 
 	if (co_zdoomphys)
 	{
-		vec3_t velocity;
+		v3float_t velocity;
 		float speed = FIXED2FLOAT (th->info->speed);
 
-		velocity[0] = FIXED2FLOAT (finecosine[an>>ANGLETOFINESHIFT]);
-		velocity[1] = FIXED2FLOAT (finesine[an>>ANGLETOFINESHIFT]);
-		velocity[2] = FIXED2FLOAT (slope);
+		velocity.x = FIXED2FLOAT (finecosine[an>>ANGLETOFINESHIFT]);
+		velocity.y = FIXED2FLOAT (finesine[an>>ANGLETOFINESHIFT]);
+		velocity.z = FIXED2FLOAT (slope);
 
-		VectorNormalize (velocity);
+		M_NormalizeVec3f(&velocity, &velocity);
 
-		th->momx = FLOAT2FIXED (velocity[0] * speed);
-		th->momy = FLOAT2FIXED (velocity[1] * speed);
-		th->momz = FLOAT2FIXED (velocity[2] * speed);
+		th->momx = FLOAT2FIXED (velocity.x * speed);
+		th->momy = FLOAT2FIXED (velocity.y * speed);
+		th->momz = FLOAT2FIXED (velocity.z * speed);
 	}
 	else
 	{
@@ -1734,8 +1742,7 @@ void P_RespawnSpecials (void)
 	fixed_t 			y;
 	fixed_t 			z;
 
-	subsector_t*			ss;
-	AActor* 						mo;
+	AActor* 			mo;
 	mapthing2_t* 		mthing;
 
 	int 				i;
@@ -1782,7 +1789,6 @@ void P_RespawnSpecials (void)
 		z = ONFLOORZ;
 
 	// spawn a teleport fog at the new spot
-	ss = R_PointInSubsector (x, y);
 	mo = new AActor (x, y, z, MT_IFOG);
 	SV_SpawnMobj(mo);
     if (clientside)
@@ -1880,8 +1886,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		return;
 
 	// count deathmatch start positions
-	if (mthing->type == 11 || ((mthing->type == 5080 || mthing->type == 5081 || mthing->type == 5082))
-		&& !sv_teamspawns)
+	if (mthing->type == 11 || (!sv_teamspawns && mthing->type >= 5080 && mthing->type <= 5082))
 	{
 		// [Nes] Maximum vanilla demo starts are fixed at 10.
 		if (deathmatch_p >= &deathmatchstarts[10] && (demoplayback || demorecording) && democlassic)
@@ -2050,6 +2055,16 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		mthing->type = 14065;
 		i = MT_AMBIENT;
 	}
+
+	// [ML] Determine if it is a musicchanger thing, and if so,
+	//		map it to MT_MUSICCHANGE with the proper parameter.
+	if (mthing->type >= 14101 && mthing->type <= 14164)
+	{
+		mthing->args[0] = mthing->type - 14100;
+		mthing->type = 14165;
+		i = MT_MUSICCHANGE;
+	}
+
 	// [RH] Check if it's a particle fountain
 	else if (mthing->type >= 9027 && mthing->type <= 9033)
 	{
@@ -2163,8 +2178,8 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		S_ActivateAmbient (mobj, mobj->args[0]);
 
 	// [RH] If a fountain and not dormant, start it
-//	if (i == MT_FOUNTAIN && !(mthing->flags & MTF_DORMANT))
-//		mobj->effects = mobj->args[0] << FX_FOUNTAINSHIFT;
+	if (i == MT_FOUNTAIN && !(mthing->flags & MTF_DORMANT))
+		mobj->effects = mobj->args[0] << FX_FOUNTAINSHIFT;
 
 	if (mobj->tics > 0)
 		mobj->tics = 1 + (P_Random () % mobj->tics);
@@ -2207,6 +2222,36 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	// [RH] Go dormant as needed
 	if (mthing->flags & MTF_DORMANT)
 		P_DeactivateMobj (mobj);
+}
+
+
+//
+// P_VisibleToPlayers
+//
+// Returns true if mo is currently in any player's field of view
+//
+
+bool P_VisibleToPlayers(AActor *mo)
+{
+	if (!mo)
+		return false;
+
+	for (size_t i = 0; i < players.size(); i++)
+	{
+		// players aren't considered visible to themselves
+		if (mo->player && mo->player->id == players[i].id)
+			continue;
+	
+		if (!players[i].mo || players[i].spectator)
+			continue;
+	
+		if (HasBehavior && P_CheckSightEdges2(players[i].mo, mo, 5.0))
+			return true;
+		if (!HasBehavior && P_CheckSightEdges(players[i].mo, mo, 5.0))
+			return true;
+	}
+
+	return false;
 }
 
 VERSION_CONTROL (p_mobj_cpp, "$Id$")

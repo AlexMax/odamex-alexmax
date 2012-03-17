@@ -26,6 +26,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#include <algorithm>
+
 #include "doomtype.h"
 #include "doomdef.h"
 #include "doomstat.h"
@@ -37,6 +39,7 @@
 #include "i_system.h"
 #include "m_swap.h"
 #include "st_stuff.h"
+#include "hu_stuff.h"
 #include "c_cvars.h"
 #include "p_ctf.h"
 
@@ -67,7 +70,11 @@ extern patch_t	*keys[NUMCARDS+NUMCARDS/2];
 extern byte		*Ranges;
 extern flagdata CTFdata[NUMFLAGS];
 
+int V_TextScaleXAmount();
+int V_TextScaleYAmount();
+
 EXTERN_CVAR (hud_scale)
+EXTERN_CVAR (sv_fraglimit)
 
 void ST_unloadNew (void)
 {
@@ -198,6 +205,21 @@ void ST_DrawNumRight (int x, int y, DCanvas *scrn, int num)
 		x -= sttminus->width() * xscale;
 
 	ST_DrawNum (x, y, scrn, num);
+}
+
+void ST_nameDraw (int y)
+{
+	player_t *plyr = &displayplayer();
+
+	if (plyr == &consoleplayer())
+		return;
+
+	int scaledxfac = V_TextScaleXAmount(), scaledyfac = V_TextScaleYAmount();
+	
+	char *string = plyr->userinfo.netname;
+	size_t x = (screen->width - V_StringWidth (string)*scaledxfac) >> 1;
+
+	screen->DrawTextStretched(CR_GREEN, x, y, string, scaledxfac, scaledyfac);
 }
 
 void ST_newDraw (void)
@@ -361,20 +383,118 @@ void ST_newDrawCTF (void)
 	ST_DrawNumRight (screen->width - 20 * xscale, 20 * yscale, screen, TEAMpoints[TEAM_RED]);
 }
 
-void ST_nameDraw (int y)
+static bool STACK_ARGS compare_player_frags (const player_t *arg1, const player_t *arg2)
 {
-	player_t *plyr = &displayplayer();
+	return arg2->fragcount < arg1->fragcount;
+}
 
-	if (plyr == &consoleplayer())
-		return;
-	
-	char *string = plyr->userinfo.netname;
-	size_t x = (screen->width - V_StringWidth (string)*CleanXfac) >> 1;
+static bool STACK_ARGS compare_player_kills (const player_t *arg1, const player_t *arg2)
+{
+	return arg2->killcount < arg1->killcount;
+}
 
-	if (level.time < NameUp)
-		screen->DrawTextClean (CR_GREEN, x, y, string);
+static bool STACK_ARGS compare_player_points (const player_t *arg1, const player_t *arg2)
+{
+	return arg2->points < arg1->points;
+}
+
+
+// [ML] 9/29/2011: New fullscreen HUD, based on Ralphis's work
+void ST_odamexHudDraw (void)
+{
+	player_t *plyr = &consoleplayer();
+	unsigned int x, y, i, j, xscale, yscale;
+	signed int f;
+	std::vector<player_t *> sortedplayers(players.size());
+	ammotype_t ammo = weaponinfo[plyr->readyweapon].ammo;
+
+	xscale = hud_scale ? CleanXfac : 1;
+	yscale = hud_scale ? CleanYfac : 1;
+
+	x = screen->width - 32 * xscale;
+	y = screen->height - (numheight + 4) * yscale;
+
+	// Draw Armor
+	if (plyr->armortype && plyr->armorpoints)
+	{
+		const patch_t *current_armor = armors[1];
+		if(plyr->armortype == 1)
+			current_armor = armors[0];
+		
+		if (current_armor)
+		{
+			//if (hud_scale)
+				screen->DrawPatchStretched (current_armor, 61*xscale, y - 14,(current_armor->width()*.75)*xscale,(current_armor->height()*.75)*yscale);
+			//else
+			//	screen->DrawLucentPatch (current_armor, 20, y - 4);
+		}
+		
+		ST_DrawNumRight (48*xscale, y-20*yscale, screen, plyr->armorpoints);
+	}
+
+	// Draw Health
+	ST_DrawNumRight (48*xscale, y, screen, plyr->health);
+
+	// Face widget time
+	//if (hud_scale)
+		screen->DrawPatchStretched(faces[st_faceindex],48*xscale,y-12,(faces[st_faceindex]->width()*.75)*xscale,(faces[st_faceindex]->height()*.75)*yscale);
+	//else
+	//	screen->DrawPatch(faces[st_faceindex],ST_FACESX*CleanXfac,168*CleanYfac);
+
+	// Draw ammo
+	if (ammo < NUMAMMO)
+	{
+		const patch_t *ammopatch = ammos[weaponinfo[plyr->readyweapon].ammo];
+
+		ST_DrawNumRight (screen->width-31*xscale, y, screen, plyr->ammo[ammo]);
+
+		if (hud_scale)
+			screen->DrawLucentPatchCleanNoMove (ammopatch,
+										  screen->width - 16 * xscale,
+										  screen->height - 4 * yscale);
+		else
+			screen->DrawLucentPatch (ammopatch, screen->width - 16,
+												screen->height - 4);
+	}
+
+	if (multiplayer && sv_gametype > 0)
+	{
+		// Show timer
+		HU_DisplayTimer(screen->width/2 - 30*xscale, y+(8*yscale));
+
+		// Player list sorting
+		for (j = 0; j < sortedplayers.size(); j++)
+			sortedplayers[j] = &players[j];	
+
+		if(sv_gametype != GM_COOP)
+			std::sort(sortedplayers.begin(), sortedplayers.end(), compare_player_frags);
+		else
+			std::sort(sortedplayers.begin(), sortedplayers.end(), compare_player_kills);
+		
+		f = plyr->fragcount - sortedplayers[0]->fragcount;
+
+		char statline1[16+10];
+		sprintf(statline1, "%d/%d",sortedplayers[0]->fragcount,sv_fraglimit.asInt());
+		screen->DrawTextClean (CR_RED, x-((V_StringWidth(statline1))*xscale), y-(16*yscale), statline1);
+
+		char statline2[16+10];
+		sprintf(statline2, (f > 0 ? "+%d":"%d"),f);
+		screen->DrawTextClean (CR_GREEN, x-((V_StringWidth(statline2))*xscale), y-(24*yscale), statline2);
+	}
 	else
-		screen->DrawTextCleanLuc (CR_GREEN, x, y, string);
+	{
+		char line[32+10];
+		int time = level.time / TICRATE;
+
+		sprintf (line, " %02d:%02d:%02d", time/3600, (time%3600)/60, time%60);	// Time
+		screen->DrawTextClean (CR_RED, screen->width/2 - 30*xscale, y+(8*yscale), line);
+	}
+}
+
+void ST_odamexHudDrawCTF (void)
+{
+	// Draw the base
+	ST_odamexHudDraw();
 }
 
 VERSION_CONTROL (st_new_cpp, "$Id$")

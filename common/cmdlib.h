@@ -25,8 +25,9 @@
 #ifndef __CMDLIB__
 #define __CMDLIB__
 
-#include <string>
 #include <algorithm>
+#include <string>
+#include <vector>
 
 #ifdef _MSC_VER
 #pragma warning(disable : 4244)     // MIPS
@@ -68,7 +69,9 @@ size_t  StdStringRFind(const std::string& haystack, const std::string& needle,
     size_t pos, size_t n, bool CIS);
 
 std::string StdStringToLower(const std::string&);
+std::string StdStringToLower(const char*);
 std::string StdStringToUpper(const std::string&);
+std::string StdStringToUpper(const char*);
 
 char	*COM_Parse (char *data);
 
@@ -81,8 +84,8 @@ void	CRC_Init(unsigned short *crcvalue);
 void	CRC_ProcessByte(unsigned short *crcvalue, byte data);
 unsigned short CRC_Value(unsigned short crcvalue);
 
+std::vector<std::string> VectorArgs(size_t argc, char **argv);
+bool CheckWildcards (const char *pattern, const char *text);
+void ReplaceString (const char **ptr, const char *str);
 
 #endif
-
-
-

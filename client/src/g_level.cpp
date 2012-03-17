@@ -41,7 +41,7 @@
 #include "r_sky.h"
 #include "c_console.h"
 #include "f_finale.h"
-#include "dstrings.h"
+#include "gstrings.h"
 #include "v_video.h"
 #include "st_stuff.h"
 #include "hu_stuff.h"
@@ -55,6 +55,7 @@
 #include "m_fileio.h"
 #include "m_misc.h"
 
+#include <set>
 #include "gi.h"
 #include "minilzo.h"
 
@@ -80,11 +81,18 @@ EXTERN_CVAR(sv_aircontrol)
 int starttime;
 
 // ACS variables with world scope
-int WorldVars[NUM_WORLDVARS];
+int ACS_WorldVars[NUM_WORLDVARS];
+
+// ACS variables with global scope
+int ACS_GlobalVars[NUM_GLOBALVARS];
+
+// [SL] 2012-02-23 - Sectors that can possibly change floor/ceiling height
+std::set<sector_t*> movable_sectors;
 
 BOOL savegamerestore;
 
 extern int mousex, mousey;
+extern bool r_underwater;
 
 extern int joyforward, joystrafe, joyturn, joylook, Impulse;
 extern BOOL sendpause, sendsave, sendcenterview;
@@ -156,7 +164,7 @@ static const char *MapInfoMapLevel[] =
 	"cd_title_track",
 	"warptrans",
 	"gravity",
-	"aircontrol",	
+	"aircontrol",
 	NULL
 };
 
@@ -221,7 +229,7 @@ MapHandlers[] =
 	{ MITYPE_EATNEXT,	0, 0 },
 	{ MITYPE_EATNEXT,	0, 0 },
 	{ MITYPE_EATNEXT,	0, 0 },
-	{ MITYPE_EATNEXT,	0, 0 },	
+	{ MITYPE_EATNEXT,	0, 0 },
 	{ MITYPE_FLOAT,		lioffset(gravity), 0 },
 	{ MITYPE_FLOAT,		lioffset(aircontrol), 0 },
 };
@@ -402,7 +410,7 @@ static void ParseMapInfoLower (MapInfoHandler *handlers,
 			SC_MustGetFloat ();
 			*((float *)(info + handler->data1)) = sc_Float;
 			break;
-			
+
 		case MITYPE_COLOR:
 			{
 				SC_MustGetString ();
@@ -513,6 +521,13 @@ void P_RemoveDefereds (void)
 		}
 }
 
+// [ML] Not sure where to put this for now...
+// 	G_ParseMusInfo
+void G_ParseMusInfo(void)
+{
+	// Nothing yet...
+}
+
 //
 // G_InitNew
 // Can be called by the startup code or the menu task,
@@ -533,7 +548,7 @@ BEGIN_COMMAND (map)
 		// [Dash|RD] -- We can make a safe assumption that the user might not specify
 		//              the whole lumpname for the level, and might opt for just the
 		//              number. This makes sense, so why isn't there any code for it?
-		if (W_CheckNumForName (argv[1]) == -1)
+		if (W_CheckNumForName (argv[1]) == -1 && isdigit(argv[1][0]))
 		{ // The map name isn't valid, so lets try to make some assumptions for the user.
 			char mapname[32];
 
@@ -623,6 +638,29 @@ BEGIN_COMMAND (wad) // denis - changes wads
 }
 END_COMMAND (wad)
 
+// Clientside maplist query.
+BEGIN_COMMAND (maplist)
+{
+	// Are we even connected to a server?
+	if (!connected) {
+		Printf(PRINT_HIGH, "Invalid maplist, you are not connected to a server.\n");
+		return;
+	}
+
+	// We don't want or need more than 255 params.
+	if (argc > 255) {
+		Printf(PRINT_HIGH, "Invalid maplist, maximum argument count is 255.\n");
+		return;
+	}
+
+	MSG_WriteMarker(&net_buffer, clc_maplist);
+	MSG_WriteByte(&net_buffer, (byte)argc - 1);
+	for (unsigned int i = 1;i < argc;i++) {
+		MSG_WriteString(&net_buffer, argv[i]);
+	}
+}
+END_COMMAND (maplist)
+
 EXTERN_CVAR(sv_allowexit)
 EXTERN_CVAR(sv_nomonsters)
 EXTERN_CVAR(sv_freelook)
@@ -657,6 +695,9 @@ void G_DoNewGame (void)
 void G_InitNew (const char *mapname)
 {
 	size_t i = 0, j = 0;
+
+	// [RH] Remove all particles
+	R_ClearParticles ();
 
 	for (i = 0; i < players.size(); i++)
 	{
@@ -735,11 +776,15 @@ void G_InitNew (const char *mapname)
 	if (!savegamerestore)
 	{
 		M_ClearRandom ();
+		memset (ACS_WorldVars, 0, sizeof(ACS_WorldVars));
+		memset (ACS_GlobalVars, 0, sizeof(ACS_GlobalVars));
 		level.time = 0;
+		level.timeleft = 0;
+		level.inttimeleft = 0;
 
 		// force players to be initialized upon first level load
 		for (i = 0; i < players.size(); i++)
-			players[i].playerstate = PST_REBORN;
+			players[i].playerstate = PST_ENTER;	// [BC]
 	}
 
 	usergame = true;				// will be set false if a demo
@@ -800,7 +845,7 @@ void G_SecretExitLevel (int position, int drawscores)
 		secretexit = false;
 	else
 		secretexit = true;
-    
+
 	shotclock = 0;
 
     goOn (position);
@@ -870,10 +915,10 @@ void G_DoCompleted (void)
 		wminfo.plyr[i].in = players[i].ingame();
 		wminfo.plyr[i].skills = players[i].killcount;
 		wminfo.plyr[i].sitems = players[i].itemcount;
-		wminfo.plyr[i].ssecret = players[i].secretcount;		
+		wminfo.plyr[i].ssecret = players[i].secretcount;
 		wminfo.plyr[i].stime = level.time;
 		//memcpy (wminfo.plyr[i].frags, players[i].frags
-		//		, sizeof(wminfo.plyr[i].frags));		
+		//		, sizeof(wminfo.plyr[i].frags));
 		wminfo.plyr[i].fragcount = players[i].fragcount;
 
 		if(&players[i] == &consoleplayer())
@@ -897,7 +942,7 @@ void G_DoCompleted (void)
 					G_PlayerFinishLevel (players[i]);	// take away cards and stuff
 
 				if (nextcluster->flags & CLUSTER_HUB) {
-					memset (WorldVars, 0, sizeof(WorldVars));
+					memset (ACS_WorldVars, 0, sizeof(ACS_WorldVars));
 					P_RemoveDefereds ();
 					G_ClearSnapshots ();
 				}
@@ -905,7 +950,11 @@ void G_DoCompleted (void)
 			G_SnapshotLevel ();
 		}
 		if (!(nextcluster->flags & CLUSTER_HUB) || !(thiscluster->flags & CLUSTER_HUB))
+		{
 			level.time = 0;	// Reset time to zero if not entering/staying in a hub
+			level.timeleft = 0;
+			//level.inttimeleft = 0;
+		}
 
 		if (!(sv_gametype == GM_DM) &&
 			((level.flags & LEVEL_NOINTERMISSION) ||
@@ -914,7 +963,7 @@ void G_DoCompleted (void)
 			return;
 		}
 	}
-	
+
 	gamestate = GS_INTERMISSION;
 	viewactive = false;
 	automapactive = false;
@@ -971,7 +1020,7 @@ void G_DoLoadLevel (int position)
 	for (i = 0; i < players.size(); i++)
 	{
 		if (players[i].ingame() && players[i].playerstate == PST_DEAD)
-			players[i].playerstate = PST_REBORN;
+			players[i].playerstate = PST_ENTER;	// [BC]
 
 		players[i].fragcount = 0;
 		players[i].itemcount = 0;
@@ -1013,7 +1062,7 @@ void G_DoLoadLevel (int position)
 			if (G_CheckSpot(consoleplayer(), &playerstarts[n]))
 				P_SpawnPlayer(consoleplayer(), &playerstarts[n]);
 		}
-			
+
 		// Check for a free deathmatch start point
 		for (int n = 0; n < deathmatch_p - deathmatchstarts && !consoleplayer().mo; n++)
 		{
@@ -1062,7 +1111,7 @@ void G_DoLoadLevel (int position)
 	level.starttime = I_GetTime ();
 	G_UnSnapshotLevel (!savegamerestore);	// [RH] Restore the state of the level.
     P_DoDeferedScripts ();	// [RH] Do script actions that were triggered on another map.
-    
+
 	C_FlushDisplay ();
 }
 
@@ -1131,10 +1180,11 @@ void G_InitLevelLocals ()
 
 	BaseBlendA = 0.0f;		// Remove underwater blend effect, if any
 	NormalLight.maps = realcolormaps;
-	
+	r_underwater = false;
+
 	level.gravity = sv_gravity;
 	level.aircontrol = (fixed_t)(sv_aircontrol * 65536.f);
-	
+
 	if ((i = FindWadLevelInfo (level.mapname)) > -1)
 	{
 		level_pwad_info_t *pinfo = wadlevelinfos + i;
@@ -1246,7 +1296,7 @@ level_info_t *FindLevelByNum (int num)
 	{
 		level_info_t *i = LevelInfos;
 		while (i->level_name) {
-			if (i->levelnum == num)
+			if (i->levelnum == num && W_CheckNumForName (i->mapname) != -1)
 				return i;
 			i++;
 		}
@@ -1284,59 +1334,66 @@ void G_SetLevelStrings (void)
 	temp[0] = '0';
 	temp[1] = ':';
 	temp[2] = 0;
-
-	for (i = 65; i < 101; i++) {		// HUSTR_E1M1 .. HUSTR_E4M9
+	for (i = HUSTR_E1M1; i <= HUSTR_E4M9; ++i)
+	{
 		if (temp[0] < '9')
 			temp[0]++;
 		else
 			temp[0] = '1';
 
-		if ( (namepart = strstr (Strings[i].string, temp)) ) {
+		if ( (namepart = strstr (GStrings(i), temp)) )
+		{
 			namepart += 2;
 			while (*namepart && *namepart <= ' ')
 				namepart++;
-		} else {
-			namepart = Strings[i].string;
+		}
+		else
+		{
+			namepart = GStrings(i);
 		}
 
-		ReplaceString (&LevelInfos[i-65].level_name, namepart);
+		ReplaceString (&LevelInfos[i-HUSTR_E1M1].level_name, namepart);
+		//ReplaceString (&LevelInfos[i-HUSTR_E1M1].music, Musics1[i-HUSTR_E1M1]);
 	}
 
 	for (i = 0; i < 4; i++)
-		ReplaceString (&ClusterInfos[i].exittext, Strings[221+i].string);
+		ReplaceString (&ClusterInfos[i].exittext, GStrings(E1TEXT+i));
 
 	if (gamemission == pack_plut)
-		start = 133;		// PHUSTR_1
+		start = PHUSTR_1;
 	else if (gamemission == pack_tnt)
-		start = 165;		// THUSTR_1
+		start = THUSTR_1;
 	else
-		start = 101;		// HUSTR_1
+		start = HUSTR_1;
 
-	for (i = 0; i < 32; i++) {
-		sprintf (temp, "%d:", i + 1);
-		if ( (namepart = strstr (Strings[i+start].string, temp)) ) {
-			namepart += strlen (temp);
-			while (*namepart && *namepart <= ' ')
-				namepart++;
-		} else {
-			namepart = Strings[i+start].string;
-		}
-		ReplaceString (&LevelInfos[36+i].level_name, namepart);
-	}
+ 	for (i = 0; i < 32; i++) {
+ 		sprintf (temp, "%d:", i + 1);
+		if ( (namepart = strstr (GStrings(i+start), temp)) ) {
+ 			namepart += strlen (temp);
+ 			while (*namepart && *namepart <= ' ')
+ 				namepart++;
+ 		} else {
+			namepart = GStrings(i+start);
+ 		}
+ 		ReplaceString (&LevelInfos[36+i].level_name, namepart);
+ 	}
 
 	if (gamemission == pack_plut)
-		start = 231;		// P1TEXT
+		start = P1TEXT;		// P1TEXT
 	else if (gamemission == pack_tnt)
-		start = 237;		// T1TEXT
+		start = T1TEXT;		// T1TEXT
 	else
-		start = 225;		// C1TEXT
+		start = C1TEXT;		// C1TEXT
 
 	for (i = 0; i < 4; i++)
-		ReplaceString (&ClusterInfos[4 + i].exittext, Strings[start+i].string);
+		ReplaceString (&ClusterInfos[4 + i].exittext, GStrings(start+i));
 	for (; i < 6; i++)
-		ReplaceString (&ClusterInfos[4 + i].entertext, Strings[start+i].string);
+		ReplaceString (&ClusterInfos[4 + i].entertext, GStrings(start+i));
 
-	if (level.info && level.info->level_name)
+	//for (i = 0; i < 15; i++)
+	//	ReplaceString (&ClusterInfos[i].messagemusic, Musics4[i]);
+
+	if (level.info)
 		strncpy (level.level_name, level.info->level_name, 63);
 }
 
@@ -1367,12 +1424,12 @@ void G_SerializeLevel (FArchive &arc, bool hubLoad)
 			<< level.killed_monsters
 			<< level.gravity
 			<< level.aircontrol;
-			
+
 		G_AirControlChanged ();
-	
+
 		for (int i = 0; i < NUM_MAPVARS; i++)
 			arc << level.vars[i];
-			
+
 		arc << playernum;
 	}
 	else
@@ -1387,17 +1444,17 @@ void G_SerializeLevel (FArchive &arc, bool hubLoad)
 			>> level.aircontrol;
 
 		G_AirControlChanged ();
-			
+
 		for (int i = 0; i < NUM_MAPVARS; i++)
 			arc >> level.vars[i];
-        
+
        	arc >> playernum;
 
 		players.resize(playernum);
 	}
 	if (!hubLoad)
 		P_SerializePlayers (arc);
-		
+
 	P_SerializeThinkers (arc, hubLoad);
 	P_SerializeWorld (arc);
 	P_SerializePolyobjs (arc);
@@ -1516,7 +1573,8 @@ void P_SerializeACSDefereds (FArchive &arc)
 				writeDefereds (arc, &LevelInfos[i]);
 
 		// Signal end of defereds
-		arc << (char)0;
+		BYTE zero = 0;
+		arc << zero;
 	}
 	else
 	{
@@ -2652,8 +2710,3 @@ cluster_info_t ClusterInfos[] = {
 };
 
 VERSION_CONTROL (g_level_cpp, "$Id$")
-
-
-
-
-

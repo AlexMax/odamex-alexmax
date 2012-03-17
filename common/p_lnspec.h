@@ -38,6 +38,7 @@ typedef enum {
 	Polyobj_MoveTimes8 = 6,
 	Polyobj_DoorSwing = 7,
 	Polyobj_DoorSlide = 8,
+	Line_Horizon = 9,
 	Door_Close = 10,
 	Door_Open = 11,
 	Door_Raise = 12,
@@ -275,6 +276,10 @@ typedef enum {
 	dSector_DoorRaiseIn5Mins = 78,
 	dDamage_SuperHellslime = 80,
 	dLight_FireFlicker = 81,
+	dDamage_LavaWimpy = 82,
+	dDamage_LavaHefty = 83,
+	dScroll_EastLavaDamage = 84,
+
 
 	Light_IndoorLightning2 = 198,
 	Light_IndoorLightning1 = 199,

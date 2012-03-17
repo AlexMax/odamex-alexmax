@@ -33,6 +33,7 @@
 #include "doomdef.h"
 #include "p_local.h"
 #include "p_lnspec.h"
+#include "c_effect.h"
 #include "p_mobj.h"
 
 #include "s_sound.h"
@@ -43,6 +44,7 @@
 
 #include "z_zone.h"
 #include "p_unlag.h"
+#include <math.h>
 
 fixed_t 		tmbbox[4];
 static AActor  *tmthing;
@@ -476,8 +478,8 @@ BOOL PIT_CheckThing (AActor *thing)
 	{
 		// check if a mobj passed over/under another object
 		if (/*!(thing->flags & MF_SPECIAL) &&*/
-			((tmthing->z >= thing->z + P_ThingInfoHeight(thing->info) ||
-			  tmthing->z + P_ThingInfoHeight(tmthing->info) < thing->z)))
+			((tmthing->z >= thing->z + thing->height ||
+			  tmthing->z + tmthing->height < thing->z)))
 			return true;
 	}
 
@@ -648,11 +650,11 @@ BOOL PIT_CheckOnmobjZ (AActor *thing)
 	{ // Don't clip against self
 		return(true);
 	}
-	if(tmthing->z > thing->z+P_ThingInfoHeight(thing->info))
+	if(tmthing->z > thing->z + thing->height)
 	{
 		return(true);
 	}
-	else if(tmthing->z+P_ThingInfoHeight(tmthing->info) < thing->z)
+	else if(tmthing->z + tmthing->height < thing->z)
 	{ // under thing
 		return(true);
 	}
@@ -718,8 +720,8 @@ bool P_CheckPosition (AActor *thing, fixed_t x, fixed_t y)
 	int yl, yh;
 	int bx, by;
 	subsector_t *newsubsec;
-	AActor *thingblocker;
-	AActor *fakedblocker;
+	AActor *thingblocker = NULL;
+	AActor *fakedblocker = NULL;
 	fixed_t realheight = thing->height;
 
 	tmthing = thing;
@@ -865,6 +867,28 @@ bool P_CheckPosition (AActor *thing, fixed_t x, fixed_t y)
 
 	return true;
 }
+
+
+//
+// P_SetFloorCeil
+//
+// Sets the floorz and ceilingz attributes of an actor based on the
+// actor's current sector
+
+void P_SetFloorCeil(AActor *mo)
+{
+	if (!mo)
+		return;
+
+	subsector_t *subsec = R_PointInSubsector(mo->x, mo->y);
+
+	if (subsec && subsec->sector)
+	{
+		mo->floorz		= subsec->sector->floorheight;
+		mo->ceilingz	= subsec->sector->ceilingheight;
+	}
+}
+
 
 //
 // P_CheckOnmobj(AActor *thing)
@@ -1517,6 +1541,12 @@ BOOL PTR_AimTraverse (intercept_t* in)
 	if ((th->player && th->player->spectator))
 		return true;
 
+	// [SL] 2011-10-31 - Don't aim at teammates
+	if ((sv_gametype == GM_CTF || sv_gametype == GM_TEAMDM) &&
+		shootthing->player && th->player &&
+		shootthing->player->userinfo.team == th->player->userinfo.team)
+		return true;
+
 	// check angles to see if the thing can be aimed at
 	dist = FixedMul (attackrange, in->frac);
 	thingtopslope = FixedDiv (th->z+th->height - shootz , dist);
@@ -1626,6 +1656,10 @@ BOOL PTR_ShootTraverse (intercept_t* in)
 			// [RH] If the trace went below/above the floor/ceiling, make the puff
 			//		appear in the right place and not on a wall.
 			int ceilingpic, updown;
+
+			// [SL] 2012-01-25 - Don't show bullet puffs on horizon lines 
+			if (co_fixweaponimpacts && li->special == Line_Horizon)
+				return false;
 
 			if (!li->backsector || !P_PointOnLineSide (trace.x, trace.y, li)) {
 				ceilingheight = li->frontsector->ceilingheight;
@@ -1895,6 +1929,199 @@ void P_LineAttack (AActor *t1, angle_t angle, fixed_t distance,
 }
 
 //
+// [RH] PTR_RailTraverse
+//
+static int MaxRailHits, NumRailHits;
+static struct SRailHit {
+	AActor *hitthing;
+	fixed_t x,y,z;
+} *RailHits;
+static v3double_t RailEnd;
+
+BOOL PTR_RailTraverse (intercept_t *in)
+{
+	fixed_t 			x;
+	fixed_t 			y;
+	fixed_t 			z;
+	fixed_t 			frac;
+	
+	line_t* 			li;
+	
+	AActor* 			th;
+
+	fixed_t 			dist;
+	fixed_t 			thingtopslope;
+	fixed_t 			thingbottomslope;
+	fixed_t				floorheight;
+	fixed_t				ceilingheight;
+				
+	if (in->isaline)
+	{
+		li = in->d.line;
+		
+		frac = in->frac;
+		z = shootz + FixedMul (aimslope, FixedMul (frac, attackrange));
+
+		if (!(li->flags & ML_TWOSIDED) || (li->flags & ML_BLOCKEVERYTHING))
+			goto hitline;
+		
+		// crosses a two sided line
+		P_LineOpening (li);
+
+		if (z >= opentop || z <= openbottom)
+			goto hitline;
+
+		// shot continues
+		if (li->special)
+			P_ShootSpecialLine (shootthing, li);
+
+		return true;
+		
+		
+		// hit line
+	  hitline:
+		if (!li->backsector || !P_PointOnLineSide (trace.x, trace.y, li)) {
+			ceilingheight = li->frontsector->ceilingheight;
+			floorheight = li->frontsector->floorheight;
+		} else {
+			ceilingheight = li->backsector->ceilingheight;
+			floorheight = li->backsector->floorheight;
+		}
+
+		if (z < floorheight) {
+			frac = FixedDiv (FixedMul (floorheight - shootz, frac), z - shootz);
+			z = floorheight;
+		} else if (z > ceilingheight) {
+			frac = FixedDiv (FixedMul (ceilingheight - shootz, frac), z - shootz);
+			z = ceilingheight;
+		} else {
+			if (li->backsector && z > opentop &&
+				li->frontsector->ceilingpic == skyflatnum &&
+				li->backsector->ceilingpic == skyflatnum)
+				;	// sky hack wall
+			else if (!co_fixweaponimpacts && li->special) {
+				// Shot actually hit a wall. It might be set up for shoot activation
+				P_ShootSpecialLine (shootthing, li);
+			}
+		}
+
+		x = trace.x + FixedMul (trace.dx, frac);
+		y = trace.y + FixedMul (trace.dy, frac);
+
+		// Save final position of rail shot.
+		M_SetVec3(&RailEnd, x, y, z);
+
+		// don't go any farther
+		return false;	
+	}
+	
+	// shoot a thing
+	th = in->d.thing;
+	if (th == shootthing)
+		return true;			// can't shoot self
+	
+	if (!(th->flags & MF_SHOOTABLE))
+		return true;			// corpse or something
+				
+	// check angles to see if the thing can be aimed at
+	dist = FixedMul (attackrange, in->frac);
+	thingtopslope = FixedDiv (th->z+th->height - shootz , dist);
+
+	if (thingtopslope < aimslope)
+		return true;			// shot over the thing
+
+	thingbottomslope = FixedDiv (th->z - shootz, dist);
+
+	if (thingbottomslope > aimslope)
+		return true;			// shot under the thing
+
+	
+	// hit thing
+	// if it's invulnerable, it completely blocks the shot
+	if (th->flags2 & MF2_INVULNERABLE)
+		return false;
+
+	// position a bit closer
+	frac = in->frac - FixedDiv (10*FRACUNIT,attackrange);
+
+	x = trace.x + FixedMul (trace.dx, frac);
+	y = trace.y + FixedMul (trace.dy, frac);
+	z = shootz + FixedMul (aimslope, FixedMul(frac, attackrange));
+
+	// Save this thing for damaging later
+	if (NumRailHits >= MaxRailHits)
+	{
+		MaxRailHits = MaxRailHits ? MaxRailHits * 2 : 16;
+		RailHits = (SRailHit *)Realloc (RailHits, sizeof(*RailHits) * MaxRailHits);
+	}
+	RailHits[NumRailHits].hitthing = th;
+	RailHits[NumRailHits].x = x;
+	RailHits[NumRailHits].y = y;
+	RailHits[NumRailHits].z = z;
+	NumRailHits++;
+
+	// continue the trace
+	return true;
+}
+
+void P_RailAttack (AActor *source, int damage, int offset)
+{
+	angle_t angle;
+	fixed_t x1, y1, x2, y2;
+	v3double_t start, end;
+
+	x1 = source->x;
+	y1 = source->y;
+	angle = (source->angle - ANG90) >> ANGLETOFINESHIFT;
+	x1 += offset*finecosine[angle];
+	y1 += offset*finesine[angle];
+	angle = source->angle >> ANGLETOFINESHIFT;
+	x2 = source->x + 8192*finecosine[angle];
+	y2 = source->y + 8192*finesine[angle];
+	shootz = source->z + (source->height >> 1) + 8*FRACUNIT;
+	attackrange = 8192*FRACUNIT;
+	aimslope = finetangent[FINEANGLES/4-(source->pitch>>ANGLETOFINESHIFT)];
+	shootthing = source;
+	NumRailHits = 0;
+
+	M_SetVec3(&start, x1, y1, shootz);
+
+	if (P_PathTraverse (x1, y1, x2, y2, PT_ADDLINES|PT_ADDTHINGS, PTR_RailTraverse))
+	{
+		// Nothing hit, so just shoot the air
+		M_AngleToVec3(&end, source->angle, source->pitch);		
+
+		M_ScaleVec3(&end, &end, 8192.0);
+		M_AddVec3(&end, &start, &end);
+	}
+	else
+	{
+		// Hit a wall, maybe some things as well
+		end = RailEnd;
+		
+		for (int i = 0; i < NumRailHits; i++)
+		{
+			if (RailHits[i].hitthing->flags & MF_NOBLOOD)
+				P_SpawnPuff (RailHits[i].x, RailHits[i].y, RailHits[i].z,
+							 R_PointToAngle2 (0, 0,
+											  FLOAT2FIXED(end.x - start.x),
+											  FLOAT2FIXED(end.y - start.y)) - ANG180,
+							 1);
+			else
+				P_SpawnBlood (RailHits[i].x, RailHits[i].y, RailHits[i].z,
+							 R_PointToAngle2 (0, 0,
+											  FLOAT2FIXED(end.x - start.x),
+											  FLOAT2FIXED(end.y - start.y)) - ANG180,
+							 damage);
+			P_DamageMobj (RailHits[i].hitthing, source, source, damage, MOD_RAILGUN);
+		}
+	}
+
+	if (clientside)
+		P_DrawRailTrail (start, end);
+}
+
+//
 // [RH] PTR_CameraTraverse
 //
 fixed_t CameraX, CameraY, CameraZ;
@@ -2117,7 +2344,7 @@ AActor* 		bombspot;
 int 			bombdamage;
 float			bombdamagefloat;
 int				bombmod;
-vec3_t			bombvec;
+v3double_t		bombvec;
 
 //
 // PIT_ZdoomRadiusAttack
@@ -2130,7 +2357,7 @@ vec3_t			bombvec;
 // [RH] Damage scale to apply to thing that shot the missile.
 static float selfthrustscale;
 
-BEGIN_CUSTOM_CVAR (sv_splashfactor, "1.0", "", CVAR_ARCHIVE | CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
+BEGIN_CUSTOM_CVAR (sv_splashfactor, "1.0", "", CVARTYPE_FLOAT,  CVAR_ARCHIVE | CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 {
 	if (var <= 0.0f)
 		var.Set (1.0f);
@@ -2138,91 +2365,6 @@ BEGIN_CUSTOM_CVAR (sv_splashfactor, "1.0", "", CVAR_ARCHIVE | CVAR_SERVERARCHIVE
 		selfthrustscale = 1.0f / var;
 }
 END_CUSTOM_CVAR (sv_splashfactor)
-
-BOOL PIT_ZdoomRadiusAttack (AActor *thing)
-{
-	if (!serverside || !(thing->flags & MF_SHOOTABLE))
-		return true;
-
-	// Boss spider and cyborg
-	// take no damage from concussion.
-	if (thing->flags2 & MF2_BOSS)
-		return true;
-
-	// Barrels always use the original code, since this makes
-	// them far too "active."
-	if (bombspot->type != MT_BARREL && thing->type != MT_BARREL) {
-		// [RH] New code (based on stuff in Q2)
-		float points;
-		vec3_t thingvec;
-
-		VectorPosition (thing, thingvec);
-		thingvec[2] += (float)(thing->height >> (FRACBITS+1));
-		{
-			vec3_t v;
-			float len;
-
-			VectorSubtract (bombvec, thingvec, v);
-			len = VectorLength (v);
-			points = bombdamagefloat - len;
-		}
-		if (thing == bombsource)
-			points = points * sv_splashfactor;
-		if (points > 0) {
-			if ((!HasBehavior && P_CheckSight (thing, bombspot, true)) ||
-				(HasBehavior && P_CheckSight2 (thing, bombspot, true))) {
-				vec3_t dir;
-				float thrust;
-				fixed_t momx = thing->momx;
-				fixed_t momy = thing->momy;
-
-				P_DamageMobj (thing, bombspot, bombsource, (int)points, bombmod);
-
-				thrust = points * 35000.0f / (float)thing->info->mass;
-				VectorSubtract (thingvec, bombvec, dir);
-				VectorScale (dir, thrust, dir);
-				if (bombsource != thing) {
-					dir[2] *= 0.5f;
-				} else if (sv_splashfactor) {
-					dir[0] *= selfthrustscale;
-					dir[1] *= selfthrustscale;
-					dir[2] *= selfthrustscale;
-				}
-				thing->momx = momx + (fixed_t)(dir[0]);
-				thing->momy = momy + (fixed_t)(dir[1]);
-				thing->momz += (fixed_t)(dir[2]);
-			}
-		}
-	} else {
-		// [RH] Old code just for barrels
-		fixed_t dx;
-		fixed_t dy;
-		fixed_t dist;
-
-		dx = abs(thing->x - bombspot->x);
-		dy = abs(thing->y - bombspot->y);
-
-		dist = dx>dy ? dx : dy;
-		dist = (dist - thing->radius) >> FRACBITS;
-
-		if (dist >= bombdamage)
-			return true;  // out of range
-
-		if (dist < 0)
-			dist = 0;
-
-
-		if ((!HasBehavior && P_CheckSight (thing, bombspot)) ||
-			(HasBehavior && P_CheckSight2 (thing, bombspot)) )
-		{
-			// must be in direct path
-			P_DamageMobj (thing, bombspot, bombsource, bombdamage - dist, bombmod);
-		}
-	}
-
-	return true;
-}
-
 
 //
 // PIT_RadiusAttack
@@ -2266,6 +2408,91 @@ BOOL PIT_RadiusAttack (AActor *thing)
     return true;
 }
 
+BOOL PIT_ZdoomRadiusAttack (AActor *thing)
+{
+	if (!serverside || !(thing->flags & MF_SHOOTABLE))
+		return true;
+
+	// Boss spider and cyborg
+	// take no damage from concussion.
+	if (thing->flags2 & MF2_BOSS)
+		return true;
+	
+	// Barrels always use the original code, since this makes
+	// them far too "active." BossBrains also use the old code
+	// because some user levels require they have a height of 16,
+	// which can make them near impossible to hit with the new code.
+	if (bombspot->type == MT_BARREL || thing->type == MT_BARREL ||
+		thing->type == MT_BOSSBRAIN)
+	{
+		return PIT_RadiusAttack(thing);
+	}
+	
+	// [RH] New code. The bounding box only covers the
+	// height of the thing and not the height of the map.
+	fixed_t dx = abs(thing->x - bombspot->x);
+	fixed_t dy = abs(thing->y - bombspot->y);
+	float len = float(MAX(dx, dy));
+	float boxradius = float(thing->radius);
+
+	if (bombspot->z < thing->z || bombspot->z >= thing->z + thing->height)
+	{
+		float dz;
+
+		if (bombspot->z > thing->z)
+			dz = float(thing->z + thing->height - bombspot->z);
+		else
+			dz = float(thing->z - bombspot->z);
+
+		if (len <= boxradius)
+			len = dz;
+		else
+		{
+			len -= boxradius;
+			len = sqrtf(len*len + dz*dz);
+		}
+	}
+	else
+	{
+		len -= boxradius;
+		if (len < 0.0f)
+			len = 0.0f;
+	}
+	
+	float points = bombdamagefloat - (len / FRACUNIT) + 1.0f;
+	if (thing == bombsource)
+		points *= sv_splashfactor;
+
+	if (points > 0.0f &&
+		((!HasBehavior && P_CheckSight(thing, bombspot, true)) ||
+		 (HasBehavior && P_CheckSight2(thing, bombspot, true))))
+	{
+		// OK to damage; target is in direct path
+
+		fixed_t momx = thing->momx;
+		fixed_t momy = thing->momy;
+		int damage = (int)points;
+
+		P_DamageMobj(thing, bombspot, bombsource, damage, bombmod);
+
+		float thrust = points * 0.5f / thing->info->mass;
+		if (bombsource == thing)
+			thrust *= selfthrustscale;
+
+		float momz = (float)(thing->z + (thing->height>>1) - bombspot->z) * thrust;
+		if (bombsource != thing)
+			momz *= 0.5f;
+		else
+			momz *= 0.8f;
+
+		thing->momx = momx + (fixed_t)((thing->x - bombspot->x) * thrust);
+		thing->momy = momy + (fixed_t)((thing->y - bombspot->y) * thrust);
+		thing->momz += (fixed_t)momz;
+	}
+
+	return true;
+}
+
 //
 // P_RadiusAttack
 // Source is the creature that caused the explosion at spot.
@@ -2293,7 +2520,7 @@ void P_RadiusAttack (AActor *spot, AActor *source, int damage, int mod)
 	bombmod = mod;
 	bombdamagefloat = (float)damage;
 	bombmod = mod;
-	VectorPosition (spot, bombvec);
+	M_ActorPositionToVec3(&bombvec, spot);
 
 	for (y=yl ; y<=yh ; y++)
 	{

@@ -52,8 +52,11 @@ using namespace std;
 namespace agOdalaunch {
 
 AGOL_MainWindow::AGOL_MainWindow(int width, int height) :
-	SettingsDialog(NULL), SoloGameDialog(NULL), AboutDialog(NULL),
-	ManualDialog(NULL), QServer(NULL), WindowExited(false)
+	SettingsDialog(NULL), CloseSettingsHandler(NULL),
+	SoloGameDialog(NULL), CloseSoloGameHandler(NULL),
+	AboutDialog(NULL), CloseAboutHandler(NULL),
+	ManualDialog(NULL), CloseManualHandler(NULL),
+	QServer(NULL), WindowExited(false)
 {
 	// Create the Agar window. If we are using a single-window display driver (sdlfb, sdlgl) 
 	// make the window plain (no window decorations). No flags for multi-window drivers (glx, wgl)
@@ -93,7 +96,7 @@ AGOL_MainWindow::AGOL_MainWindow(int width, int height) :
 	StopServerListPoll();
 
 	// If query master on start is configured post the event.
-	GuiConfig::Read("MasterOnStart", (uint8_t&)StartupQuery);
+	GuiConfig::Read("MasterOnStart", reinterpret_cast<uint8_t&>(StartupQuery));
 	if(StartupQuery)
 		AG_PostEvent(MainWindow, MainButtonBox->mlist, "button-pushed", NULL);
 
@@ -391,8 +394,10 @@ int AGOL_MainWindow::GetSelectedServerListRow()
 {
 	// Loop until a selected row is found
 	for(int row = 0; row < ServerList->m; row++)
+	{
 		if(AG_TableRowSelected(ServerList, row))
 			return row;
+	}
 
 	return -1;
 }
@@ -421,7 +426,7 @@ int AGOL_MainWindow::GetSelectedServerArrayIndex()
 	MServer.Unlock();
 
 	// No servers
-	if(serverCount <= 0)
+	if(serverCount == 0)
 		return -1;
 
 	// Loop until the selected server array is found
@@ -492,7 +497,7 @@ int AGOL_MainWindow::GetServerArrayIndexFromListRow(int row)
 	MServer.Unlock();
 
 	// No servers
-	if(serverCount <= 0)
+	if(serverCount == 0)
 		return -1;
 
 	// Loop until the selected server array is found
@@ -859,14 +864,14 @@ void AGOL_MainWindow::OnRefreshAll(AG_Event *event)
 {
 	// Kick off a thread to query all the servers
 	if(!MasterThread.IsRunning())
-		MasterThread.Create(static_cast<ODA_ThreadBase*>(this), (THREAD_FUNC_PTR)&AGOL_MainWindow::QueryAllServers, NULL);
+		MasterThread.Create(this, (THREAD_FUNC_PTR)&AGOL_MainWindow::QueryAllServers, NULL);
 }
 
 void AGOL_MainWindow::OnGetMasterList(AG_Event *event)
 {
 	// Kick off a thread to get the master list and query all the servers
 	if(!MasterThread.IsRunning())
-		MasterThread.Create(static_cast<ODA_ThreadBase*>(this), (THREAD_FUNC_PTR)&AGOL_MainWindow::GetMasterList, NULL);
+		MasterThread.Create(this, (THREAD_FUNC_PTR)&AGOL_MainWindow::GetMasterList, NULL);
 }
 
 void AGOL_MainWindow::OnGetWAD(AG_Event *event)
@@ -951,7 +956,7 @@ void AGOL_MainWindow::UpdateServerList(AG_Event *event)
 	// Reset the total player count statusbar
 	ResetTotalPlayerCount();
 
-	if(serverCount <= 0)
+	if(serverCount == 0)
 	{
 		AG_TableEnd(ServerList);
 		return;
@@ -1007,7 +1012,7 @@ void AGOL_MainWindow::UpdateServerList(AG_Event *event)
 				pwads += QServer[i].Info.Wads[j].Name.substr(0, QServer[i].Info.Wads[j].Name.find('.')) + " ";
 
 		// Player Count column
-		plyrCnt << QServer[i].Info.Players.size() << "/" << (int)QServer[i].Info.MaxClients;
+		plyrCnt << QServer[i].Info.Players.size() << "/" << static_cast<int>(QServer[i].Info.MaxClients);
 
 		// Map column
 		if(QServer[i].Info.CurrentMap.size())
@@ -1111,7 +1116,7 @@ void *AGOL_MainWindow::GetMasterList(void *arg)
 		AG_Delay(750);
 #endif
 
-	if(GuiConfig::Read("MasterTimeout", masterTimeout) || masterTimeout <= 0)
+	if(GuiConfig::Read("MasterTimeout", masterTimeout) || masterTimeout == 0)
 		masterTimeout = 500;
 
 	// Get the lock
@@ -1124,7 +1129,7 @@ void *AGOL_MainWindow::GetMasterList(void *arg)
 
 	// If there are no servers something went wrong 
 	// (either with the query or with the Odamex project ;P)
-	if(serverCount <= 0)
+	if(serverCount == 0)
 	{
 		MServer.Unlock();
 		return NULL;
@@ -1166,7 +1171,7 @@ int AGOL_MainWindow::QuerySingleServer(Server *server)
 	unsigned int serverTimeout;
 	int          ret;
 
-	if(GuiConfig::Read("ServerTimeout", serverTimeout) || serverTimeout <= 0)
+	if(GuiConfig::Read("ServerTimeout", serverTimeout) || serverTimeout == 0)
 		serverTimeout = 500;
 
 	server->GetLock();
@@ -1190,7 +1195,7 @@ void *AGOL_MainWindow::QueryAllServers(void *arg)
 	MServer.Unlock();
 
 	// There are no servers to query
-	if(serverCount <= 0)
+	if(serverCount == 0)
 		return NULL;
 
 #ifdef _XBOX
@@ -1207,7 +1212,7 @@ void *AGOL_MainWindow::QueryAllServers(void *arg)
 	{
 		for(size_t i = 0; i < NUM_THREADS; i++)
 		{
-			if((QServerThread.size() != 0) && ((QServerThread.size() - 1) >= i))
+			if((!QServerThread.empty()) && ((QServerThread.size() - 1) >= i))
 			{
 				// If a thread is no longer running delete it
 				if(QServerThread[i]->IsRunning())
@@ -1226,8 +1231,8 @@ void *AGOL_MainWindow::QueryAllServers(void *arg)
 				QServerThread.push_back(new ODA_Thread());
 
 				// Start the thread for a server query
-				QServerThread.back()->Create(static_cast<ODA_ThreadBase*>(this), 
-						(THREAD_FUNC_PTR)&AGOL_MainWindow::QueryServerThrEntry, &QServer[serversQueried]);
+				QServerThread.back()->Create(this, (THREAD_FUNC_PTR)&AGOL_MainWindow::QueryServerThrEntry,
+					&QServer[serversQueried]);
 
 				// Incremement the number of requested server queries
 				serversQueried++;
@@ -1239,7 +1244,7 @@ void *AGOL_MainWindow::QueryAllServers(void *arg)
 		// while this thread continuously queries the other threads for completion. -- Hyper_Eye
 		AG_Delay(1); // 1ms yield
 #endif
-		UpdateQueriedLabelCompleted((int)count);
+		UpdateQueriedLabelCompleted(static_cast<int>(count));
 	}
 
 	// Stop the server list automatic polling

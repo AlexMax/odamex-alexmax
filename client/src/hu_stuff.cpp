@@ -31,7 +31,7 @@
 #include "s_sound.h"
 #include "doomstat.h"
 #include "st_stuff.h"
-#include "dstrings.h"
+#include "gstrings.h"
 #include "c_console.h"
 #include "c_dispatch.h"
 #include "c_cvars.h"
@@ -43,7 +43,6 @@
 #include "i_input.h"
 
 #define QUEUESIZE		128
-#define MESSAGESIZE		256
 #define HU_INPUTX		0
 #define HU_INPUTY		(0 + (SHORT(hu_font[0]->height) +1))
 
@@ -59,11 +58,13 @@
 DCanvas *odacanvas = NULL;
 extern	DCanvas *screen;
 
-EXTERN_CVAR (con_scaletext)
+EXTERN_CVAR (hud_scaletext)
 EXTERN_CVAR (sv_fraglimit)
 EXTERN_CVAR (sv_timelimit)
 EXTERN_CVAR (sv_scorelimit)
-EXTERN_CVAR (sv_timeleft)
+
+int V_TextScaleXAmount();
+int V_TextScaleYAmount();
 
 // Chat
 void HU_Init (void);
@@ -83,7 +84,7 @@ void HU_TeamScores2 (player_t *player);
 
 extern bool HasBehavior;
 extern inline int V_StringWidth (const char *str);
-
+size_t P_NumPlayersInGame();
 static void ShoveChatStr (std::string str, byte who);
 
 static std::string input_text;
@@ -210,7 +211,7 @@ BOOL HU_Responder (event_t *ev)
 		if(!c)
 			return false;
 
-		if(input_text.length() < 1024)
+		if(input_text.length() < MAX_CHATSTR_LEN)
 			input_text += c;
 
 		return true;
@@ -272,9 +273,13 @@ typedef struct
 // GhostlyDeath -- Move this into it's own function!
 void HU_DrawTargetNames(void)
 {
+	// Set up text scaling
+	int scaledxfac = V_TextScaleXAmount();
+	int scaledyfac = V_TextScaleYAmount();
+				
 	int ProposedColor = CR_GREY;
 	int TargetX = 0;
-	int TargetY = screen->height - ((hu_font[0]->height() + 4) * CleanYfac);
+	int TargetY = screen->height - ((hu_font[0]->height() + 4) * scaledyfac);
 	std::vector<TargetInfo_t> Targets;
 	size_t i;
 
@@ -285,11 +290,11 @@ void HU_DrawTargetNames(void)
 	if (screenblocks <= 10 && !consoleplayer().spectator)
 		TargetY -= ST_HEIGHT;
 	else if (consoleplayer().spectator)
-		TargetY -= ((hu_font[0]->height() + 4) * CleanYfac);	// Don't get in the Join messages way!
+		TargetY -= ((hu_font[0]->height() + 4) * scaledyfac);	// Don't get in the Join messages way!
 
 	// Sometimes the "Other person's name" will get blocked
 	if (&(consoleplayer()) != &(displayplayer()))
-		TargetY -= ((hu_font[0]->height() + 4) * CleanYfac);
+		TargetY -= ((hu_font[0]->height() + 4) * scaledyfac);
 
 	for (i = 0; i < players.size(); i++)
 	{
@@ -421,23 +426,16 @@ void HU_DrawTargetNames(void)
 	{
 		// So "You" (or not) is centered
 		if (Targets[i].PlayPtr == &(consoleplayer()))
-			TargetX = (screen->width - V_StringWidth ("You")*CleanXfac) >> 1;
+			TargetX = (screen->width - V_StringWidth ("You")*scaledxfac) >> 1;
 		else
-			TargetX = (screen->width - V_StringWidth (Targets[i].PlayPtr->userinfo.netname)*CleanXfac) >> 1;
+			TargetX = (screen->width - V_StringWidth (Targets[i].PlayPtr->userinfo.netname)*scaledxfac) >> 1;
 
 		// Draw the Player's name or You! (Personally, I like the You part - GhostlyDeath)
-		if (Targets[i].PlayPtr->mo->health > 0)
-			screen->DrawTextClean(Targets[i].Color,
-				TargetX,
-				TargetY,
-				(Targets[i].PlayPtr == &(consoleplayer()) ? "You" : Targets[i].PlayPtr->userinfo.netname));
-		else
-			screen->DrawTextCleanLuc(Targets[i].Color,
-				TargetX,
-				TargetY,
-				(Targets[i].PlayPtr == &(consoleplayer()) ? "You" : Targets[i].PlayPtr->userinfo.netname));
+		screen->DrawTextStretched(Targets[i].Color, TargetX, TargetY,
+				(Targets[i].PlayPtr == &(consoleplayer()) ? "You" : Targets[i].PlayPtr->userinfo.netname),
+				scaledxfac, scaledyfac);
 
-		TargetY -= ((hu_font[0]->height() + 1) * CleanYfac);
+		TargetY -= ((hu_font[0]->height() + 1) * scaledyfac);
 	}
 }
 
@@ -448,36 +446,31 @@ EXTERN_CVAR (sv_maxplayers)
 //
 void HU_Drawer (void)
 {
+	// Set up text scaling
+	int scaledxfac = CleanXfac, scaledyfac = CleanYfac;
+	if (hud_scaletext)
+	{
+		scaledxfac = V_TextScaleXAmount();
+		scaledyfac = V_TextScaleYAmount();
+	}
 
 	// Draw "Press USE to join" as the bottom layer.
 	if ((&consoleplayer())->spectator && (level.time / TICRATE)%2 && gamestate != GS_INTERMISSION)
 	{
 		setsizeneeded = true;
-		int YPos = screen->height - ((hu_font[0]->height() + 4) * CleanYfac);
+		int YPos = screen->height - ((hu_font[0]->height() + 4) * scaledyfac);
 
 		if (&consoleplayer() != &displayplayer())
-			YPos -= ((hu_font[0]->height() + 4) * CleanYfac);
+			YPos -= ((hu_font[0]->height() + 4) * scaledyfac);
 
-		size_t num_players = 0;
+		if (P_NumPlayersInGame() < sv_maxplayers)
+		{
+			static const std::string joinmsg("Press USE to join");
 
-        for (size_t i = 0; i < players.size(); ++i)
-		{
-            if (!players[i].spectator && players[i].playerstate != PST_CONTACT && players[i].playerstate != PST_DOWNLOAD)
-                ++num_players;
-        }
-
-		// GhostlyDeath -- X Pos from the F12 coop spy thingy
-		if (num_players == sv_maxplayers)
-		{
-            screen->DrawTextClean (CR_GREY,
-                (screen->width - V_StringWidth ("Game is full")*CleanXfac) >> 1, //(screen->width / 2) - (59 * CleanXfac),
-                YPos, "Game is full");
-		}
-		else
-		{
-            screen->DrawTextClean (CR_GREEN,
-                (screen->width - V_StringWidth ("Press USE to join")*CleanXfac) >> 1, //(screen->width / 2) - (59 * CleanXfac),
-                YPos, "Press USE to join");
+			screen->DrawTextStretched(CR_GREEN,
+					(screen->width - V_StringWidth(joinmsg.c_str())*scaledxfac) >> 1,
+					YPos, joinmsg.c_str(), scaledxfac, scaledyfac);
+					
 		}
 	}
 
@@ -493,19 +486,9 @@ void HU_Drawer (void)
 	if (headsupactive)
 	{
 		static const char *prompt;
-		int i, x, c, scalex, y, promptwidth;
+		int i, x, c, y, promptwidth;
 
-		if (con_scaletext)
-		{
-			scalex = CleanXfac;
-			y = (!viewactive ? -30 : -10) * CleanYfac;
-		}
-		else
-		{
-			scalex = 1;
-			y = (!viewactive ? -30 : -10);
-		}
-
+		y = (!viewactive ? -30 : -10) * scaledyfac;
 		y += (screen->height == realviewheight && viewactive) ? screen->height : ST_Y;
 
 		if (headsupactive == 2)
@@ -513,8 +496,8 @@ void HU_Drawer (void)
 		else if (headsupactive == 1)
 			prompt = "Say: ";
 
-		promptwidth = V_StringWidth (prompt) * scalex;
-		x = hu_font['_' - HU_FONTSTART]->width() * scalex * 2 + promptwidth;
+		promptwidth = V_StringWidth (prompt) * scaledxfac;
+		x = hu_font['_' - HU_FONTSTART]->width() * scaledxfac * 2 + promptwidth;
 
 		// figure out if the text is wider than the screen->
 		// if so, only draw the right-most portion of it.
@@ -523,11 +506,11 @@ void HU_Drawer (void)
 			c = toupper(input_text[i] & 0x7f) - HU_FONTSTART;
 			if (c < 0 || c >= HU_FONTSIZE)
 			{
-				x += 4 * scalex;
+				x += 4 * scaledxfac;
 			}
 			else
 			{
-				x += hu_font[c]->width() * scalex;
+				x += hu_font[c]->width() * scaledxfac;
 			}
 		}
 
@@ -539,16 +522,10 @@ void HU_Drawer (void)
 		// draw the prompt, text, and cursor
 		std::string show_text = input_text;
 		show_text += '_';
-		if (con_scaletext)
-		{
-			screen->DrawTextClean (CR_RED, 0, y, prompt);
-			screen->DrawTextClean (CR_GREY, promptwidth, y, show_text.c_str() + i);
-		}
-		else
-		{
-			screen->DrawText (CR_RED, 0, y, prompt);
-			screen->DrawText (CR_GREY, promptwidth, y, show_text.c_str() + i);
-		}
+		screen->DrawTextStretched (	CR_RED, 0, y, prompt, 
+									scaledxfac, scaledyfac);
+		screen->DrawTextStretched (	CR_GREY, promptwidth, y, show_text.c_str() + i,
+									scaledxfac, scaledyfac);
 	}
 
 	if(multiplayer && consoleplayer().camera && !(demoplayback && democlassic))
@@ -578,8 +555,8 @@ static void ShoveChatStr (std::string str, byte who)
 	if (str.length() == 0)
 		return;
 
-	if(str.length() > MESSAGESIZE)
-		str.resize(MESSAGESIZE);
+	if(str.length() > MAX_CHATSTR_LEN)
+		str.resize(MAX_CHATSTR_LEN);
 
 	MSG_WriteMarker (&net_buffer, clc_say);
 	MSG_WriteByte (&net_buffer, who);
@@ -674,14 +651,29 @@ void HU_DrawScores (player_t *player)
 	}
 }
 
-void HU_DisplayTimer(int x, int y, bool scale = true)
+void HU_DisplayTimer(int x, int y, bool scale)
 {
 	int timeleft, hours, minutes, seconds;
 	char str[80];
 
-	if (sv_gametype != GM_COOP && sv_timeleft && gamestate == GS_LEVEL)
+	if (sv_gametype != GM_COOP)
 	{
-		timeleft = sv_timeleft;
+		switch (gamestate)
+		{
+			case GS_LEVEL:
+				if (!level.timeleft)
+					return;
+				timeleft = level.timeleft;
+			break;
+			
+			case GS_INTERMISSION:
+				timeleft = level.inttimeleft * TICRATE;
+			break;
+			
+			default:
+				return;
+			break;
+		}	
 
 		if (timeleft < 0)
 			timeleft = 0;
@@ -692,10 +684,10 @@ void HU_DisplayTimer(int x, int y, bool scale = true)
 		timeleft -= minutes * TICRATE * 60;
 		seconds = timeleft / TICRATE;
 
-		if (hours)
-			sprintf (str, "Level ends in %02d:%02d:%02d", hours, minutes, seconds);
-		else
-			sprintf (str, "Level ends in %02d:%02d", minutes, seconds);
+		//if (hours)
+			sprintf (str, "%02d:%02d:%02d", hours, minutes, seconds);
+		//else
+		//	sprintf (str, "%02d:%02d", minutes, seconds);
 
 		if (scale)
 			screen->DrawTextClean (CR_GREY, x, y, str);
@@ -871,7 +863,7 @@ void HU_DMScores2 (player_t *player)
 				  locy + DMBOARDHEIGHT + (listsize*10) + DMBORDER);
 
 	//	Timelimit display
-	HU_DisplayTimer(locx + 225,locy - DMBORDER+8,false);
+	HU_DisplayTimer(locx + (DMBOARDWIDTH-52),locy - DMBORDER+8,false);
 
 	// Scoreboard Identify
     // Dan - Tells which current game mode is being played
@@ -1181,16 +1173,6 @@ void HU_TeamScores1 (player_t *player)
 				bpings = bpings + sortedplayers[i]->ping;
 				bpoints = bpoints + sortedplayers[i]->points;
 
-				// Total blue frags and points
-				if(sv_gametype == GM_CTF)
-				{
-					sprintf (str, "%d", bfrags);
-					screen->DrawTextClean	  (CR_BLUE	,	287	* CleanXfac	,	42	* CleanYfac	,	str	);
-
-					sprintf (str, "%d", bpoints);
-					screen->DrawTextClean	  (CR_BLUE	,	287	* CleanXfac	,	50	* CleanYfac	,	str	);
-				}
-
 				bluey += 8 * CleanYfac;
 
 				bcount++;
@@ -1222,16 +1204,6 @@ void HU_TeamScores1 (player_t *player)
 				rpings = rpings + sortedplayers[i]->ping;
 				rpoints = rpoints + sortedplayers[i]->points;
 
-				// Total red frags and points
-				if(sv_gametype == GM_CTF)
-				{
-					sprintf (str, "%d", rfrags);
-					screen->DrawTextClean	  (CR_RED	,	287	* CleanXfac	,	114	* CleanYfac	,	str	);
-
-					sprintf (str, "%d", rpoints);
-					screen->DrawTextClean	  (CR_RED	,	287	* CleanXfac	,	122	* CleanYfac	,	str	);
-				}
-
 				redy += 8 * CleanYfac;
 
 				rcount++;
@@ -1242,11 +1214,28 @@ void HU_TeamScores1 (player_t *player)
 	// Blue team score
 	sprintf (str, "%d", TEAMpoints[TEAM_BLUE]);
 	screen->DrawTextClean	  (CR_BLUE	,	287	* CleanXfac	,	26	* CleanYfac	,	str	);
+	// Total blue frags and points
+	if(sv_gametype == GM_CTF)
+	{
+		sprintf (str, "%d", bfrags);
+		screen->DrawTextClean	  (CR_BLUE	,	287	* CleanXfac	,	42	* CleanYfac	,	str	);
+
+		sprintf (str, "%d", bpoints);
+		screen->DrawTextClean	  (CR_BLUE	,	287	* CleanXfac	,	50	* CleanYfac	,	str	);
+	}
 
 	// Red team score
 	sprintf (str, "%d", TEAMpoints[TEAM_RED]);
 	screen->DrawTextClean	  (CR_RED	,	287	* CleanXfac	,	98	* CleanYfac	,	str	);
+	// Total red frags and points
+	if(sv_gametype == GM_CTF)
+	{
+		sprintf (str, "%d", rfrags);
+		screen->DrawTextClean	  (CR_RED	,	287	* CleanXfac	,	114	* CleanYfac	,	str	);
 
+		sprintf (str, "%d", rpoints);
+		screen->DrawTextClean	  (CR_RED	,	287	* CleanXfac	,	122	* CleanYfac	,	str	);
+	}
 
 	if (bcount)
 	{
@@ -1385,7 +1374,7 @@ void HU_TeamScores2 (player_t *player)
 				  rlocy + CTFBOARDHEIGHT + (listsize*10) + TEAMPLAYBORDER);
 
 	//	Timelimit display
-	HU_DisplayTimer(rlocx + 90,rlocy - TEAMPLAYBORDER+4,false);
+	HU_DisplayTimer(rlocx + 180,rlocy - TEAMPLAYBORDER+4,false);
 
 	// Player scores header
 	// Blue Bar
@@ -1536,13 +1525,6 @@ void HU_TeamScores2 (player_t *player)
 				if(sv_gametype == GM_CTF)
 					bpoints = bpoints + sortedplayers[i]->points;
 
-				// TOTAL FRAGS (ctf only)
-				if(sv_gametype == GM_CTF)
-				{
-					sprintf (str, "%d", bfrags);
-					screen->DrawText	  (CR_BLUE	,blocx + 203		,blocy + 0	,	str			);
-				}
-
 				bluey += 10;
 
 				//bcount++;
@@ -1599,13 +1581,6 @@ void HU_TeamScores2 (player_t *player)
 				if(sv_gametype == GM_CTF)
 					rpoints = rpoints + sortedplayers[i]->points;
 
-				// TOTAL FRAGS (ctf only)
-				if(sv_gametype == GM_CTF)
-				{
-					sprintf (str, "%d", rfrags);
-					screen->DrawText	  (CR_RED	,rlocx + 203		,rlocy + 0	,	str			);
-				}
-
 				redy += 10;
 
 				//rcount++;
@@ -1629,6 +1604,13 @@ void HU_TeamScores2 (player_t *player)
 		else
 			sprintf (str, "%d", bpoints);
 		screen->DrawText	  (CR_BLUE	,blocx + 203		,blocy + 16	,	str			);
+
+		// TOTAL FRAGS (ctf only)
+		if(sv_gametype == GM_CTF)
+		{
+			sprintf (str, "%d", bfrags);
+			screen->DrawText	  (CR_BLUE	,blocx + 203		,blocy + 0	,	str			);
+		}
 	}
 
 	if (rcount)
@@ -1647,6 +1629,13 @@ void HU_TeamScores2 (player_t *player)
 		else
 			sprintf (str, "%d", rpoints);
 		screen->DrawText	  (CR_RED	,rlocx + 203		,rlocy + 16	,	str			);
+
+		// TOTAL FRAGS (ctf only)
+		if(sv_gametype == GM_CTF)
+		{
+			sprintf (str, "%d", rfrags);
+			screen->DrawText	  (CR_RED	,rlocx + 203		,rlocy + 0	,	str			);
+		}
 	}
 }
 
