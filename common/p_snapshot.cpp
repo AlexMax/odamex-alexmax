@@ -514,11 +514,6 @@ static fixed_t P_PositionDifference(const v3fixed_t &a, const v3fixed_t &b)
 	return M_LengthVec3Fixed(&diff);
 }
 
-static angle_t P_AngleDifference(const angle_t a, const angle_t b)
-{
-	return (b - a < ANG180 ? b - a : a - b);
-}
-
 //
 // P_ExtrapolateActorPosition
 //
@@ -608,8 +603,8 @@ ActorSnapshot P_LerpActorPosition(const ActorSnapshot &from, const ActorSnapshot
 	#endif // _SNAPSHOT_DEBUG_
 
 	// lerp the angle
-	angle_t anglediff = P_AngleDifference(from.getAngle(), to.getAngle());
-	angle_t angle = from.getAngle() + (angle_t)(anglediff * amount);
+	int anglediff = int(to.getAngle()) - int(from.getAngle());
+	angle_t angle = from.getAngle() + FixedMul(anglediff, amount_fixed);	
 	
 	#ifdef _SNAPSHOT_DEBUG_
 	if (anglediff)
