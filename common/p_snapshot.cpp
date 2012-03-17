@@ -161,16 +161,6 @@ void ActorSnapshot::toActor(AActor *mo) const
 	if (mFields & (ACT_POSITIONX | ACT_POSITIONY | ACT_POSITIONZ))
 	{
 		fixed_t destx = mX, desty = mY, destz = mZ;
-		if (isInterpolated() || isExtrapolated())
-		{
-			// need to check for collisions before moving
-			P_TestActorMovement(mo, mX, mY, mZ, destx, desty, destz);
-			
-			#ifdef _SNAPSHOT_DEBUG_
-			if (mX != destx || mY != desty || mZ != destz)
-				Printf(PRINT_HIGH, "Snapshot %i: ActorSnapshot::toActor() clipping movement.\n", getTime()); 
-			#endif // _SNAPSHOT_DEBUG_
-		}
 		
 		// [SL] 2011-11-06 - Avoid setting the actor's floorz value if it hasn't moved.
 		// This ensures the floorz value is correct for actors that have spawned too
@@ -605,10 +595,6 @@ ActorSnapshot P_LerpActorPosition(const ActorSnapshot &from, const ActorSnapshot
 	// lerp the angle
 	int anglediff = int(to.getAngle()) - int(from.getAngle());
 	angle_t angle = from.getAngle() + FixedMul(anglediff, amount_fixed);	
-
-	// lerp the pitch
-	int pitchdiff = int(to.getPitch()) - int(from.getPitch());
-	angle_t pitch = from.getPitch() + FixedMul(pitchdiff, amount_fixed);
 	
 	#ifdef _SNAPSHOT_DEBUG_
 	if (anglediff)
@@ -623,7 +609,6 @@ ActorSnapshot P_LerpActorPosition(const ActorSnapshot &from, const ActorSnapshot
 	newsnapshot.setY(pos_new.y);
 	newsnapshot.setZ(pos_new.z);
 	newsnapshot.setAngle(angle);
-	newsnapshot.setPitch(pitch);
 
 	return newsnapshot;
 }

@@ -82,7 +82,13 @@ buf_t     net_buffer(MAX_UDP_PACKET);
 
 bool      noservermsgs;
 int       last_received;
+
+// [SL] 2012-03-17 - world_index is the gametic on the server that the client
+// is currently simulating.  world_index_accum is a continuous accumulator that
+// is used to advance world_index if appropriate.
 int       world_index = 0;
+float     world_index_accum = 0.0f;
+
 int       last_svgametic = 0;
 int       last_player_update = 0;
 
@@ -255,6 +261,7 @@ void AM_Stop();
 void CL_ClearWorldIndexSync()
 {
 	last_svgametic = world_index = 0;
+	world_index_accum = 0.0f;
 }
 
 int CL_CalculateWorldIndexSync()
@@ -1833,6 +1840,7 @@ void CL_SpawnPlayer()
 		// [SL] 2012-03-08 - Resync with the server's incoming tic since we don't care
 		// about players/sectors jumping to new positions when the displayplayer spawns
 		world_index = CL_CalculateWorldIndexSync();
+		world_index_accum = (float)world_index;
 	}
 
 	int snaptime = last_svgametic;
@@ -3160,6 +3168,7 @@ CVAR_FUNC_IMPL (cl_interp)
 
 	// Resync the world index since the sync offset has changed		
 	world_index = CL_CalculateWorldIndexSync();
+	world_index_accum = (float)world_index;
 }
 
 //
@@ -3172,8 +3181,8 @@ void CL_SimulateWorld()
 		return;
 		
 	// if the world_index falls outside this range, resync it
-	static const int MAX_BEHIND = 4;
-	static const int MAX_AHEAD = 4;
+	static const int MAX_BEHIND = 16;
+	static const int MAX_AHEAD = 16;
 
 	int lower_sync_limit = CL_CalculateWorldIndexSync() - MAX_BEHIND;
 	int upper_sync_limit = CL_CalculateWorldIndexSync() + MAX_AHEAD;
@@ -3199,6 +3208,7 @@ void CL_SimulateWorld()
 		#endif // _WORLD_INDEX_DEBUG_
 		
 		world_index = CL_CalculateWorldIndexSync();
+		world_index_accum = (float)world_index;
 	}
 	
 	#ifdef _WORLD_INDEX_DEBUG_
@@ -3247,8 +3257,25 @@ void CL_SimulateWorld()
 			snap.toPlayer(player);
 		}
 	}
-			
-	world_index++;
+	
+	// [SL] 2012-03-17 - Try to maintain sync with the server by gradually
+	// slowing down or speeding up world_index
+	if (last_svgametic - cl_interp > world_index)
+		world_index_accum += 1.25f;		// behind server so speed up time
+	else if (last_svgametic - cl_interp < world_index)
+		world_index_accum += 0.75f;		// ahead of server so slow down time
+	else
+		world_index_accum += 1.0f;
+
+	int diff = int(world_index_accum - world_index);
+	
+	#ifdef _WORLD_INDEX_DEBUG_
+	if (diff != 1)
+		Printf(PRINT_HIGH, "Gametic %i, increasing world index by %i.",
+				gametic, diff);
+	#endif // _WORLD_INDEX_DEBUG_
+	
+	world_index += diff;
 }
 
 void OnChangedSwitchTexture (line_t *line, int useAgain) {}
