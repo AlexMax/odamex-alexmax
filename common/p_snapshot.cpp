@@ -605,6 +605,10 @@ ActorSnapshot P_LerpActorPosition(const ActorSnapshot &from, const ActorSnapshot
 	// lerp the angle
 	int anglediff = int(to.getAngle()) - int(from.getAngle());
 	angle_t angle = from.getAngle() + FixedMul(anglediff, amount_fixed);	
+
+	// lerp the pitch
+	int pitchdiff = int(to.getPitch()) - int(from.getPitch());
+	angle_t pitch = from.getPitch() + FixedMul(pitchdiff, amount_fixed);
 	
 	#ifdef _SNAPSHOT_DEBUG_
 	if (anglediff)
@@ -616,9 +620,10 @@ ActorSnapshot P_LerpActorPosition(const ActorSnapshot &from, const ActorSnapshot
 	newsnapshot.setAuthoritative(false);
 	newsnapshot.setInterpolated(true);
 	newsnapshot.setX(pos_new.x);
-	newsnapshot.setY(pos_new.y);	
-	newsnapshot.setZ(pos_new.z);	
+	newsnapshot.setY(pos_new.y);
+	newsnapshot.setZ(pos_new.z);
 	newsnapshot.setAngle(angle);
+	newsnapshot.setPitch(pitch);
 
 	return newsnapshot;
 }
