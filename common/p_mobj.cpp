@@ -452,30 +452,23 @@ void P_MoveActor(AActor *mo)
 void P_TestActorMovement(AActor *mo, fixed_t tryx, fixed_t tryy, fixed_t tryz,
 						fixed_t &destx, fixed_t &desty, fixed_t &destz)
 {
-	// Make a fake copy of the real actor
-	AActor *fakemo = new AActor(mo->x, mo->y, mo->z, mo->type);
-	fakemo->height = mo->height;
-	fakemo->flags = mo->flags;
-	fakemo->flags2 = mo->flags2;
-	fakemo->momx = tryx - mo->x;
-	fakemo->momy = tryy - mo->y;
-	fakemo->momz = tryz - mo->z;	
-		
-	// Make the real actor non-solid so it doesn't interfere with fakemo
-	bool oldsolid = mo->flags & MF_SOLID;
-	mo->flags &= ~MF_SOLID;
+	// backup the actor's position/state
+	ActorSnapshot backup(gametic, mo);
 	
-	// Perform collision testing with the fake actor
-	P_MoveActor(fakemo);
-	
-	destx = fakemo->x;
-	desty = fakemo->y;
-	destz = fakemo->z;
-	
-	// Make the real actor solid again
-	mo->flags |= oldsolid;
-	
-	fakemo->Destroy();
+	mo->momx = tryx - mo->x;
+	mo->momy = tryy - mo->y;
+	mo->momz = tryz - mo->z;
+
+	// Perform collision testing
+	P_MoveActor(mo);
+
+	// the position the actor would move to
+	destx = mo->x;
+	desty = mo->y;
+	destz = mo->z;
+
+	// restore the actor's position/state
+	backup.toActor(mo);
 }
 
 //
