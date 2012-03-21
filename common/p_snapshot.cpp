@@ -353,7 +353,7 @@ PlayerSnapshot PlayerSnapshotManager::mInterpolateSnapshots(int from, int to, in
 	const PlayerSnapshot *snapfrom = &mSnaps[from % NUM_SNAPSHOTS];
 	const PlayerSnapshot *snapto = &mSnaps[to % NUM_SNAPSHOTS];
 	
-	if (to == from)
+	if (to == from || !snapto->isContinuous())
 		return *snapto;
 		
 	float amount = float(time - from) / float(to - from);

@@ -2660,6 +2660,10 @@ void CL_ActivateLine(void)
 		 lines[l].special == Teleport_Line))
 	{	
 		teleported_players.insert(mo->player->id);
+		
+		// [SL] 2012-03-21 - Server takes care of moving players that teleport.
+		// Don't allow client to process it since it screws up interpolation.
+		return;
 	}
 
 	switch (activationType)
