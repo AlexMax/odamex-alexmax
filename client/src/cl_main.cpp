@@ -3185,8 +3185,8 @@ void CL_SimulateWorld()
 		return;
 		
 	// if the world_index falls outside this range, resync it
-	static const int MAX_BEHIND = 16;
-	static const int MAX_AHEAD = 16;
+	static const int MAX_BEHIND = 6;
+	static const int MAX_AHEAD = 6;
 
 	int lower_sync_limit = CL_CalculateWorldIndexSync() - MAX_BEHIND;
 	int upper_sync_limit = CL_CalculateWorldIndexSync() + MAX_AHEAD;
@@ -3279,6 +3279,10 @@ void CL_SimulateWorld()
 				gametic, diff);
 	#endif // _WORLD_INDEX_DEBUG_
 	
+	// FIXME: the current world_index_accum scheme causes skipping movement
+	// disable for now until more testing can be done
+	diff = 1;
+
 	world_index += diff;
 }
 
