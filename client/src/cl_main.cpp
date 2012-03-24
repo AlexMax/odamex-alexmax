@@ -105,6 +105,7 @@ std::string server_host = "";	// hostname of server
 
 // [SL] 2011-06-27 - Class to record and playback network recordings
 NetDemo netdemo;
+static const std::string default_netdemo_filename("%n_%g_%w-%m_%d");
 // [SL] 2011-07-06 - not really connected (playing back a netdemo)
 bool simulated_connection = false;		
 
@@ -209,6 +210,8 @@ EXTERN_CVAR (sv_freelook)
 EXTERN_CVAR (cl_connectalert)
 EXTERN_CVAR (cl_disconnectalert)
 EXTERN_CVAR (waddirs)
+EXTERN_CVAR (cl_autorecord)
+EXTERN_CVAR (cl_splitnetdemos)
 
 void CL_RunTics (void);
 void CL_PlayerTimes (void);
@@ -283,13 +286,10 @@ void CL_QuitNetGame(void)
 	players.clear();
 
 	if (netdemo.isRecording())
-	{
 		netdemo.stopRecording();
-	}
+
 	if (netdemo.isPlaying())
-	{
 		netdemo.stopPlaying();
-	}
 
 	// Reset the palette to default
 	if (I_HardwareInitialized())
@@ -699,8 +699,41 @@ END_COMMAND (exit)
 
 
 //
-// CL_NetDemoStop
+// NetDemo related functions
 //
+
+//
+// CL_GenerateNetDemoFileName
+//
+// 
+std::string CL_GenerateNetDemoFileName(const std::string &filename = default_netdemo_filename)
+{
+	const std::string expanded_filename(M_ExpandTokens(filename));	
+	std::string newfilename(expanded_filename + ".odd");
+	newfilename = I_GetUserFileName(newfilename.c_str());
+
+	FILE *fp;
+	int counter = 1;
+	char cntstr[5];
+
+	// keep trying to find a filename that doesn't yet exist
+	while ( (fp = fopen(newfilename.c_str(), "r")) )
+	{
+		fclose(fp);
+		
+		// add a number to the end of the filename
+		sprintf(cntstr, "%i", counter);
+		newfilename = expanded_filename + cntstr + ".odd";
+		newfilename = I_GetUserFileName(newfilename.c_str());
+
+		counter++;
+		if (counter > 9999)		// don't overflow cntstr
+			break;
+	}
+
+	return newfilename;
+}
+
 void CL_NetDemoStop()
 {
 	netdemo.stopPlaying();
@@ -744,19 +777,12 @@ BEGIN_COMMAND(netrecord)
 	}
 
 	std::string filename;
-	if (argc < 2)
-	{
-		filename = "demo";
-	}
+	if (argc > 1 && strlen(argv[1]) > 0)
+		filename = CL_GenerateNetDemoFileName(argv[1]);
 	else
-	{
-		if (strlen(argv[1]) > 0)
-			filename = argv[1];
-	}
+		filename = CL_GenerateNetDemoFileName();
 
-	M_AppendExtension(filename, ".odd");
-
-	CL_NetDemoRecord(I_GetUserFileName(filename.c_str()));
+	CL_NetDemoRecord(filename);
 }
 END_COMMAND(netrecord)
 
@@ -800,17 +826,17 @@ END_COMMAND(netplay)
 
 BEGIN_COMMAND(ff)
 {
-	int ticnum = gametic;
+	int ticnum;
 
-	if (argc < 1)
+	if (argc == 1)
 	{
 		// no arg so just go to the next snapshot
-		ticnum += netdemo.getSpacing();
+		ticnum = gametic + netdemo.getSpacing();
 	}
 	else
 	{
 		// go forward X seconds
-		ticnum += TICRATE * atoi(argv[1]);
+		ticnum = gametic + TICRATE * atoi(argv[1]);
 	}
 
 	if (netdemo.isPlaying())
@@ -822,17 +848,17 @@ END_COMMAND(ff)
 
 BEGIN_COMMAND(rew)
 {
-	int ticnum = gametic;
+	int ticnum;
 
-	if (argc < 1)
+	if (argc == 1)
 	{
 		// no arg so just go to the next snapshot
-		ticnum -= netdemo.getSpacing();
+		ticnum = gametic - netdemo.getSpacing();
 	}
 	else
 	{
-		// go forward X seconds
-		ticnum -= TICRATE * atoi(argv[1]);
+		// go backwards X seconds
+		ticnum = gametic - TICRATE * atoi(argv[1]);
 	}
 
 	if (netdemo.isPlaying())
@@ -841,6 +867,21 @@ BEGIN_COMMAND(rew)
 	}
 }
 END_COMMAND(rew)
+
+BEGIN_COMMAND(ffnextmap)
+{
+	if (netdemo.isPlaying())
+		netdemo.nextMap(&net_message);
+}
+END_COMMAND(ffnextmap)
+
+BEGIN_COMMAND(rewprevmap)
+{
+	if (netdemo.isPlaying())
+		netdemo.prevMap(&net_message);
+}
+END_COMMAND(rewprevmap)
+
 
 //
 // CL_MoveThing
@@ -2626,6 +2667,10 @@ void CL_LoadMap(void)
 {
 	const char *mapname = MSG_ReadString ();
 
+	bool splitnetdemo = netdemo.isRecording() && cl_splitnetdemos;
+	if (splitnetdemo)
+		netdemo.stopRecording();
+
 	if(gamestate == GS_DOWNLOAD)
 		return;
 
@@ -2639,7 +2684,18 @@ void CL_LoadMap(void)
 	CTF_CheckFlags(consoleplayer());
 
 	gameaction = ga_nothing;
+
+	// Autorecord netdemo or continue recording in a new file
+	if ((splitnetdemo || cl_autorecord) &&
+		(!netdemo.isPlaying() && !netdemo.isRecording() && !netdemo.isPaused()))
+	{
+		netdemo.startRecording(CL_GenerateNetDemoFileName());
+	}
+
+	if (netdemo.isRecording())
+		netdemo.writeMapChange();
 }
+
 
 void CL_EndGame()
 {

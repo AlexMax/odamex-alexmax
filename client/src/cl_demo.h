@@ -25,6 +25,7 @@ public:
 	void writeMessages();
 	void readMessages(buf_t* netbuffer);
 	void capture(const buf_t* netbuffer);
+	void writeMapChange();
 
 	bool isRecording() const { return (state == NetDemo::st_recording); }
 	bool isPlaying() const { return (state == NetDemo::st_playing); }
@@ -33,6 +34,9 @@ public:
 	int getSpacing() const { return header.snapshot_spacing; }
 	
 	void skipTo(buf_t *netbuffer, int ticnum);
+	void nextMap(buf_t *netbuffer);
+	void prevMap(buf_t *netbuffer);
+
 private:
 	typedef enum
 	{
@@ -48,37 +52,6 @@ private:
 		msg_snapshot
 	} netdemo_message_t;
 
-	void cleanUp();
-	void copy(NetDemo &to, const NetDemo &from);
-	void error(const std::string &message);
-	void reset();
-
-	int snapshotLookup(int ticnum);
-	void writeLauncherSequence(buf_t *netbuffer);
-	void writeConnectionSequence(buf_t *netbuffer);
-	void writeSnapshot(buf_t *netbuffer);
-	void writeSnapshotData(buf_t *netbuffer);
-	void writeSnapshotIndexEntry();
-	void readSnapshot(buf_t *netbuffer, size_t index);
-	void writeChunk(const byte *data, size_t size, netdemo_message_t type);
-	bool writeHeader();
-	bool readHeader();
-	bool writeIndex();
-	bool readIndex();
-	void writeLocalCmd(buf_t *netbuffer) const;
-	bool readMessageHeader(netdemo_message_t &type, uint32_t &len, uint32_t &tic) const;
-	void readMessageBody(buf_t *netbuffer, uint32_t len);
-	void writeFullUpdate(int ticnum);
-
-	int calculateTimeElapsed();
-	int calculateTotalTime();
-
-	typedef struct
-	{
-		uint32_t	ticnum;
-		uint32_t	offset;			// offset in the demo file
-	} netdemo_snapshot_entry_t;
-	
 	typedef struct
 	{
 		byte		type;
@@ -88,15 +61,52 @@ private:
 
 	typedef struct
 	{
+		uint32_t	ticnum;
+		uint32_t	offset;			// offset in the demo file
+	} netdemo_index_entry_t;
+	
+	void cleanUp();
+	void copy(NetDemo &to, const NetDemo &from);
+	void error(const std::string &message);
+	void reset();
+
+	const netdemo_index_entry_t *snapshotLookup(int ticnum) const;
+	void writeLauncherSequence(buf_t *netbuffer);
+	void writeConnectionSequence(buf_t *netbuffer);
+	void writeSnapshot(buf_t *netbuffer);
+	void writeSnapshotData(buf_t *netbuffer);
+	void writeSnapshotIndexEntry();
+	void writeMapIndexEntry();
+	void readSnapshot(buf_t *netbuffer, const netdemo_index_entry_t *snap);
+	void writeChunk(const byte *data, size_t size, netdemo_message_t type);
+	bool writeHeader();
+	bool readHeader();
+	bool writeIndex();
+	bool readIndex();
+	bool writeMapIndex();
+	bool readMapIndex();
+	void writeLocalCmd(buf_t *netbuffer) const;
+	bool readMessageHeader(netdemo_message_t &type, uint32_t &len, uint32_t &tic) const;
+	void readMessageBody(buf_t *netbuffer, uint32_t len);
+	void writeFullUpdate(int ticnum);
+	int getCurrentMapIndex();
+
+	int calculateTimeElapsed();
+	int calculateTotalTime();
+
+	typedef struct
+	{
 		char		identifier[4];  		// "ODAD"
 		byte		version;
 		byte    	compression;    		// type of compression used
+		uint16_t	snapshot_index_size;	// number of snapshots in the index
 		uint32_t	snapshot_index_offset;	// offset from start of the file for the index
-		uint32_t	snapshot_index_size;	// gametic filepos index follows header
+		uint16_t	map_index_size;			// number of maps in the mapindex
+		uint32_t	map_index_offset;		// offset from start of the file for the mapindex
 		uint16_t	snapshot_spacing;		// number of gametics between indices
 		uint32_t	starting_gametic;		// the gametic the demo starts at
 		uint32_t	ending_gametic;			// the last gametic of the demo
-		byte		reserved[40];   		// for future use
+		byte		reserved[36];   		// for future use
 	} netdemo_header_t;
 	
 	static const size_t HEADER_SIZE = 64;
@@ -115,7 +125,8 @@ private:
 	std::list<buf_t>	captured;
 
 	netdemo_header_t	header;	
-	std::vector<netdemo_snapshot_entry_t> snapshot_index;
+	std::vector<netdemo_index_entry_t> snapshot_index;
+	std::vector<netdemo_index_entry_t> map_index;
 };
 
 
