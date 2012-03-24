@@ -37,6 +37,11 @@ public:
 	void nextMap(buf_t *netbuffer);
 	void prevMap(buf_t *netbuffer);
 
+	int calculateTimeElapsed();
+	int calculateTotalTime();
+	const std::vector<int> getMapChangeTimes();
+	const std::string &getFileName() { return filename; }
+	
 private:
 	typedef enum
 	{
@@ -90,9 +95,6 @@ private:
 	void readMessageBody(buf_t *netbuffer, uint32_t len);
 	void writeFullUpdate(int ticnum);
 	int getCurrentMapIndex();
-
-	int calculateTimeElapsed();
-	int calculateTotalTime();
 
 	typedef struct
 	{

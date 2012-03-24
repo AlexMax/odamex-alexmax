@@ -1539,6 +1539,20 @@ int NetDemo::calculateTimeElapsed()
 	return ((gametic - header.starting_gametic) / TICRATE);	
 }
 
+const std::vector<int> NetDemo::getMapChangeTimes()
+{
+	std::vector<int> times;
+
+	for (int i = 0; i < map_index.size(); i++)
+	{
+		int start_time = (map_index[i].ticnum - header.starting_gametic) / TICRATE;
+		times.push_back(start_time);
+	}
+	
+	return times;
+}
+
+
 void NetDemo::writeMapChange()
 {
 	static buf_t netbuf_snapshot(NetDemo::MAX_SNAPSHOT_SIZE);

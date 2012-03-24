@@ -824,6 +824,29 @@ BEGIN_COMMAND(netplay)
 }
 END_COMMAND(netplay)
 
+BEGIN_COMMAND(netdemostats)
+{
+	if (!netdemo.isPlaying())
+		return;
+
+	std::vector<int> maptimes = netdemo.getMapChangeTimes();
+	int curtime = netdemo.calculateTimeElapsed();
+	int totaltime = netdemo.calculateTotalTime();
+
+	Printf(PRINT_HIGH, "\n%s\n", netdemo.getFileName().c_str());
+	Printf(PRINT_HIGH, "============================================\n");
+	Printf(PRINT_HIGH, "Total time: %i seconds\n", totaltime);
+	Printf(PRINT_HIGH, "Current position: %i seconds (%i%%)\n",
+		curtime, curtime * 100 / totaltime);
+	Printf(PRINT_HIGH, "Number of maps: %i\n", maptimes.size());
+	for (size_t i = 0; i < maptimes.size(); i++)
+	{
+		Printf(PRINT_HIGH, "> %02i Starting time: %i seconds\n",
+			i + 1, maptimes[i]);
+	}
+}
+END_COMMAND(netdemostats)
+
 BEGIN_COMMAND(ff)
 {
 	int ticnum;
