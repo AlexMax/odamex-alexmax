@@ -1185,7 +1185,7 @@ void NetDemo::writeLauncherSequence(buf_t *netbuffer)
 	
 	// get sv_hostname and write it
 	var = cvar_t::FindCVar("sv_hostname", &prev_cvar);
-	MSG_WriteString	(netbuffer, var ? var->cstring() : "");
+	MSG_WriteString (netbuffer, "server_hostname");
 	
 	int playersingame = 0;
 	for (size_t i = 0; i < players.size(); i++)
@@ -1362,15 +1362,26 @@ void NetDemo::writeConnectionSequence(buf_t *netbuffer)
 	MSG_WriteString	(netbuffer, level.mapname);
 
 	// Server spawns the player
+	MSG_WriteMarker	(netbuffer, svc_spawnplayer);
+	MSG_WriteByte	(netbuffer, consoleplayer().id);
 	if (consoleplayer().mo)
 	{
-		MSG_WriteMarker	(netbuffer, svc_spawnplayer);
-		MSG_WriteByte	(netbuffer, consoleplayer().id);
 		MSG_WriteShort	(netbuffer, consoleplayer().mo->netid);
 		MSG_WriteLong	(netbuffer, consoleplayer().mo->angle);
 		MSG_WriteLong	(netbuffer, consoleplayer().mo->x);
 		MSG_WriteLong	(netbuffer, consoleplayer().mo->y);
 		MSG_WriteLong	(netbuffer, consoleplayer().mo->z);
+	}
+	else
+	{
+		// The client hasn't yet received his own position from the server
+		// This happens with cl_autorecord
+		// Just fake a position for now
+		MSG_WriteShort	(netbuffer, MAXSHORT);
+		MSG_WriteLong	(netbuffer, 0);
+		MSG_WriteLong	(netbuffer, 0);
+		MSG_WriteLong	(netbuffer, 0);
+		MSG_WriteLong	(netbuffer, 0);
 	}
 }
 
@@ -1543,7 +1554,7 @@ const std::vector<int> NetDemo::getMapChangeTimes()
 {
 	std::vector<int> times;
 
-	for (int i = 0; i < map_index.size(); i++)
+	for (size_t i = 0; i < map_index.size(); i++)
 	{
 		int start_time = (map_index[i].ticnum - header.starting_gametic) / TICRATE;
 		times.push_back(start_time);
