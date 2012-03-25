@@ -28,6 +28,7 @@
 #include "i_net.h"
 #include "d_ticcmd.h"
 #include "r_defs.h"
+#include "cl_demo.h"
 #include <string>
 
 extern netadr_t  serveraddr;
@@ -38,6 +39,8 @@ extern bool      noservermsgs;
 extern int       last_received;
 
 extern buf_t     net_buffer;
+
+extern NetDemo	netdemo;
 
 #define MAXSAVETICS 70
 extern ticcmd_t localcmds[MAXSAVETICS];

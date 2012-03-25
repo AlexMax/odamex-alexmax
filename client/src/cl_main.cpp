@@ -847,7 +847,7 @@ BEGIN_COMMAND(netdemostats)
 }
 END_COMMAND(netdemostats)
 
-BEGIN_COMMAND(ff)
+BEGIN_COMMAND(netff)
 {
 	int ticnum;
 
@@ -867,9 +867,9 @@ BEGIN_COMMAND(ff)
 		netdemo.skipTo(&net_message, ticnum);
 	}
 }
-END_COMMAND(ff)
+END_COMMAND(netff)
 
-BEGIN_COMMAND(rew)
+BEGIN_COMMAND(netrew)
 {
 	int ticnum;
 
@@ -889,21 +889,21 @@ BEGIN_COMMAND(rew)
 		netdemo.skipTo(&net_message, ticnum);
 	}
 }
-END_COMMAND(rew)
+END_COMMAND(netrew)
 
-BEGIN_COMMAND(ffnextmap)
+BEGIN_COMMAND(netnextmap)
 {
 	if (netdemo.isPlaying())
 		netdemo.nextMap(&net_message);
 }
-END_COMMAND(ffnextmap)
+END_COMMAND(netnextmap)
 
-BEGIN_COMMAND(rewprevmap)
+BEGIN_COMMAND(netprevmap)
 {
 	if (netdemo.isPlaying())
 		netdemo.prevMap(&net_message);
 }
-END_COMMAND(rewprevmap)
+END_COMMAND(netprevmap)
 
 
 //
