@@ -46,6 +46,7 @@
 
 #include "z_zone.h"
 #include "p_unlag.h"
+#include <math.h>
 
 fixed_t 		tmbbox[4];
 static AActor  *tmthing;
@@ -481,9 +482,13 @@ BOOL PIT_CheckThing (AActor *thing)
 	if ((tmthing->flags2 & MF2_PASSMOBJ) && co_realactorheight)
 	{
 		// check if a mobj passed over/under another object
-		if (/*!(thing->flags & MF_SPECIAL) &&*/
-			((tmthing->z >= thing->z + thing->height ||
-			  tmthing->z + tmthing->height < thing->z)))
+		// [SL] 2012-03-27 - ZDoom uses a modified thing->height value for
+		// testing (height += 24*FRACUNIT).  This allows the player to grab
+		// items above his head so just use the thing's original height
+		// (returned by P_ThingInfoHeight) for now.
+
+		if (tmthing->z >= thing->z + P_ThingInfoHeight(thing->info) ||
+			tmthing->z + P_ThingInfoHeight(tmthing->info) < thing->z)
 			return true;
 	}
 
@@ -2370,87 +2375,6 @@ BEGIN_CUSTOM_CVAR (sv_splashfactor, "1.0", "", CVARTYPE_FLOAT,  CVAR_ARCHIVE | C
 }
 END_CUSTOM_CVAR (sv_splashfactor)
 
-BOOL PIT_ZdoomRadiusAttack (AActor *thing)
-{
-	if (!serverside || !(thing->flags & MF_SHOOTABLE))
-		return true;
-
-	// Boss spider and cyborg
-	// take no damage from concussion.
-	if (thing->flags2 & MF2_BOSS)
-		return true;
-
-	// Barrels always use the original code, since this makes
-	// them far too "active."
-	if (bombspot->type != MT_BARREL && thing->type != MT_BARREL) {
-		// [RH] New code (based on stuff in Q2)
-		float points;
-		v3double_t thingvec;
-
-		M_ActorPositionToVec3(&thingvec, thing);
-		thingvec.z += (double)(thing->height >> (FRACBITS+1));
-		{
-			v3double_t v;
-
-			M_SubVec3(&v, &bombvec, &thingvec);
-			points = bombdamagefloat - M_LengthVec3(&v);
-		}
-		if (thing == bombsource)
-			points = points * sv_splashfactor;
-		if (points > 0) {
-			if ((!HasBehavior && P_CheckSight (thing, bombspot, true)) ||
-				(HasBehavior && P_CheckSight2 (thing, bombspot, true))) {
-				v3double_t dir;
-				float thrust;
-				fixed_t momx = thing->momx;
-				fixed_t momy = thing->momy;
-
-				P_DamageMobj (thing, bombspot, bombsource, (int)points, bombmod);
-
-				thrust = points * 35000.0f / (float)thing->info->mass;
-				M_SubVec3(&dir, &thingvec, &bombvec);
-				M_ScaleVec3(&dir, &dir, thrust);
-				if (bombsource != thing) {
-					dir.z *= 0.5f;
-				} else if (sv_splashfactor) {
-					M_ScaleVec3(&dir, &dir, selfthrustscale);
-				}
-				thing->momx = momx + (fixed_t)(dir.x);
-				thing->momy = momy + (fixed_t)(dir.y);
-				thing->momz += (fixed_t)(dir.z);
-			}
-		}
-	} else {
-		// [RH] Old code just for barrels
-		fixed_t dx;
-		fixed_t dy;
-		fixed_t dist;
-
-		dx = abs(thing->x - bombspot->x);
-		dy = abs(thing->y - bombspot->y);
-
-		dist = dx>dy ? dx : dy;
-		dist = (dist - thing->radius) >> FRACBITS;
-
-		if (dist >= bombdamage)
-			return true;  // out of range
-
-		if (dist < 0)
-			dist = 0;
-
-
-		if ((!HasBehavior && P_CheckSight (thing, bombspot)) ||
-			(HasBehavior && P_CheckSight2 (thing, bombspot)) )
-		{
-			// must be in direct path
-			P_DamageMobj (thing, bombspot, bombsource, bombdamage - dist, bombmod);
-		}
-	}
-
-	return true;
-}
-
-
 //
 // PIT_RadiusAttack
 // "bombsource" is the creature
@@ -2491,6 +2415,91 @@ BOOL PIT_RadiusAttack (AActor *thing)
     }
 
     return true;
+}
+
+BOOL PIT_ZdoomRadiusAttack (AActor *thing)
+{
+	if (!serverside || !(thing->flags & MF_SHOOTABLE))
+		return true;
+
+	// Boss spider and cyborg
+	// take no damage from concussion.
+	if (thing->flags2 & MF2_BOSS)
+		return true;
+	
+	// Barrels always use the original code, since this makes
+	// them far too "active." BossBrains also use the old code
+	// because some user levels require they have a height of 16,
+	// which can make them near impossible to hit with the new code.
+	if (bombspot->type == MT_BARREL || thing->type == MT_BARREL ||
+		thing->type == MT_BOSSBRAIN)
+	{
+		return PIT_RadiusAttack(thing);
+	}
+	
+	// [RH] New code. The bounding box only covers the
+	// height of the thing and not the height of the map.
+	fixed_t dx = abs(thing->x - bombspot->x);
+	fixed_t dy = abs(thing->y - bombspot->y);
+	float len = float(MAX(dx, dy));
+	float boxradius = float(thing->radius);
+
+	if (bombspot->z < thing->z || bombspot->z >= thing->z + thing->height)
+	{
+		float dz;
+
+		if (bombspot->z > thing->z)
+			dz = float(thing->z + thing->height - bombspot->z);
+		else
+			dz = float(thing->z - bombspot->z);
+
+		if (len <= boxradius)
+			len = dz;
+		else
+		{
+			len -= boxradius;
+			len = sqrtf(len*len + dz*dz);
+		}
+	}
+	else
+	{
+		len -= boxradius;
+		if (len < 0.0f)
+			len = 0.0f;
+	}
+	
+	float points = bombdamagefloat - (len / FRACUNIT) + 1.0f;
+	if (thing == bombsource)
+		points *= sv_splashfactor;
+
+	if (points > 0.0f &&
+		((!HasBehavior && P_CheckSight(thing, bombspot, true)) ||
+		 (HasBehavior && P_CheckSight2(thing, bombspot, true))))
+	{
+		// OK to damage; target is in direct path
+
+		fixed_t momx = thing->momx;
+		fixed_t momy = thing->momy;
+		int damage = (int)points;
+
+		P_DamageMobj(thing, bombspot, bombsource, damage, bombmod);
+
+		float thrust = points * 0.5f / thing->info->mass;
+		if (bombsource == thing)
+			thrust *= selfthrustscale;
+
+		float momz = (float)(thing->z + (thing->height>>1) - bombspot->z) * thrust;
+		if (bombsource != thing)
+			momz *= 0.5f;
+		else
+			momz *= 0.8f;
+
+		thing->momx = momx + (fixed_t)((thing->x - bombspot->x) * thrust);
+		thing->momy = momy + (fixed_t)((thing->y - bombspot->y) * thrust);
+		thing->momz += (fixed_t)momz;
+	}
+
+	return true;
 }
 
 //

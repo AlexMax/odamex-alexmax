@@ -53,8 +53,6 @@ extern int last_player_update;
 extern int world_index;
 bool predicting;
 
-extern NetDemo netdemo;
-
 
 TArray <plat_pred_t> real_plats;
 

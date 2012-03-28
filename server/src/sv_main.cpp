@@ -890,10 +890,11 @@ void SV_RemoveDisconnectedPlayer(player_t &player)
 	// remove this player from the global players vector
 	for (size_t i=0; i<players.size(); i++)
 	{
-		if (players[i].id == player.id)
+		if (players[i].id == player_id)
 		{
 			players.erase(players.begin() + i);
-			free_player_ids.push(player.id);
+			free_player_ids.push(player_id);
+			break;
 		}
 	}
 
@@ -1475,6 +1476,9 @@ void SV_SendMobjToClient(AActor *mo, client_t *cl)
 	MSG_WriteByte(&cl->reliablebuf, mo->rndindex);
 	MSG_WriteShort(&cl->reliablebuf, (mo->state - states)); // denis - sending state fixes monster ghosts appearing under doors
 
+	if (mo->type == MT_FOUNTAIN)
+		MSG_WriteByte(&cl->reliablebuf, mo->args[0]);
+
 	if(mo->flags & MF_MISSILE || mobjinfo[mo->type].flags & MF_MISSILE) // denis - check type as that is what the client will be spawning
 	{
 		MSG_WriteShort (&cl->reliablebuf, mo->target ? mo->target->netid : 0);
@@ -1901,7 +1905,8 @@ void SV_UpdateMovingSectors(player_t &pl)
                 MSG_WriteLong (&cl->netbuf, Door->m_TopWait);
                 MSG_WriteLong (&cl->netbuf, Door->m_TopCountdown);
 				MSG_WriteLong (&cl->netbuf, Door->m_Status);
-                MSG_WriteLong (&cl->netbuf, (Door->m_Line - lines));
+				// Check for an invalid m_Line (doors triggered by tag 666)
+                MSG_WriteLong (&cl->netbuf, Door->m_Line ? (Door->m_Line - lines) : -1);
             }
         }
 	}
@@ -2451,11 +2456,15 @@ void SV_ConnectClient (void)
 
 		return;
 	}
+#if 0
+	// [SL] 2012-03-16 - This is currently unused so do no treat this
+	// connection type differently
 	else if(connection_type == 2)
 	{
 		players[n].playerstate = PST_SPECTATE;
 		return;
 	}
+#endif
 	else
 		players[n].playerstate = PST_REBORN;
 
@@ -3067,6 +3076,9 @@ void SV_UpdateMissiles(player_t &pl)
 		{
 			client_t *cl = &pl.client;
 
+            statenum_t mostate = (statenum_t)(mo->state - states);
+            mobjinfo_t moinfo = mobjinfo[mo->type];
+
 			MSG_WriteMarker (&cl->netbuf, svc_movemobj);
 			MSG_WriteShort (&cl->netbuf, mo->netid);
 			MSG_WriteByte (&cl->netbuf, mo->rndindex);
@@ -3101,18 +3113,20 @@ void SV_UpdateMissiles(player_t &pl)
                 MSG_WriteShort (&cl->netbuf, mo->tracer->netid);
             }
 
-			if ((mobjinfo[mo->type].spawnstate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].seestate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].painstate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].meleestate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].missilestate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].deathstate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].xdeathstate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].raisestate == (statenum_t)(mo->state - states)))
+            // This code is designed to send the 'starting' state, not inbetween
+            // ones
+			if ((moinfo.spawnstate == mostate) ||
+                (moinfo.seestate == mostate) ||
+                (moinfo.painstate == mostate) ||
+                (moinfo.meleestate == mostate) ||
+                (moinfo.missilestate == mostate) ||
+                (moinfo.deathstate == mostate) ||
+                (moinfo.xdeathstate == mostate) ||
+                (moinfo.raisestate == mostate))
             {
                 MSG_WriteMarker (&cl->netbuf, svc_mobjstate);
                 MSG_WriteShort (&cl->netbuf, mo->netid);
-                MSG_WriteShort (&cl->netbuf, (mo->state - states));
+                MSG_WriteShort (&cl->netbuf, (short)mostate);
             }
 
             if (cl->netbuf.cursize >= 1024)
@@ -3148,6 +3162,9 @@ void SV_UpdateMonsters(player_t &pl)
 		{
 			client_t *cl = &pl.client;
 
+            statenum_t mostate = (statenum_t)(mo->state - states);
+            mobjinfo_t moinfo = mobjinfo[mo->type];
+
 			MSG_WriteMarker (&cl->netbuf, svc_movemobj);
 			MSG_WriteShort (&cl->netbuf, mo->netid);
 			MSG_WriteByte (&cl->netbuf, mo->rndindex);
@@ -3174,18 +3191,20 @@ void SV_UpdateMonsters(player_t &pl)
                 MSG_WriteShort (&cl->netbuf, mo->target->netid);
             }
 
-			if ((mobjinfo[mo->type].spawnstate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].seestate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].painstate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].meleestate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].missilestate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].deathstate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].xdeathstate == (statenum_t)(mo->state - states)) ||
-                (mobjinfo[mo->type].raisestate == (statenum_t)(mo->state - states)))
+            // This code is designed to send the 'starting' state, not inbetween
+            // ones
+			if ((moinfo.spawnstate == mostate) ||
+                (moinfo.seestate == mostate) ||
+                (moinfo.painstate == mostate) ||
+                (moinfo.meleestate == mostate) ||
+                (moinfo.missilestate == mostate) ||
+                (moinfo.deathstate == mostate) ||
+                (moinfo.xdeathstate == mostate) ||
+                (moinfo.raisestate == mostate))
             {
                 MSG_WriteMarker (&cl->netbuf, svc_mobjstate);
                 MSG_WriteShort (&cl->netbuf, mo->netid);
-                MSG_WriteShort (&cl->netbuf, (mo->state - states));
+                MSG_WriteShort (&cl->netbuf, (short)mostate);
             }
 
             if (cl->netbuf.cursize >= 1024)
@@ -3550,10 +3569,7 @@ void SV_ProcessPlayerCmd(player_t &player)
 	#endif	// _TICCMD_QUEUE_DEBUG_
 
 	if (!player.mo)
-	{
-		SV_FlushPlayerCmds(player);
 		return;
-	}
 
 	int num_cmds = SV_CalculateNumTiccmds(player);	
 

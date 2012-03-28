@@ -1,9 +1,10 @@
-// Emacs style mode select   -*- C++ -*- 
+// Emacs style mode select   -*- C++ -*-
 //-----------------------------------------------------------------------------
 //
-// $Id$
+// $Id:$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
+// Copyright (C) 1998-2006 by Randy Heit (ZDoom).
 // Copyright (C) 2006-2010 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
@@ -17,25 +18,13 @@
 // GNU General Public License for more details.
 //
 // DESCRIPTION:
-//  Sky rendering. The DOOM sky is a texture map like any
-//  wall, wrapping around. A 1024 columns equal 360 degrees.
-//  The default sky map is 256 columns and repeats 4 times
-//  on a 320 screen?
-//  
+//	Common level routines
+//
 //-----------------------------------------------------------------------------
 
+#ifndef __C_LEVEL_H__
+#define __C_LEVEL_H__
 
-#include <stdio.h>
 
-#include "r_data.h"
 
-// [ML] 5/11/06 - Remove sky2
-int 		skyflatnum;
-int 		sky1texture, sky2texture;
-
-fixed_t		sky1pos=0,		sky1speed=0;
-
-char SKYFLATNAME[8] = "F_SKY1";
-
-VERSION_CONTROL (r_sky_cpp, "$Id$")
-
+#endif // __C_LEVEL_H__

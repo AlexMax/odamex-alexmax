@@ -1916,7 +1916,7 @@ void P_ThrustMobj (AActor *mo, angle_t angle, fixed_t move)
 //
 void P_SpawnMapThing (mapthing2_t *mthing, int position)
 {
-	int i;
+	int i = -1;
 	int bit;
 	AActor *mobj;
 	fixed_t x, y, z;
@@ -2036,7 +2036,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		return;
 	}
 
-	if (sv_gametype != GM_COOP)
+	if (sv_gametype == GM_DM || sv_gametype == GM_TEAMDM)
 	{
 		if (!(mthing->flags & MTF_DEATHMATCH))
 			return;
@@ -2111,12 +2111,13 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	}
 
 	// [RH] Check if it's a particle fountain
-	else if (mthing->type >= 9027 && mthing->type <= 9033)
+	if (mthing->type >= 9027 && mthing->type <= 9033)
 	{
 		mthing->args[0] = mthing->type - 9026;
 		i = MT_FOUNTAIN;
 	}
-	else
+
+	if (i == -1)	// we have to search for the type
 	{
 		// find which type to spawn
 		for (i = 0; i < NUMMOBJTYPES; i++)
@@ -2124,7 +2125,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 				break;
 	}
 
-	if (i >= NUMMOBJTYPES)
+	if (i >= NUMMOBJTYPES || i < 0)
 	{
 		// [RH] Don't die if the map tries to spawn an unknown thing
 		Printf (PRINT_HIGH, "Unknown type %i at (%i, %i)\n",

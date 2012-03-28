@@ -98,6 +98,7 @@ EXTERN_CVAR (sv_monstersrespawn)
 EXTERN_CVAR (sv_itemsrespawn)
 EXTERN_CVAR (sv_weaponstay)
 EXTERN_CVAR (co_nosilentspawns)
+EXTERN_CVAR (co_allowdropoff)
 
 EXTERN_CVAR (chasedemo)
 
@@ -175,7 +176,6 @@ char			demoname[256];
 BOOL 			demorecording;
 BOOL 			demoplayback;
 BOOL			democlassic;
-extern NetDemo	netdemo;
 BOOL			demonew;				// [RH] Only used around G_InitNew for demos
 
 extern bool		simulated_connection;
@@ -2236,6 +2236,7 @@ void G_DoPlayDemo (bool justStreamInput)
 		sv_allowjump = "0";
 		co_realactorheight = "0";
 		co_zdoomphys = "0";
+		co_allowdropoff = "0";
 		co_fixweaponimpacts = "0";
 
 		return;

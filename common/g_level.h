@@ -104,6 +104,7 @@ struct level_pwad_info_s
 	struct acsdefered_s *defered;
 
 	// level_pwad_info_s				[ML] 5/11/06 Removed sky scrolling/sky2
+	char		skypic2[9];
 	DWORD		fadeto;
 	char		fadetable[8];
 	DWORD		outsidefog;
@@ -135,6 +136,7 @@ struct level_locals_s {
 
 	char		music[8];
 	char		skypic[8];
+	char		skypic2[8];
 
 	int			total_secrets;
 	int			found_secrets;

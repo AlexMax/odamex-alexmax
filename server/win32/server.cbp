@@ -3,7 +3,6 @@
 	<FileVersion major="1" minor="6" />
 	<Project>
 		<Option title="server" />
-		<Option pch_mode="0" />
 		<Option compiler="gcc" />
 		<Build>
 			<Target title="Win Release (GCC)">
@@ -290,6 +289,8 @@
 		<Unit filename="..\..\common\c_dispatch.h" />
 		<Unit filename="..\..\common\c_effect.cpp" />
 		<Unit filename="..\..\common\c_effect.h" />
+		<Unit filename="..\..\common\c_level.cpp" />
+		<Unit filename="..\..\common\c_level.h" />
 		<Unit filename="..\..\common\c_pch.h" />
 		<Unit filename="..\..\common\c_vote.cpp" />
 		<Unit filename="..\..\common\c_vote.h" />
