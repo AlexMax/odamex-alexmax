@@ -670,8 +670,11 @@ void NetDemo::writeSnapshotData(buf_t *netbuffer)
 	}
 	else if (gamestate == GS_INTERMISSION)
 	{
+		// Force clients into intermission
 		MSG_WriteMarker		(netbuffer, svc_exitlevel);
 	}
+	else
+		return;
 
 	for (size_t i = 0; i < players.size(); i++)
 	{
@@ -827,9 +830,7 @@ void NetDemo::writeSnapshotData(buf_t *netbuffer)
 	MSG_WriteMarker	(netbuffer, svc_playerinfo);
 
 	for (int n = 0; n < NUMWEAPONS; n++)
-	{
 		MSG_WriteByte	(netbuffer, consoleplayer().weaponowned[n]);
-	}
 
 	for (int n = 0; n < NUMAMMO; n++)
 	{
