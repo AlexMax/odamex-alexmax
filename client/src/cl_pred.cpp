@@ -49,10 +49,7 @@ void P_CalcHeight (player_t *player);
 static ticcmd_t cl_savedticcmds[MAXSAVETICS];
 static PlayerSnapshot cl_savedsnaps[MAXSAVETICS];
 
-extern int last_player_update;
-extern int world_index;
 bool predicting;
-
 
 TArray <plat_pred_t> real_plats;
 
@@ -69,7 +66,7 @@ CVAR_FUNC_IMPL(cl_prednudge)
 //
 // CL_ResetSectors
 //
-void CL_ResetSectors (void)
+static void CL_ResetSectors (void)
 {
 	for(size_t i = 0; i < real_plats.Size(); i++)
 	{
@@ -207,7 +204,7 @@ void CL_ResetSectors (void)
 //
 // CL_PredictSectors
 //
-void CL_PredictSectors (int predtic)
+static void CL_PredictSectors (int predtic)
 {
 	for(size_t i = 0; i < real_plats.Size(); i++)
 	{
@@ -243,38 +240,11 @@ void CL_PredictSectors (int predtic)
 	}
 } 
 
-
-//
-// CL_ResetPlayer
-//
-// Resets consoleplayer's position to their last known position according
-// to the server
-//
-
-void CL_ResetLocalPlayer()
-{
-	player_t &p = consoleplayer();
-	
-	if (!p.mo)
-		return;
-	
-	int snaptime = p.snapshots.getMostRecentTime();
-	PlayerSnapshot snap = p.snapshots.getSnapshot(snaptime);
-	snap.toPlayer(&p);
-
-	// [SL] 2012-02-13 - Determine if the player is standing on any actors
-	// since the server does not send this info
-	if (co_realactorheight && P_CheckOnmobj(p.mo))
-		p.mo->flags2 |= MF2_ONMOBJ;
-	else
-		p.mo->flags2 &= ~MF2_ONMOBJ;
-}
-
 //
 // CL_PredictLocalPlayer
 //
 // 
-void CL_PredictLocalPlayer(int predtic)
+static void CL_PredictLocalPlayer(int predtic)
 {
 	player_t &p = consoleplayer();
 	
@@ -344,10 +314,20 @@ void CL_PredictWorld(void)
 	PlayerSnapshot prevsnap(p->tic, p);
 	cl_savedsnaps[gametic % MAXSAVETICS] = prevsnap;
 
-	// Move sectors and our player back to the last position received from
-	// the server
+	// Move sectors to the last position received from the server
 	CL_ResetSectors();
-	CL_ResetLocalPlayer();
+
+	// Move the client to the last position received from the sever
+	int snaptime = p->snapshots.getMostRecentTime();
+	PlayerSnapshot snap = p->snapshots.getSnapshot(snaptime);
+	snap.toPlayer(p);
+
+	// [SL] 2012-02-13 - Determine if the player is standing on any actors
+	// since the server does not send this info
+	if (co_realactorheight && P_CheckOnmobj(p->mo))
+		p->mo->flags2 |= MF2_ONMOBJ;
+	else
+		p->mo->flags2 &= ~MF2_ONMOBJ;
 
 	// Disable sounds, etc, during prediction
 	predicting = true;
@@ -358,9 +338,15 @@ void CL_PredictWorld(void)
 		CL_PredictLocalPlayer(predtic);
 	}
 
-	PlayerSnapshot correctedprevsnap(p->tic, p);
-	PlayerSnapshot lerpedsnap = P_LerpPlayerPosition(prevsnap, correctedprevsnap, cl_prednudge);	
-	lerpedsnap.toPlayer(p);
+	// If the player didn't just spawn or teleport, nudge the player from
+	// his position last tic to this new corrected position.  This smooths the
+	// view when there's a misprediction.
+	if (snap.isContinuous())
+	{
+		PlayerSnapshot correctedprevsnap(p->tic, p);
+		PlayerSnapshot lerpedsnap = P_LerpPlayerPosition(prevsnap, correctedprevsnap, cl_prednudge);	
+		lerpedsnap.toPlayer(p);
+	}
 
 	predicting = false;
 
