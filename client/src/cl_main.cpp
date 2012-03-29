@@ -3308,7 +3308,7 @@ CVAR_FUNC_IMPL (cl_interp)
 // 
 void CL_SimulateWorld()
 {
-	if (gamestate != GS_LEVEL)
+	if (gamestate != GS_LEVEL || netdemo.isPaused())
 		return;
 		
 	// if the world_index falls outside this range, resync it
