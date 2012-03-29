@@ -38,9 +38,13 @@ public:
 
 private:
 	void drawWorldIndexSync(int x, int y);
+	void drawMispredictions(int x, int y);
 
 	static const int BAR_HEIGHT_WORLD_INDEX = 4;
 	static const int BAR_WIDTH_WORLD_INDEX = 2;
+	
+	static const int BAR_HEIGHT_MISPREDICTION = 2;
+	static const int BAR_WIDTH_MISPREDICTION = 2;
 
 	static const int MAX_WORLD_INDEX = 6;
 	static const int MIN_WORLD_INDEX = -6;

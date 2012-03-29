@@ -98,15 +98,42 @@ void NetGraph::drawWorldIndexSync(int x, int y)
 	{
 		int liney = centery - NetGraph::BAR_HEIGHT_WORLD_INDEX * mInterpolation;
 		for (size_t i = 0; i < NetGraph::MAX_HISTORY_TICS; i++)
-			NetGraphDrawBar(x, liney, graphwidth, 1, 60);
+			NetGraphDrawBar(x, liney, graphwidth, 1, 1);
 	}
+}
+
+void NetGraph::drawMispredictions(int x, int y)
+{
+	const int graphwidth = NetGraph::BAR_WIDTH_MISPREDICTION * NetGraph::MAX_HISTORY_TICS;
+	const int centery = y + NetGraph::BAR_HEIGHT_MISPREDICTION;
+		
+	// draw the center line
+	for (size_t i = 0; i < NetGraph::MAX_HISTORY_TICS; i++)
+		NetGraphDrawBar(x, centery, graphwidth, 1, 0);
+		
+	for (size_t i = 0; i < NetGraph::MAX_HISTORY_TICS; i++)
+	{
+		int index = (gametic - (NetGraph::MAX_HISTORY_TICS - i)) % MAX_HISTORY_TICS; 
+		int width = NetGraph::BAR_WIDTH_MISPREDICTION;
+		int height = NetGraph::BAR_HEIGHT_MISPREDICTION;
+		int startx = x + i * NetGraph::BAR_WIDTH_MISPREDICTION;
+		int starty = y;
+		
+		if (mMisprediction[index])
+			NetGraphDrawBar(startx, starty, width, height, 0xB0);
+	}	
 }
 
 void NetGraph::draw()
 {
 	static const int textcolor = CR_GREY;
-	screen->DrawText (textcolor, mX, mY, "World Index Sync");
-	drawWorldIndexSync(mX, mY + 8);
+	static const int fontheight = 8;
+	
+	screen->DrawText(textcolor, mX, mY, "World Index Sync");
+	drawWorldIndexSync(mX, mY + fontheight);
+	
+	screen->DrawText(textcolor, mX, mY + 64, "Mispredictions");
+	drawMispredictions(mX, mY + 64 + fontheight); 
 }
 
 VERSION_CONTROL (cl_netgraph_cpp, "$Id$")

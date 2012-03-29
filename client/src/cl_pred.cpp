@@ -36,11 +36,14 @@
 #include "cl_main.h"
 #include "cl_demo.h"
 #include "vectors.h"
+#include "cl_netgraph.h"
 
 #include "p_snapshot.h"
 
 EXTERN_CVAR (co_realactorheight)
 EXTERN_CVAR (cl_prednudge)
+
+extern NetGraph netgraph;
 
 void P_DeathThink (player_t *player);
 void P_MovePlayer (player_t *player);
@@ -282,6 +285,8 @@ void CL_PredictWorld(void)
 	if (!validplayer(*p) || !p->mo || noservermsgs || netdemo.isPaused())
 		return;
 
+	netgraph.setMisprediction(false);
+
 	// [SL] 2012-03-10 - Spectators can predict their position without server
 	// correction.  Handle them as a special case and leave.
 	if (consoleplayer().spectator)
@@ -346,6 +351,12 @@ void CL_PredictWorld(void)
 		PlayerSnapshot correctedprevsnap(p->tic, p);
 		PlayerSnapshot lerpedsnap = P_LerpPlayerPosition(prevsnap, correctedprevsnap, cl_prednudge);	
 		lerpedsnap.toPlayer(p);
+
+		// Update the netgraph concerning our prediction's success
+		bool correct = (correctedprevsnap.getX() == prevsnap.getX()) &&
+					   (correctedprevsnap.getY() == prevsnap.getY()) &&
+					   (correctedprevsnap.getZ() == prevsnap.getZ());
+		netgraph.setMisprediction(!correct);
 	}
 
 	predicting = false;
