@@ -52,6 +52,7 @@
 #include "cl_download.h"
 #include "p_snapshot.h"
 #include "p_lnspec.h"
+#include "cl_netgraph.h"
 
 #include <string>
 #include <vector>
@@ -117,7 +118,9 @@ std::string server_host = "";	// hostname of server
 NetDemo netdemo;
 static const std::string default_netdemo_filename("%n_%g_%w-%m_%d");
 // [SL] 2011-07-06 - not really connected (playing back a netdemo)
-bool simulated_connection = false;		
+bool simulated_connection = false;	
+
+extern NetGraph netgraph;
 
 // [SL] 2012-03-07 - Players that were teleported during the current gametic
 std::set<byte> teleported_players;
@@ -3295,6 +3298,8 @@ CVAR_FUNC_IMPL (cl_interp)
 	// Resync the world index since the sync offset has changed		
 	world_index = CL_CalculateWorldIndexSync();
 	world_index_accum = (float)world_index;
+	
+	netgraph.setInterpolation(var);
 }
 
 //
@@ -3342,6 +3347,9 @@ void CL_SimulateWorld()
 		gametic, world_index);
 	#endif // _WORLD_INDEX_DEBUG_
 
+	// [SL] 2012-03-29 - Add sync information to the netgraph
+	netgraph.setWorldIndexSync(world_index - (last_svgametic - cl_interp));
+	
 	// Move players
 	for (size_t i = 0; i < players.size(); i++)
 	{
@@ -3383,7 +3391,7 @@ void CL_SimulateWorld()
 			snap.toPlayer(player);
 		}
 	}
-	
+
 	// [SL] 2012-03-17 - Try to maintain sync with the server by gradually
 	// slowing down or speeding up world_index
 	if (last_svgametic - cl_interp > world_index)
