@@ -496,6 +496,8 @@
 			<Option compile="1" />
 			<Option weight="0" />
 		</Unit>
+		<Unit filename="..\src\cl_netgraph.h" />
+		<Unit filename="..\src\cl_netgraph.cpp" />
 		<Unit filename="..\src\cl_pred.cpp" />
 		<Unit filename="..\src\cl_stubs.cpp" />
 		<Unit filename="..\src\cl_vote.cpp" />
