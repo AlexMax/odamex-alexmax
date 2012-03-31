@@ -280,11 +280,15 @@ static void CL_PredictLocalPlayer(int predtic)
 // 
 void CL_PredictWorld(void)
 {
+	if (gamestate != GS_LEVEL)
+		return;
+
 	player_t *p = &consoleplayer();
 
 	if (!validplayer(*p) || !p->mo || noservermsgs || netdemo.isPaused())
 		return;
 
+	// tenatively tell the netgraph that our prediction was successful
 	netgraph.setMisprediction(false);
 
 	// [SL] 2012-03-10 - Spectators can predict their position without server
@@ -327,13 +331,6 @@ void CL_PredictWorld(void)
 	PlayerSnapshot snap = p->snapshots.getSnapshot(snaptime);
 	snap.toPlayer(p);
 
-	// [SL] 2012-02-13 - Determine if the player is standing on any actors
-	// since the server does not send this info
-	if (co_realactorheight && P_CheckOnmobj(p->mo))
-		p->mo->flags2 |= MF2_ONMOBJ;
-	else
-		p->mo->flags2 &= ~MF2_ONMOBJ;
-
 	// Disable sounds, etc, during prediction
 	predicting = true;
 
@@ -349,14 +346,21 @@ void CL_PredictWorld(void)
 	if (snap.isContinuous())
 	{
 		PlayerSnapshot correctedprevsnap(p->tic, p);
-		PlayerSnapshot lerpedsnap = P_LerpPlayerPosition(prevsnap, correctedprevsnap, cl_prednudge);	
-		lerpedsnap.toPlayer(p);
 
-		// Update the netgraph concerning our prediction's success
+		// Did we predict correctly?
 		bool correct = (correctedprevsnap.getX() == prevsnap.getX()) &&
 					   (correctedprevsnap.getY() == prevsnap.getY()) &&
 					   (correctedprevsnap.getZ() == prevsnap.getZ());
-		netgraph.setMisprediction(!correct);
+
+		if (!correct)
+		{
+			// Update the netgraph concerning our prediction's error
+			netgraph.setMisprediction(true);
+
+			// Lerp from the our previous position to the correct position
+			PlayerSnapshot lerpedsnap = P_LerpPlayerPosition(prevsnap, correctedprevsnap, cl_prednudge);	
+			lerpedsnap.toPlayer(p);
+		}
 	}
 
 	predicting = false;
@@ -366,10 +370,6 @@ void CL_PredictWorld(void)
 
 	if (consoleplayer().id != displayplayer().id)
 		P_CalcHeight(&displayplayer());
-	
-	// Player is on the ground?
-	if (p->mo->z <= p->mo->floorz)
-		p->mo->z = p->mo->floorz;
 }
 
 
