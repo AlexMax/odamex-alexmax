@@ -69,6 +69,10 @@ int             iquetail;
 
 NetIDHandler ServerNetID;
 
+// denis - fast netid lookup
+typedef std::map<size_t, AActor::AActorPtr> netid_map_t;
+netid_map_t actor_by_netid;
+
 IMPLEMENT_SERIAL(AActor, DThinker)
 
 AActor::~AActor ()
@@ -288,6 +292,58 @@ void P_AnimationTick(AActor *mo)
 	}
 }
 
+//
+// P_ClearAllNetIds
+//
+void P_ClearAllNetIds()
+{
+	actor_by_netid.clear();
+}
+
+//
+// P_FindThingById
+// denis - fast netid lookup
+//
+AActor* P_FindThingById(size_t id)
+{
+	netid_map_t::iterator i = actor_by_netid.find(id);
+
+	if(i == actor_by_netid.end())
+		return AActor::AActorPtr();
+	else
+		return i->second;
+}
+
+//
+// P_SetThingId
+//
+void P_SetThingId(AActor *mo, size_t newnetid)
+{
+	mo->netid = newnetid;
+	actor_by_netid[newnetid] = mo->ptr();
+}
+
+
+//
+// P_ClearId
+//
+void P_ClearId(size_t id)
+{
+    AActor *mo = P_FindThingById(id);
+
+	if(!mo)
+		return;
+		
+	if(mo->player)
+	{
+		if(mo->player->mo == mo)
+			mo->player->mo = AActor::AActorPtr();
+
+		mo->player = NULL;
+	}
+
+	mo->Destroy();
+}
 
 //
 // P_RemoveMobj
@@ -564,7 +620,8 @@ void AActor::Serialize (FArchive &arc)
 	if (arc.IsStoring ())
 	{
 		int playerid = player ? player->id : 0;
-		arc << x
+		arc << netid
+			<< x
 			<< y
 			<< z
 			<< pitch
@@ -620,7 +677,10 @@ void AActor::Serialize (FArchive &arc)
 	{
 		unsigned dummy;
 		unsigned playerid;
-		arc >> x
+		int newnetid;
+
+		arc >> newnetid
+			>> x
 			>> y
 			>> z
 			>> pitch
@@ -665,6 +725,8 @@ void AActor::Serialize (FArchive &arc)
 			>> dummy
 			>> translucency
 			>> waterlevel;
+
+		P_SetThingId(this, newnetid);
 
 		DWORD trans;
 		arc >> trans;

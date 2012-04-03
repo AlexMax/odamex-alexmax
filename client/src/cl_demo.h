@@ -2,6 +2,7 @@
 #define __CL_DEMO_H__
 
 #include "doomtype.h"
+#include "i_net.h"
 #include "d_net.h"
 #include <string>
 #include <vector>
@@ -26,6 +27,7 @@ public:
 	void readMessages(buf_t* netbuffer);
 	void capture(const buf_t* netbuffer);
 	void writeMapChange();
+	void writeIntermission();
 
 	bool isRecording() const { return (state == NetDemo::st_recording); }
 	bool isPlaying() const { return (state == NetDemo::st_playing); }
@@ -33,10 +35,12 @@ public:
 	
 	int getSpacing() const { return header.snapshot_spacing; }
 	
-	void skipTo(buf_t *netbuffer, int ticnum);
-	void nextMap(buf_t *netbuffer);
-	void prevMap(buf_t *netbuffer);
+	void nextSnapshot();
+	void prevSnapshot();
+	void nextMap();
+	void prevMap();
 
+	void ticker();
 	int calculateTimeElapsed();
 	int calculateTotalTime();
 	const std::vector<int> getMapChangeTimes();
@@ -78,23 +82,30 @@ private:
 	const netdemo_index_entry_t *snapshotLookup(int ticnum) const;
 	void writeLauncherSequence(buf_t *netbuffer);
 	void writeConnectionSequence(buf_t *netbuffer);
-	void writeSnapshot(buf_t *netbuffer);
-	void writeSnapshotData(buf_t *netbuffer);
+	
+	void readSnapshotData(byte *buf, size_t length);
+	void writeSnapshotData(byte *buf, size_t &length);
+	
 	void writeSnapshotIndexEntry();
 	void writeMapIndexEntry();
-	void readSnapshot(buf_t *netbuffer, const netdemo_index_entry_t *snap);
+	void readSnapshot(const netdemo_index_entry_t *snap);
 	void writeChunk(const byte *data, size_t size, netdemo_message_t type);
 	bool writeHeader();
 	bool readHeader();
-	bool writeIndex();
-	bool readIndex();
+	
+	bool atSnapshotInterval();
+	
+	bool writeSnapshotIndex();
+	bool readSnapshotIndex();
 	bool writeMapIndex();
 	bool readMapIndex();
+	int getCurrentSnapshotIndex() const;
+	int getCurrentMapIndex() const;
+	
 	void writeLocalCmd(buf_t *netbuffer) const;
 	bool readMessageHeader(netdemo_message_t &type, uint32_t &len, uint32_t &tic) const;
 	void readMessageBody(buf_t *netbuffer, uint32_t len);
 	void writeFullUpdate(int ticnum);
-	int getCurrentMapIndex();
 
 	typedef struct
 	{
@@ -117,7 +128,7 @@ private:
 
 	static const uint16_t SNAPSHOT_SPACING = 5 * TICRATE;
 
-	static const size_t MAX_SNAPSHOT_SIZE = MAX_UDP_PACKET;
+	static const size_t MAX_SNAPSHOT_SIZE = 65536;
 	
 	netdemo_state_t		state;
 	netdemo_state_t		oldstate;	// used when unpausing
@@ -129,6 +140,9 @@ private:
 	netdemo_header_t	header;	
 	std::vector<netdemo_index_entry_t> snapshot_index;
 	std::vector<netdemo_index_entry_t> map_index;
+	
+	byte				snapbuf[NetDemo::MAX_SNAPSHOT_SIZE];
+	int					netdemotic;
 };
 
 

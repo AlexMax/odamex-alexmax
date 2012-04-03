@@ -53,6 +53,9 @@
 #include "p_snapshot.h"
 #include "p_lnspec.h"
 #include "cl_netgraph.h"
+#include "cl_maplist.h"
+#include "cl_vote.h"
+#include "p_mobj.h"
 
 #include <string>
 #include <vector>
@@ -108,15 +111,10 @@ std::string digest;
 // denis - clientside compressor, used for decompression
 huffman_client compressor;
 
-// denis - fast netid lookup
-typedef std::map<size_t, AActor::AActorPtr> netid_map_t;
-netid_map_t actor_by_netid;
-
 std::string server_host = "";	// hostname of server
 
 // [SL] 2011-06-27 - Class to record and playback network recordings
 NetDemo netdemo;
-static const std::string default_netdemo_filename("%n_%g_%w-%m_%d");
 // [SL] 2011-07-06 - not really connected (playing back a netdemo)
 bool simulated_connection = false;	
 
@@ -241,6 +239,7 @@ void CL_Decompress(int sequence);
 void CL_LocalDemoTic(void);
 void CL_NetDemoStop(void);
 void CL_NetDemoSnapshot(void);
+bool M_FindFreeName(std::string &filename, const std::string &extension);
 
 void CL_SimulateWorld();
 
@@ -313,7 +312,7 @@ void CL_QuitNetGame(void)
 	sv_allowexit = 1;
 	sv_allowredscreen = 1;
 
-	actor_by_netid.clear();
+	P_ClearAllNetIds();
 	players.clear();
 
 	if (netdemo.isRecording())
@@ -362,7 +361,7 @@ void CL_Reconnect(void)
 		connected = false;
 		gameaction = ga_fullconsole;
 
-		actor_by_netid.clear();
+		P_ClearAllNetIds();
 	}
 	else if (lastconaddr.ip[0])
 	{
@@ -746,35 +745,27 @@ END_COMMAND (exit)
 // NetDemo related functions
 //
 
+CVAR_FUNC_IMPL (cl_netdemoname)
+{
+	// No empty format strings allowed.
+	if (strlen(var.cstring()) == 0)
+		var.RestoreDefault();
+}
+
 //
 // CL_GenerateNetDemoFileName
 //
 // 
-std::string CL_GenerateNetDemoFileName(const std::string &filename = default_netdemo_filename)
+std::string CL_GenerateNetDemoFileName(const std::string &filename = cl_netdemoname.cstring())
 {
 	const std::string expanded_filename(M_ExpandTokens(filename));	
-	std::string newfilename(expanded_filename + ".odd");
+	std::string newfilename(expanded_filename);
 	newfilename = I_GetUserFileName(newfilename.c_str());
 
-	FILE *fp;
-	int counter = 1;
-	char cntstr[5];
-
 	// keep trying to find a filename that doesn't yet exist
-	while ( (fp = fopen(newfilename.c_str(), "r")) )
-	{
-		fclose(fp);
-		
-		// add a number to the end of the filename
-		sprintf(cntstr, "%i", counter);
-		newfilename = expanded_filename + cntstr + ".odd";
-		newfilename = I_GetUserFileName(newfilename.c_str());
-
-		counter++;
-		if (counter > 9999)		// don't overflow cntstr
-			break;
-	}
-
+	if (!M_FindFreeName(newfilename, "odd"))
+		I_Error("Unable to generate netdemo file name.  Please delete some netdemos.");
+	
 	return newfilename;
 }
 
@@ -826,7 +817,8 @@ BEGIN_COMMAND(netrecord)
 	else
 		filename = CL_GenerateNetDemoFileName();
 
-	CL_NetDemoRecord(I_GetUserFileName(filename.c_str()));
+	CL_NetDemoRecord(filename.c_str());
+	netdemo.writeMapChange();
 }
 END_COMMAND(netrecord)
 
@@ -849,7 +841,7 @@ END_COMMAND(netpause)
 
 BEGIN_COMMAND(netplay)
 {
-	if(argc < 1)
+	if(argc <= 1)
 	{
 		Printf(PRINT_HIGH, "Usage: netplay <demoname>\n");
 		return;
@@ -870,7 +862,7 @@ END_COMMAND(netplay)
 
 BEGIN_COMMAND(netdemostats)
 {
-	if (!netdemo.isPlaying())
+	if (!netdemo.isPlaying() && !netdemo.isPaused())
 		return;
 
 	std::vector<int> maptimes = netdemo.getMapChangeTimes();
@@ -893,62 +885,36 @@ END_COMMAND(netdemostats)
 
 BEGIN_COMMAND(netff)
 {
-	int ticnum;
-
-	if (argc == 1)
-	{
-		// no arg so just go to the next snapshot
-		ticnum = gametic + netdemo.getSpacing();
-	}
-	else
-	{
-		// go forward X seconds
-		ticnum = gametic + TICRATE * atoi(argv[1]);
-	}
-
 	if (netdemo.isPlaying())
-	{
-		netdemo.skipTo(&net_message, ticnum);
-	}
+		netdemo.nextSnapshot();
 }
 END_COMMAND(netff)
 
 BEGIN_COMMAND(netrew)
 {
-	int ticnum;
-
-	if (argc == 1)
-	{
-		// no arg so just go to the next snapshot
-		ticnum = gametic - netdemo.getSpacing();
-	}
-	else
-	{
-		// go backwards X seconds
-		ticnum = gametic - TICRATE * atoi(argv[1]);
-	}
-
 	if (netdemo.isPlaying())
-	{
-		netdemo.skipTo(&net_message, ticnum);
-	}
+		netdemo.prevSnapshot();
 }
 END_COMMAND(netrew)
 
 BEGIN_COMMAND(netnextmap)
 {
 	if (netdemo.isPlaying())
-		netdemo.nextMap(&net_message);
+		netdemo.nextMap();
 }
 END_COMMAND(netnextmap)
 
 BEGIN_COMMAND(netprevmap)
 {
 	if (netdemo.isPlaying())
-		netdemo.prevMap(&net_message);
+		netdemo.prevMap();
 }
 END_COMMAND(netprevmap)
 
+void CL_NetDemoLoadSnap()
+{
+	AddCommandString("netprevmap");
+}
 
 //
 // CL_MoveThing
@@ -1084,43 +1050,6 @@ void CL_TeamPoints (void)
 }
 
 //
-// denis - fast netid lookup
-//
-AActor* CL_FindThingById(size_t id)
-{
-	netid_map_t::iterator i = actor_by_netid.find(id);
-
-	if(i == actor_by_netid.end())
-		return AActor::AActorPtr();
-	else
-		return i->second;
-}
-
-void CL_SetThingId(AActor *mo, size_t newnetid)
-{
-	mo->netid = newnetid;
-	actor_by_netid[newnetid] = mo->ptr();
-}
-
-void CL_ClearID(size_t id)
-{
-    AActor *mo = CL_FindThingById(id);
-
-	if(!mo)
-		return;
-
-	if(mo->player)
-	{
-		if(mo->player->mo == mo)
-			mo->player->mo = AActor::AActorPtr();
-
-		mo->player = NULL;
-	}
-
-	mo->Destroy();
-}
-
-//
 // CL_MoveMobj
 //
 void CL_MoveMobj(void)
@@ -1130,7 +1059,7 @@ void CL_MoveMobj(void)
 	fixed_t  x, y, z;
 
 	netid = MSG_ReadShort();
-	mo = CL_FindThingById (netid);
+	mo = P_FindThingById (netid);
 
 	byte rndindex = MSG_ReadByte();
 	x = MSG_ReadLong();
@@ -1156,7 +1085,7 @@ void CL_DamageMobj()
 	health = MSG_ReadShort();
 	pain = MSG_ReadByte();
 
-	mo = CL_FindThingById (netid);
+	mo = P_FindThingById (netid);
 
 	if (!mo)
 		return;
@@ -1752,7 +1681,7 @@ void CL_SpawnMobj()
 	if(type >= NUMMOBJTYPES)
 		return;
 
-	CL_ClearID(netid);
+	P_ClearId(netid);
 
 	mo = new AActor (x, y, z, (mobjtype_t)type);
 
@@ -1766,7 +1695,7 @@ void CL_SpawnMobj()
 	}
 
 	mo->angle = angle;
-	CL_SetThingId(mo, netid);
+	P_SetThingId(mo, netid);
 	mo->rndindex = rndindex;
 
 	if (state < NUMSTATES)
@@ -1774,7 +1703,7 @@ void CL_SpawnMobj()
 
 	if(mo->flags & MF_MISSILE)
 	{
-		AActor *target = CL_FindThingById(MSG_ReadShort());
+		AActor *target = P_FindThingById(MSG_ReadShort());
 		if(target)
 			mo->target = target->ptr();
 		CL_SetMobjSpeedAndAngle();
@@ -1805,7 +1734,7 @@ void CL_SpawnMobj()
 //
 void CL_Corpse(void)
 {
-	AActor *mo = CL_FindThingById(MSG_ReadShort());
+	AActor *mo = P_FindThingById(MSG_ReadShort());
 	int frame = MSG_ReadByte();
 	int tics = MSG_ReadByte();
 	
@@ -1840,7 +1769,7 @@ void CL_Corpse(void)
 //
 void CL_TouchSpecialThing (void)
 {
-	AActor *mo = CL_FindThingById(MSG_ReadShort());
+	AActor *mo = P_FindThingById(MSG_ReadShort());
 
 	if(!consoleplayer().mo || !mo)
 		return;
@@ -1871,7 +1800,7 @@ void CL_SpawnPlayer()
 	y = MSG_ReadLong();
 	z = MSG_ReadLong();
 
-	CL_ClearID(netid);
+	P_ClearId(netid);
 
 	// first disassociate the corpse
 	if (p->mo)
@@ -1892,7 +1821,7 @@ void CL_SpawnPlayer()
 	mobj->pitch = mobj->roll = 0;
 	mobj->player = p;
 	mobj->health = p->health;
-	CL_SetThingId(mobj, netid);
+	P_SetThingId(mobj, netid);
 
 	// [RH] Set player sprite based on skin
 	if(p->userinfo.skin >= numskins)
@@ -1988,7 +1917,7 @@ void CL_SetMobjSpeedAndAngle(void)
 	int     netid;
 
 	netid = MSG_ReadShort();
-	mo = CL_FindThingById(netid);
+	mo = P_FindThingById(netid);
 
 	if (!mo)
 	{
@@ -2012,7 +1941,7 @@ void CL_ExplodeMissile(void)
 	int     netid;
 
 	netid = MSG_ReadShort();
-	mo = CL_FindThingById(netid);
+	mo = P_FindThingById(netid);
 
 	if (!mo)
 		return;
@@ -2030,7 +1959,7 @@ void CL_UpdateMobjInfo(void)
 	int flags = MSG_ReadLong();
 	//int flags2 = MSG_ReadLong();
 
-	AActor *mo = CL_FindThingById(netid);
+	AActor *mo = P_FindThingById(netid);
 
 	if (!mo)
 		return;
@@ -2045,7 +1974,7 @@ void CL_UpdateMobjInfo(void)
 //
 void CL_RemoveMobj(void)
 {
-	CL_ClearID(MSG_ReadShort());
+	P_ClearId(MSG_ReadShort());
 }
 
 
@@ -2093,9 +2022,9 @@ extern int MeansOfDeath;
 //
 void CL_KillMobj(void)
 {
- 	AActor *source = CL_FindThingById (MSG_ReadShort() );
-	AActor *target = CL_FindThingById (MSG_ReadShort() );
-	AActor *inflictor = CL_FindThingById (MSG_ReadShort() );
+ 	AActor *source = P_FindThingById (MSG_ReadShort() );
+	AActor *target = P_FindThingById (MSG_ReadShort() );
+	AActor *inflictor = P_FindThingById (MSG_ReadShort() );
 	int health = MSG_ReadShort();
 
 	MeansOfDeath = MSG_ReadLong();
@@ -2235,7 +2164,7 @@ void CL_Sound(void)
 	byte attenuation = MSG_ReadByte();
 	byte vol = MSG_ReadByte();
 
-	AActor *mo = CL_FindThingById (netid);
+	AActor *mo = P_FindThingById (netid);
 
 	float volume = vol/(float)255;
 
@@ -2648,11 +2577,24 @@ void CL_GetServerSettings(void)
 }
 
 //
+// CL_FinishedFullUpdate
+//
+// Takes care of any business that needs to be done once the client has a full
+// view of the game world.
+//
+void CL_FinishedFullUpdate()
+{
+	// Write the first map snapshot to a netdemo
+	if (netdemo.isRecording())
+		netdemo.writeMapChange();
+}
+
+//
 // CL_SetMobjState
 //
 void CL_SetMobjState()
 {
-	AActor *mo = CL_FindThingById (MSG_ReadShort() );
+	AActor *mo = P_FindThingById (MSG_ReadShort() );
 	SWORD s = MSG_ReadShort();
 
 	if (!mo || s >= NUMSTATES)
@@ -2679,7 +2621,7 @@ void CL_ForceSetTeam (void)
 //
 void CL_Actor_Movedir()
 {
-	AActor *actor = CL_FindThingById (MSG_ReadShort());
+	AActor *actor = P_FindThingById (MSG_ReadShort());
 	BYTE movedir = MSG_ReadByte();
     SDWORD movecount = MSG_ReadLong();
     
@@ -2695,8 +2637,8 @@ void CL_Actor_Movedir()
 //
 void CL_Actor_Target()
 {
-	AActor *actor = CL_FindThingById (MSG_ReadShort());
-	AActor *target = CL_FindThingById (MSG_ReadShort());
+	AActor *actor = P_FindThingById (MSG_ReadShort());
+	AActor *target = P_FindThingById (MSG_ReadShort());
 
 	if (!actor || !target)
 		return;
@@ -2709,8 +2651,8 @@ void CL_Actor_Target()
 //
 void CL_Actor_Tracer()
 {
-	AActor *actor = CL_FindThingById (MSG_ReadShort());
-	AActor *tracer = CL_FindThingById (MSG_ReadShort());
+	AActor *actor = P_FindThingById (MSG_ReadShort());
+	AActor *tracer = P_FindThingById (MSG_ReadShort());
 
 	if (!actor || !tracer)
 		return;
@@ -2723,7 +2665,7 @@ void CL_Actor_Tracer()
 //
 void CL_MobjTranslation()
 {
-	AActor *mo = CL_FindThingById(MSG_ReadShort());
+	AActor *mo = P_FindThingById(MSG_ReadShort());
 	byte table = MSG_ReadByte();
 
 	mo->translation = translationtables + 256 * table;
@@ -2755,7 +2697,7 @@ void CL_Switch()
 void CL_ActivateLine(void)
 {
 	unsigned l = MSG_ReadLong();
-	AActor *mo = CL_FindThingById(MSG_ReadShort());
+	AActor *mo = P_FindThingById(MSG_ReadShort());
 	byte side = MSG_ReadByte();
 	byte activationType = MSG_ReadByte();
 
@@ -2829,15 +2771,29 @@ void CL_LoadMap(void)
 
 	gameaction = ga_nothing;
 
-	// Autorecord netdemo or continue recording in a new file
-	if ((splitnetdemo || cl_autorecord) &&
-		(!netdemo.isPlaying() && !netdemo.isRecording() && !netdemo.isPaused()))
-	{
-		netdemo.startRecording(CL_GenerateNetDemoFileName());
-	}
-
+	// Add a netdemo snapshot at the start of this new map
 	if (netdemo.isRecording())
 		netdemo.writeMapChange();
+
+	// Autorecord netdemo or continue recording in a new file
+	if (!(netdemo.isPlaying() || netdemo.isRecording() || netdemo.isPaused()))
+	{
+		std::string filename;
+
+		size_t param = Args.CheckParm("-netrecord");
+		if (param && Args.GetArg(param + 1))
+			filename = Args.GetArg(param + 1);
+
+		if (splitnetdemo || cl_autorecord || param)
+		{
+			if (filename.empty())
+				filename = CL_GenerateNetDemoFileName();
+			else
+				filename = CL_GenerateNetDemoFileName(filename);
+
+			netdemo.startRecording(filename);
+		}
+	}
 }
 
 
@@ -2855,6 +2811,9 @@ void CL_ExitLevel()
 {
 	if(gamestate != GS_DOWNLOAD) {
 		gameaction = ga_completed;
+
+		if (netdemo.isRecording())
+			netdemo.writeIntermission();
 	}
 }
 
@@ -2977,6 +2936,13 @@ void CL_InitCommands(void)
 
 	cmds[svc_netdemocap]        = &CL_LocalDemoTic;
 	cmds[svc_netdemostop]       = &CL_NetDemoStop;
+	cmds[svc_netdemoloadsnap]	= &CL_NetDemoLoadSnap;
+	cmds[svc_fullupdatedone]	= &CL_FinishedFullUpdate;
+
+	cmds[svc_vote_update] = &CL_VoteUpdate;
+	cmds[svc_maplist] = &CL_Maplist;
+	cmds[svc_maplist_update] = &CL_MaplistUpdate;
+	cmds[svc_maplist_index] = &CL_MaplistIndex;
 }
 
 //
@@ -3159,6 +3125,8 @@ void CL_RunTics (void)
 
 	if (sv_gametype == GM_CTF)
 		CTF_RunTics ();
+
+	Maplist_Runtic();
 }
 
 void PickupMessage (AActor *toucher, const char *message)
@@ -3238,18 +3206,19 @@ void CL_LocalDemoTic()
 	player_t* clientPlayer = &consoleplayer();
 	fixed_t x, y, z;
 	fixed_t momx, momy, momz;
-	fixed_t pitch, roll, viewheight, deltaviewheight;
+	fixed_t pitch, viewheight, deltaviewheight;
 	angle_t angle;
 	int jumpTics, reactiontime;
 	byte waterlevel;
-	
+
+	memset(&clientPlayer->cmd, 0, sizeof(ticcmd_t));	
 	clientPlayer->cmd.ucmd.buttons = MSG_ReadByte();
 	clientPlayer->cmd.ucmd.impulse = MSG_ReadByte();	
 	clientPlayer->cmd.ucmd.yaw = MSG_ReadShort();
 	clientPlayer->cmd.ucmd.forwardmove = MSG_ReadShort();
 	clientPlayer->cmd.ucmd.sidemove = MSG_ReadShort();
 	clientPlayer->cmd.ucmd.upmove = MSG_ReadShort();
-	clientPlayer->cmd.ucmd.roll = MSG_ReadShort();
+	clientPlayer->cmd.ucmd.pitch = MSG_ReadShort();
 
 	waterlevel = MSG_ReadByte();
 	x = MSG_ReadLong();
@@ -3260,7 +3229,6 @@ void CL_LocalDemoTic()
 	momz = MSG_ReadLong();
 	angle = MSG_ReadLong();
 	pitch = MSG_ReadLong();
-	roll = MSG_ReadLong();
 	viewheight = MSG_ReadLong();
 	deltaviewheight = MSG_ReadLong();
 	jumpTics = MSG_ReadLong();
@@ -3278,7 +3246,6 @@ void CL_LocalDemoTic()
 		clientPlayer->mo->momz = momz;
 		clientPlayer->mo->angle = angle;
 		clientPlayer->mo->pitch = pitch;
-		clientPlayer->mo->roll = roll;
 		clientPlayer->viewheight = viewheight;
 		clientPlayer->deltaviewheight = deltaviewheight;
 		clientPlayer->jumpTics = jumpTics;

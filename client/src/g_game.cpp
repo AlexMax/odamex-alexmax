@@ -92,6 +92,8 @@ void	G_DoSaveGame (void);
 
 void	CL_RunTics (void);
 
+bool	C_DoNetDemoKey(event_t *ev);
+
 EXTERN_CVAR (sv_skill)
 EXTERN_CVAR (novert)
 EXTERN_CVAR (sv_monstersrespawn)
@@ -360,7 +362,8 @@ BEGIN_COMMAND (spynext)
 		else if (consoleplayer().spectator ||
 			 sv_gametype == GM_COOP ||
 			 (sv_gametype != GM_DM &&
-				players[curr].userinfo.team == consoleplayer().userinfo.team) || netdemo.isPlaying())
+				players[curr].userinfo.team == consoleplayer().userinfo.team) || 
+				(netdemo.isPlaying() || netdemo.isPaused()))
 		{
 			displayplayer_id = players[curr].id;
 			break;
@@ -499,6 +502,12 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 		cmd->ucmd.impulse = Impulse;
 	}
 	Impulse = 0;
+
+	// [SL] 2012-03-31 - Let the server know when the client is predicting a
+	// weapon change due to a weapon pickup
+	if (!cmd->ucmd.impulse && !(cmd->ucmd.buttons & BT_CHANGE) &&
+		consoleplayer().pendingweapon != wp_nochange)
+		cmd->ucmd.impulse = 50 + static_cast<int>(consoleplayer().pendingweapon);
 
 	if (strafe || lookstrafe)
 		side += (int)(((float)joyturn / (float)SHRT_MAX) * sidemove[speed]);
@@ -754,6 +763,9 @@ BOOL G_Responder (event_t *ev)
 
 	if (gamestate == GS_LEVEL || gamestate == GS_INTERMISSION)
 	{
+		if (C_DoNetDemoKey(ev))	// netdemo playback ate the event
+			return true;
+
 		if (HU_Responder (ev))
 			return true;		// chat ate the event
 		if (ST_Responder (ev))
@@ -890,7 +902,7 @@ void G_Ticker (void)
 			G_DoWorldDone ();
 			break;
 		case ga_screenshot:
-			I_ScreenShot(shotfile.c_str());
+			I_ScreenShot(shotfile);
 			gameaction = ga_nothing;
 			break;
 		case ga_fullconsole:
@@ -1035,6 +1047,8 @@ void G_Ticker (void)
 				// [SL] 2011-12-14 - Spawn message from server has not arrived
 				// yet.  Fake it and hope it arrives soon.
 				AActor *mobj = new AActor (0, 0, 0, MT_PLAYER);
+				mobj->flags &= ~MF_SOLID;
+				mobj->flags2 |= MF2_DONTDRAW;
 				consoleplayer().mo = mobj->ptr();
 				consoleplayer().mo->player = &consoleplayer();
 				G_PlayerReborn(consoleplayer());

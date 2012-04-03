@@ -53,6 +53,7 @@ EXTERN_CVAR (sv_forcerespawn)
 extern bool predicting, step_mode;
 
 static player_t nullplayer;		// used to indicate 'player not found' when searching
+EXTERN_CVAR (cl_movebob);
 
 player_t &idplayer(byte id)
 {
@@ -162,7 +163,7 @@ void P_CalcHeight (player_t *player)
 		player->bob = FRACUNIT / 2;
 	}	
 
-	if (!player->spectator)
+	if (!(player->spectator && displayplayer_id == consoleplayer_id))
 		if (serverside || !predicting)
 		{
 			player->bob = FixedMul (player->mo->momx, player->mo->momx)
@@ -213,6 +214,8 @@ void P_CalcHeight (player_t *player)
 				player->deltaviewheight = 1;
 		}
 	}
+
+	bob *= cl_movebob;
 	player->viewz = player->mo->z + player->viewheight + bob;
 
 	if (player->viewz > player->mo->ceilingz-4*FRACUNIT)
@@ -637,6 +640,12 @@ void P_PlayerThink (player_t *player)
 			}
 		}
 
+		// [SL] 2012-03-31 - Client is trying to switch to a weapon they don't own
+		// Server should send them their weapon inventory
+		if (!clientside && newweapon >= 0 && newweapon < NUMWEAPONS && 
+			!player->weaponowned[newweapon])
+			SV_SendPlayerInfo(*player);
+			
 		if ((newweapon >= 0 && newweapon < NUMWEAPONS)
 			&& player->weaponowned[newweapon]
 			&& newweapon != player->readyweapon)
@@ -647,18 +656,6 @@ void P_PlayerThink (player_t *player)
 			{
 				player->pendingweapon = newweapon;
 			}
-		}
-	}
-	else
-	{
-		// [SL] 2011-11-20 - Player didn't send a weapon change command.
-		// Verify the player is holding the correct weapon.
-		weapontype_t predweapon = static_cast<weapontype_t>(cmd->ucmd.impulse);
-		if (predweapon != player->readyweapon && predweapon != player->pendingweapon)
-		{
-			// Client is wrong so send them an update
-			if (serverside && player->health > 0)
-				SV_SendPlayerInfo(*player);
 		}
 	}
 
@@ -744,6 +741,7 @@ void player_s::Serialize (FArchive &arc)
 	{ // saving to archive
 		arc << id
 			<< playerstate
+			<< spectator
 			<< cmd
 			<< userinfo
 			<< viewz
@@ -766,6 +764,7 @@ void player_s::Serialize (FArchive &arc)
 			<< secretcount			
 			<< damagecount
 			<< bonuscount
+			<< points
 			/*<< attacker->netid*/
 			<< extralight
 			<< fixedcolormap
@@ -792,8 +791,9 @@ void player_s::Serialize (FArchive &arc)
 
 		arc >> id
 			>> playerstate
+			>> spectator
 			>> cmd
-			>> dummyuserinfo // Q: Would it be better to restore the userinfo from the archive?
+			>> userinfo // Q: Would it be better to restore the userinfo from the archive?
 			>> viewz
 			>> viewheight
 			>> deltaviewheight
@@ -814,6 +814,7 @@ void player_s::Serialize (FArchive &arc)
 			>> secretcount			
 			>> damagecount
 			>> bonuscount
+			>> points
 			/*>> attacker->netid*/
 			>> extralight
 			>> fixedcolormap
@@ -836,8 +837,8 @@ void player_s::Serialize (FArchive &arc)
 
 		camera = mo;
 
-		if (&consoleplayer() != this)
-			userinfo = dummyuserinfo;
+//		if (&consoleplayer() != this)
+//			userinfo = dummyuserinfo;
 	}
 }
 
