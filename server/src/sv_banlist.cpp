@@ -21,9 +21,22 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <curl/curl.h>
+
 #include "c_dispatch.h"
 #include "d_player.h"
+#include "sv_banlist.h"
 #include "sv_main.h"
+
+Banlist banlist;
+
+bool Banlist::add(std::string address) { return true; }
+void Banlist::check(std::string address) { }
+void Banlist::debug() { }
+void Banlist::list() { }
+void Banlist::remove(std::string address) { }
+
+//// Old banlist code below ////
 
 EXTERN_CVAR(sv_email)
 
