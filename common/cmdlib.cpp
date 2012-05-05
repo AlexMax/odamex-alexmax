@@ -314,6 +314,21 @@ std::string JoinStrings(const std::vector<std::string> &pieces, const std::strin
 	return result.str();
 }
 
+// Tokenize a string
+StringTokens TokenizeString(const std::string& str, const std::string& delim) {
+	StringTokens tokens;
+	size_t delimPos = 0;
+	size_t prevDelim = 0;
+
+	while (delimPos != std::string::npos) {
+		delimPos = str.find(delim, prevDelim);
+		tokens.push_back(str.substr(prevDelim, delimPos - prevDelim));
+		prevDelim = delimPos + 1;
+	}
+
+	return tokens;
+}
+
 // [SL] Reimplement std::isspace 
 static int _isspace(int c)
 {
