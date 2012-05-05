@@ -21,14 +21,105 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <sstream>
+#include <string>
+
 #include <curl/curl.h>
 
 #include "c_dispatch.h"
+#include "cmdlib.h"
 #include "d_player.h"
 #include "sv_banlist.h"
 #include "sv_main.h"
 
 Banlist banlist;
+
+ipv4range::ipv4range() {
+	for (byte i = 0;i < 4;i++) {
+		this->ip[i] = (byte)0;
+		this->mask[i] = false;
+	}
+}
+
+// Check a given address against the ip + range in the object.
+bool ipv4range::check(const netadr_t& address) {
+	for (byte i = 0;i < 4;i++) {
+		if (!(this->ip[i] == address.ip[i] || mask[i] == true)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+// Set the object's range against the given address in string form.
+bool ipv4range::set(const std::string& input) {
+	StringTokens tokens = TokenizeString(input, ".");
+
+	// An IP address contains 4 octets
+	if (tokens.size() != 4) {
+		return false;
+	}
+
+	for (byte i = 0;i < 4;i++) {
+		// * means that octet is masked
+		if (tokens[i].compare("*") == 0) {
+			this->mask[i] = true;
+			continue;
+		}
+		this->mask[i] = false;
+
+		// Convert string into byte.
+		unsigned short octet = 0;
+		std::istringstream buffer(tokens[i]);
+		buffer >> octet;
+		if (!buffer) {
+			return false;
+		}
+
+		this->ip[i] = (byte)octet;
+	}
+
+	return true;
+}
+
+// Return the range as a string, with stars representing masked octets.
+std::string ipv4range::string() {
+	std::ostringstream buffer;
+
+	for (byte i = 0;i < 4;i++) {
+		if (mask[i]) {
+			buffer << '*';
+		} else {
+			buffer << (unsigned short)this->ip[i];
+		}
+
+		if (i < 3) {
+			buffer << '.';
+		}
+	}
+
+	return buffer.str();
+}
+
+BEGIN_COMMAND (testrange) {
+	ipv4range ip;
+	if (ip.set("192.168.*.*")) {
+		Printf(PRINT_HIGH, "%s\n", ip.string().c_str());
+
+		netadr_t address;
+		address.ip[0] = 192;
+		address.ip[1] = 169;
+		address.ip[2] = 0;
+		address.ip[3] = 1;
+
+		if (ip.check(address)) {
+			Printf(PRINT_HIGH, "Yes!\n");
+		} else {
+			Printf(PRINT_HIGH, "No!\n");
+		}
+	}
+} END_COMMAND (testrange)
 
 bool Banlist::add(std::string address) { return true; }
 void Banlist::check(std::string address) { }

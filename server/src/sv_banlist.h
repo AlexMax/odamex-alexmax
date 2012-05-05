@@ -25,13 +25,22 @@
 #define __SV_BANLIST__
 
 #include <list>
+#include <sstream>
+#include <string>
 
 #include "d_player.h"
+#include "i_net.h"
 
-typedef struct {
-	byte octet[4];
-	byte mask;
-} ipv4range_t;
+class ipv4range {
+private:
+	byte ip[4];
+	bool mask[4];
+public:
+	ipv4range(void);
+	bool check(const netadr_t& address);
+	bool set(const std::string& input);
+	std::string string(void);
+};
 
 class Banlist {
 public:
@@ -41,7 +50,7 @@ public:
 	void list(void);
 	void remove(std::string address);
 private:
-	std::list<ipv4range_t> ipv4banlist;
+	std::list<ipv4range> ipv4banlist;
 };
 
 bool SV_BanCheck(client_t *cl, int n);
