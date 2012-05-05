@@ -38,28 +38,19 @@ static const int MAX_EXTRAPOLATION = 4;
 static const fixed_t POS_LERP_THRESHOLD = 2 * FRACUNIT;
 static const fixed_t SECTOR_LERP_THRESHOLD = 2 * FRACUNIT;
 
+extern bool predicting;
+
 // ============================================================================
 //
 // Snapshot implementation
 //
 // ============================================================================
 
-Snapshot::Snapshot(const Snapshot &other) :
-		mTime(other.mTime),
-		mValid(other.mValid), mAuthoritative(other.mAuthoritative),
-		mContinuous(other.mContinuous), mInterpolated(other.mInterpolated),
-		mExtrapolated(other.mExtrapolated)
+Snapshot::Snapshot(int time) :
+		mTime(time), mValid(time > 0),
+		mAuthoritative(false), mContinuous(true),
+		mInterpolated(false), mExtrapolated(false)
 {
-}
-
-void Snapshot::operator=(const Snapshot &other)
-{
-	mTime = other.mTime;
-	mValid = other.mValid;
-	mAuthoritative = other.mAuthoritative;
-	mContinuous = other.mContinuous;
-	mInterpolated = other.mInterpolated;
-	mExtrapolated = other.mExtrapolated;
 }
 
 bool Snapshot::operator==(const Snapshot &other) const
@@ -77,17 +68,6 @@ bool Snapshot::operator==(const Snapshot &other) const
 // ActorSnapshot implementation
 //
 // ============================================================================
-
-ActorSnapshot::ActorSnapshot(const ActorSnapshot &other) :
-		Snapshot(other), mFields(other.mFields),
-		mX(other.mX), mY(other.mY), mZ(other.mZ),
-		mMomX(other.mMomX), mMomY(other.mMomY), mMomZ(other.mMomZ),
-		mAngle(other.mAngle), mPitch(other.mPitch), mOnGround(other.mOnGround),
-		mCeilingZ(other.mCeilingZ), mFloorZ(other.mFloorZ),
-		mReactionTime(other.mReactionTime), mWaterLevel(other.mWaterLevel),
-		mFlags(other.mFlags), mFlags2(other.mFlags2), mFrame(other.mFrame)
-{
-}
 
 ActorSnapshot::ActorSnapshot(int time) :
 		Snapshot(time), mFields(0),
@@ -107,28 +87,6 @@ ActorSnapshot::ActorSnapshot(int time, const AActor *mo) :
 		mReactionTime(mo->reactiontime), mWaterLevel(mo->waterlevel),
 		mFlags(mo->flags), mFlags2(mo->flags2), mFrame(mo->frame)
 {
-}
-
-void ActorSnapshot::operator=(const ActorSnapshot &other)
-{
-	Snapshot::operator=(other);
-	mFields = other.mFields;
-	mX = other.mX;
-	mY = other.mY;
-	mZ = other.mZ;
-	mMomX = other.mMomX;
-	mMomY = other.mMomY;
-	mMomZ = other.mMomZ;
-	mAngle = other.mAngle;
-	mPitch = other.mPitch;
-	mOnGround = other.mOnGround;
-	mCeilingZ = other.mCeilingZ;
-	mFloorZ = other.mFloorZ;
-	mReactionTime = other.mReactionTime;
-	mWaterLevel = other.mWaterLevel;
-	mFlags = other.mFlags;
-	mFlags2 = other.mFlags2;
-	mFrame = other.mFrame;
 }
 
 bool ActorSnapshot::operator==(const ActorSnapshot &other) const
@@ -206,9 +164,13 @@ void ActorSnapshot::toActor(AActor *mo) const
 		mo->angle = mAngle;
 		
 	if (mFields & ACT_PITCH)
-		mo->angle = mPitch;
+		mo->pitch = mPitch;
 	if (mFields & ACT_ONGROUND)
 		mo->onground = mOnGround;
+	if (mFields & ACT_CEILINGZ)
+		mo->ceilingz = mCeilingZ;
+	if (mFields & ACT_FLOORZ)
+		mo->floorz = mFloorZ;		
 	if (mFields & ACT_REACTIONTIME)
 		mo->reactiontime = mReactionTime;
 	if (mFields & ACT_WATERLEVEL)
@@ -219,8 +181,6 @@ void ActorSnapshot::toActor(AActor *mo) const
 		mo->flags2 = mFlags2;
 	if (mFields & ACT_FRAME)
 		mo->frame = mFrame;
-	if (mFields & ACT_FLOORZ)
-		mo->floorz = mFloorZ;
 }
 
 // ============================================================================
@@ -229,18 +189,10 @@ void ActorSnapshot::toActor(AActor *mo) const
 //
 // ============================================================================
 
-PlayerSnapshot::PlayerSnapshot(const PlayerSnapshot &other) :
-		Snapshot(other), mFields(other.mFields),
-		mActorSnap(other.mActorSnap),
-		mViewHeight(other.mViewHeight), mDeltaViewHeight(other.mDeltaViewHeight),
-		mJumpTime(other.mJumpTime)
-{
-}
-
 PlayerSnapshot::PlayerSnapshot(int time) :
 		Snapshot(time), mFields(0),
 		mActorSnap(time),
-		mViewHeight(VIEWHEIGHT), mDeltaViewHeight(0), mJumpTime(0)
+		mViewHeight(0), mDeltaViewHeight(0), mJumpTime(0)
 {
 }
 
@@ -250,16 +202,6 @@ PlayerSnapshot::PlayerSnapshot(int time, player_t *player) :
 		mViewHeight(player->viewheight), mDeltaViewHeight(player->deltaviewheight),
 		mJumpTime(player->jumpTics)
 {
-}
-
-void PlayerSnapshot::operator=(const PlayerSnapshot &other)
-{
-	Snapshot::operator=(other);
-	mFields = other.mFields;
-	mActorSnap = other.mActorSnap;
-	mViewHeight = other.mViewHeight;
-	mDeltaViewHeight = other.mDeltaViewHeight;
-	mJumpTime = other.mJumpTime;
 }
 
 bool PlayerSnapshot::operator==(const PlayerSnapshot &other) const
@@ -298,23 +240,6 @@ PlayerSnapshotManager::PlayerSnapshotManager() :
 	mMostRecent(0)
 {
 	clearSnapshots();
-}
-
-PlayerSnapshotManager::PlayerSnapshotManager(const PlayerSnapshotManager &other) :
-	mMostRecent(other.mMostRecent)
-{
-	for (int i = 0; i < NUM_SNAPSHOTS; i++)
-		mSnaps[i] = other.mSnaps[i];
-}
-
-PlayerSnapshotManager &PlayerSnapshotManager::operator=(const PlayerSnapshotManager &other)
-{
-	for (int i = 0; i < NUM_SNAPSHOTS; i++)
-		mSnaps[i] = other.mSnaps[i];
-		
-	mMostRecent = other.mMostRecent;
-	
-	return *this;	
 }
 
 //
@@ -509,7 +434,7 @@ PlayerSnapshot PlayerSnapshotManager::getSnapshot(int time) const
 
 // ============================================================================
 //
-// Helper functions
+// Actor and Player Helper functions
 //
 // ============================================================================
 
@@ -674,9 +599,537 @@ void P_SetPlayerSnapshotNoPosition(player_t *player, const PlayerSnapshot &snap)
 	player->mo->momy = momy;
 	player->mo->momz = momz;
 	player->mo->LinkToWorld();
+}
+
+
+// ============================================================================
+//
+// SectorSnapshot implementation
+//
+// ============================================================================
+
+
+SectorSnapshot::SectorSnapshot(int time) :
+	Snapshot(time),	mCeilingMoverType(SEC_INVALID), mFloorMoverType(SEC_INVALID),
+	mSector(NULL), mCeilingType(0), mFloorType(0), mCeilingTag(0), mFloorTag(0),
+	mCeilingLine(NULL), mFloorLine(NULL), mCeilingHeight(0), mFloorHeight(0),
+	mCeilingSpeed(0), mFloorSpeed(0), mCeilingDestination(0), mFloorDestination(0),
+	mCeilingDirection(0), mFloorDirection(0), mCeilingOldDirection(0), mFloorOldDirection(0),
+	mCeilingTexture(0), mFloorTexture(0),
+	mNewCeilingSpecial(0), mNewFloorSpecial(0), mCeilingLow(0), mCeilingHigh(0),
+	mFloorLow(0), mFloorHigh(0), mCeilingCrush(false), mFloorCrush(false), mSilent(false),
+	mCeilingWait(0), mFloorWait(0), mCeilingCounter(0), mFloorCounter(0),
+	mCeilingStatus(0), mFloorStatus(0), mOldFloorStatus(0),
+	mCrusherSpeed1(0), mCrusherSpeed2(0), mStepTime(0), mPerStepTime(0), mPauseTime(0),
+	mOrgHeight(0), mDelay(0), mFloorLip(0), mFloorOffset(0), mCeilingChange(0), mFloorChange(0)
+{
+}
+
+SectorSnapshot::SectorSnapshot(int time, sector_t *sector) :
+	Snapshot(time), mCeilingMoverType(SEC_INVALID), mFloorMoverType(SEC_INVALID),
+	mSector(sector)
+{
+	if (!sector)
+	{
+		clear();	
+		return;
+	}
+	
+	mCeilingHeight		= P_CeilingHeight(sector);
+	mFloorHeight		= P_FloorHeight(sector);
+	
+	if (sector->floordata)
+	{
+		if (sector->floordata->IsA(RUNTIME_CLASS(DElevator)))
+		{
+			DElevator *elevator = static_cast<DElevator *>(sector->floordata);
+			mCeilingMoverType	= SEC_ELEVATOR;
+			mFloorMoverType		= SEC_ELEVATOR;
+			mCeilingType		= elevator->m_Type;
+			mFloorType			= elevator->m_Type;
+			mCeilingStatus		= elevator->m_Status;
+			mFloorStatus		= elevator->m_Status;
+			mCeilingDirection	= elevator->m_Direction;
+			mFloorDirection		= elevator->m_Direction;
+			mCeilingDestination	= elevator->m_CeilingDestHeight;
+			mFloorDestination	= elevator->m_FloorDestHeight;
+			mCeilingSpeed		= elevator->m_Speed;
+			mFloorSpeed			= elevator->m_Speed;
+		}
+		else if (sector->floordata->IsA(RUNTIME_CLASS(DPillar)))
+		{
+			DPillar *pillar		= static_cast<DPillar *>(sector->floordata);
+			mCeilingMoverType	= SEC_PILLAR;
+			mFloorMoverType		= SEC_PILLAR;	
+			mCeilingType		= pillar->m_Type;
+			mFloorType			= pillar->m_Type;
+			mCeilingStatus		= pillar->m_Status;
+			mFloorStatus		= pillar->m_Status;		
+			mCeilingSpeed		= pillar->m_CeilingSpeed;
+			mFloorSpeed			= pillar->m_FloorSpeed;
+			mCeilingDestination	= pillar->m_CeilingTarget;
+			mFloorDestination	= pillar->m_FloorTarget;
+			mCeilingCrush		= pillar->m_Crush;
+			mFloorCrush			= pillar->m_Crush;
+		}
+		else if (sector->floordata->IsA(RUNTIME_CLASS(DFloor)))
+		{
+			DFloor *floor		= static_cast<DFloor *>(sector->floordata);
+			mFloorMoverType		= SEC_FLOOR;			
+			mFloorType			= floor->m_Type;
+			mFloorStatus		= floor->m_Status;
+			mFloorCrush			= floor->m_Crush;
+			mFloorDirection		= floor->m_Direction;
+			mNewFloorSpecial	= floor->m_NewSpecial;
+			mFloorTexture		= floor->m_Texture;
+			mFloorDestination	= floor->m_FloorDestHeight;
+			mFloorSpeed			= floor->m_Speed;
+			mStepTime			= floor->m_StepTime;
+			mPerStepTime		= floor->m_PerStepTime;	
+			mResetCounter		= floor->m_ResetCount;
+			mPauseTime			= floor->m_PauseTime;
+			mDelay				= floor->m_Delay;
+			mOrgHeight			= floor->m_OrgHeight;
+			mFloorLine			= floor->m_Line;
+			mFloorOffset		= floor->m_Height;
+			mFloorChange		= floor->m_Change;
+		}
+		else if (sector->floordata->IsA(RUNTIME_CLASS(DPlat)))
+		{
+			DPlat *plat			= static_cast<DPlat *>(sector->floordata);
+			mFloorMoverType		= SEC_PLAT;			
+			mFloorType			= plat->m_Type;
+			mFloorTag			= plat->m_Tag;			
+			mFloorCrush			= plat->m_Crush;
+			mFloorSpeed			= plat->m_Speed;
+			mFloorLow			= plat->m_Low;
+			mFloorHigh			= plat->m_High;
+			mFloorWait			= plat->m_Wait;
+			mFloorCounter		= plat->m_Count;
+			mFloorStatus		= plat->m_Status;
+			mOldFloorStatus		= plat->m_OldStatus;
+			mFloorOffset		= plat->m_Height;
+			mFloorLip			= plat->m_Lip;
+		}
+	}
+	
+	if (sector->ceilingdata)
+	{
+		if (sector->ceilingdata->IsA(RUNTIME_CLASS(DCeiling)))
+		{
+			DCeiling *ceiling	= static_cast<DCeiling *>(sector->ceilingdata);
+			mCeilingMoverType	= SEC_CEILING;			
+			mCeilingType		= ceiling->m_Type;
+			mCeilingStatus		= ceiling->m_Status;
+			mCeilingTag			= ceiling->m_Tag;
+			mCeilingCrush		= ceiling->m_Crush;
+			mSilent				= ceiling->m_Silent;
+			mCeilingLow			= ceiling->m_BottomHeight;
+			mCeilingHigh		= ceiling->m_TopHeight;
+			mCeilingSpeed		= ceiling->m_Speed;
+			mCeilingDirection	= ceiling->m_Direction;
+			mCeilingTexture		= ceiling->m_Texture;
+			mNewCeilingSpecial	= ceiling->m_NewSpecial;
+			mCrusherSpeed1		= ceiling->m_Speed1;
+			mCrusherSpeed2		= ceiling->m_Speed2;
+			mCeilingOldDirection = ceiling->m_OldDirection;
+		}
+		else if (sector->ceilingdata->IsA(RUNTIME_CLASS(DDoor)))
+		{
+			DDoor *door			= static_cast<DDoor *>(sector->ceilingdata);
+			mCeilingMoverType	= SEC_DOOR;
+			mCeilingType		= door->m_Type;
+			mCeilingHigh		= door->m_TopHeight;
+			mCeilingSpeed		= door->m_Speed;
+			mCeilingWait		= door->m_TopWait;
+			mCeilingCounter		= door->m_TopCountdown;
+			mCeilingStatus		= door->m_Status;
+			mCeilingLine		= door->m_Line;
+		}
+	}
+}
+
+void SectorSnapshot::clear()
+{
+	setTime(-1);
+	mCeilingMoverType = SEC_INVALID;
+	mFloorMoverType = SEC_INVALID;
+}
+
+void SectorSnapshot::toSector(sector_t *sector) const
+{
+	if (!sector)
+		return;
+
+	P_SetCeilingHeight(sector, mCeilingHeight);
+	P_SetFloorHeight(sector, mFloorHeight);
+	P_ChangeSector(sector, false);
+
+	if (mCeilingMoverType == SEC_PILLAR && mCeilingStatus != DPillar::destroy)
+	{
+		if (sector->ceilingdata && !sector->ceilingdata->IsA(RUNTIME_CLASS(DPillar)))
+		{
+			sector->ceilingdata->Destroy();
+			sector->ceilingdata = NULL;
+
+		}
+		if (sector->floordata && !sector->ceilingdata->IsA(RUNTIME_CLASS(DPillar)))
+		{
+			sector->floordata->Destroy();
+			sector->floordata = NULL;
+		}
 		
-	player->mo->angle = snap.getAngle();
-	player->mo->pitch = snap.getPitch();
+		if (!sector->ceilingdata)
+		{
+			sector->ceilingdata = new DPillar();
+			sector->floordata = sector->ceilingdata;
+		}
+		
+		DPillar *pillar				= static_cast<DPillar *>(sector->ceilingdata);
+		pillar->m_Type				= static_cast<DPillar::EPillar>(mCeilingType);
+		pillar->m_Status			= static_cast<DPillar::EPillarState>(mCeilingStatus);
+		pillar->m_CeilingSpeed		= mCeilingSpeed;
+		pillar->m_FloorSpeed		= mFloorSpeed;
+		pillar->m_CeilingTarget		= mCeilingDestination;
+		pillar->m_FloorTarget		= mFloorDestination;
+		pillar->m_Crush				= mCeilingCrush;
+	}
+	
+	if (mCeilingMoverType == SEC_ELEVATOR && mCeilingStatus != DElevator::destroy)
+	{
+		if (sector->ceilingdata && !sector->ceilingdata->IsA(RUNTIME_CLASS(DElevator)))
+		{
+			sector->ceilingdata->Destroy();
+			sector->ceilingdata = NULL;
+		}
+		if (sector->floordata && !sector->floordata->IsA(RUNTIME_CLASS(DElevator)))
+		{
+				sector->floordata->Destroy();
+				sector->floordata = NULL;
+		}
+		
+		if (!sector->ceilingdata)
+		{
+			sector->ceilingdata = new DElevator(sector);
+			sector->floordata = sector->ceilingdata;
+		}
+	
+		DElevator *elevator			= static_cast<DElevator *>(sector->ceilingdata);
+		elevator->m_Type			= static_cast<DElevator::EElevator>(mCeilingType);
+		elevator->m_Status			= static_cast<DElevator::EElevatorState>(mCeilingStatus);		
+		elevator->m_Direction		= mCeilingDirection;
+		elevator->m_CeilingDestHeight = mCeilingDestination;
+		elevator->m_FloorDestHeight	= mFloorDestination;
+		elevator->m_Speed			= mCeilingSpeed;
+	}
+
+	if (mCeilingMoverType == SEC_CEILING && mCeilingStatus != DCeiling::destroy)
+	{
+		if (sector->ceilingdata && !sector->ceilingdata->IsA(RUNTIME_CLASS(DCeiling)))
+		{
+			sector->ceilingdata->Destroy();
+			sector->ceilingdata = NULL;
+		}
+		
+		if (!sector->ceilingdata)
+			sector->ceilingdata = new DCeiling(sector);
+		
+		DCeiling *ceiling			= static_cast<DCeiling *>(sector->ceilingdata);
+		ceiling->m_Type				= static_cast<DCeiling::ECeiling>(mCeilingType);
+		ceiling->m_Status			= static_cast<DCeiling::ECeilingState>(mCeilingStatus);
+		ceiling->m_Tag				= mCeilingTag;
+		ceiling->m_BottomHeight		= mCeilingLow;
+		ceiling->m_TopHeight		= mCeilingHigh;
+		ceiling->m_Speed			= mCeilingSpeed;
+		ceiling->m_Speed1			= mCrusherSpeed1;
+		ceiling->m_Speed2			= mCrusherSpeed2;
+		ceiling->m_Crush			= mCeilingCrush;
+		ceiling->m_Silent			= mSilent;
+		ceiling->m_Direction		= mCeilingDirection;
+		ceiling->m_OldDirection		= mCeilingOldDirection;
+		ceiling->m_Texture			= mCeilingTexture;
+		ceiling->m_NewSpecial		= mNewCeilingSpecial;
+	}
+		
+	if (mCeilingMoverType == SEC_DOOR && mCeilingStatus != DDoor::destroy)
+	{
+		if (sector->ceilingdata && !sector->ceilingdata->IsA(RUNTIME_CLASS(DDoor)))
+		{
+			sector->ceilingdata->Destroy();
+			sector->ceilingdata = NULL;
+		}
+		
+		if (!sector->ceilingdata)
+		{
+			sector->ceilingdata =
+				new DDoor(sector, mCeilingLine,
+						  static_cast<DDoor::EVlDoor>(mCeilingType),
+						  mCeilingSpeed, mCeilingWait);
+		}
+
+		DDoor *door					= static_cast<DDoor *>(sector->ceilingdata);
+		door->m_Type				= static_cast<DDoor::EVlDoor>(mCeilingType);
+		door->m_Status				= static_cast<DDoor::EDoorState>(mCeilingStatus);
+		door->m_TopHeight			= mCeilingHigh;
+		door->m_Speed				= mCeilingSpeed;
+		door->m_TopWait				= mCeilingWait;
+		door->m_TopCountdown		= mCeilingCounter;
+		door->m_Line				= mCeilingLine;
+	}
+
+	if (mFloorMoverType == SEC_FLOOR && mFloorStatus != DFloor::destroy)
+	{
+		if (sector->floordata && !sector->floordata->IsA(RUNTIME_CLASS(DFloor)))
+		{
+			sector->floordata->Destroy();
+			sector->floordata = NULL;
+		}
+		
+		if (!sector->floordata)
+		{
+			sector->floordata =
+				new DFloor(sector, static_cast<DFloor::EFloor>(mFloorType),
+						   mFloorLine, mFloorSpeed, mFloorOffset,
+						   mFloorCrush, mFloorChange);			
+		}
+		
+		DFloor *floor				= static_cast<DFloor *>(sector->floordata);
+		floor->m_Type				= static_cast<DFloor::EFloor>(mFloorType);
+		floor->m_Status				= static_cast<DFloor::EFloorState>(mFloorStatus);
+		floor->m_Crush				= mFloorCrush;
+		floor->m_Direction			= mFloorDirection;
+		floor->m_NewSpecial			= mNewFloorSpecial;
+		floor->m_FloorDestHeight	= mFloorDestination;
+		floor->m_Speed				= mFloorSpeed;
+		floor->m_ResetCount			= mResetCounter;
+		floor->m_OrgHeight			= mOrgHeight;
+		floor->m_Delay				= mDelay;
+		floor->m_PauseTime			= mPauseTime;
+		floor->m_StepTime			= mStepTime;
+		floor->m_PerStepTime		= mPerStepTime;
+		floor->m_Line				= mFloorLine;
+		floor->m_Height				= mFloorOffset;
+		floor->m_Change				= mFloorChange;
+	}
+		
+	if (mFloorMoverType == SEC_PLAT && mFloorStatus != DPlat::destroy)
+	{
+		if (sector->floordata && !sector->floordata->IsA(RUNTIME_CLASS(DPlat)))
+		{
+			sector->floordata->Destroy();
+			sector->floordata = NULL;
+		}
+		
+		if (!sector->floordata)
+		{
+			sector->floordata =
+				new DPlat(sector, static_cast<DPlat::EPlatType>(mFloorType),
+						  mFloorOffset, mFloorSpeed, mFloorWait, mFloorLip);
+		}
+
+		DPlat *plat					= static_cast<DPlat *>(sector->floordata);
+		plat->m_Type				= static_cast<DPlat::EPlatType>(mFloorType);
+		plat->m_Tag					= mFloorTag;
+		plat->m_Status				= static_cast<DPlat::EPlatState>(mFloorStatus);
+		plat->m_OldStatus			= static_cast<DPlat::EPlatState>(mOldFloorStatus);		
+		plat->m_Crush				= mFloorCrush;
+		plat->m_Low					= mFloorLow;
+		plat->m_High				= mFloorHigh;
+		plat->m_Speed				= mFloorSpeed;
+		plat->m_Wait				= mFloorWait;
+		plat->m_Count				= mFloorCounter;
+		plat->m_Height				= mFloorOffset;
+		plat->m_Lip					= mFloorLip;
+	}
+}
+
+// ============================================================================
+//
+// SectorrSnapshotManager implementation
+//
+// ============================================================================
+
+SectorSnapshotManager::SectorSnapshotManager() :
+	mMostRecent(0)
+{
+	clearSnapshots();
+}
+
+//
+// SectorSnapshotManager::clearSnapshots()
+//
+// Marks all of the snapshots in the container invalid, effectively
+// clearing the container.
+//
+void SectorSnapshotManager::clearSnapshots()
+{
+	// Set the time for all snapshots to an invalid value
+	for (int i = 0; i < NUM_SNAPSHOTS; i++)
+		mSnaps[i].clear();
+		
+	mMostRecent = 0;
+}
+
+//
+// SectorSnapshotManager::mValidSnapshot()
+//
+// Returns true if a snapshot at the given time is present in the container
+//
+bool SectorSnapshotManager::mValidSnapshot(int time) const
+{
+	return ((time <= mMostRecent) && (mMostRecent - time <= NUM_SNAPSHOTS) &&
+			(time > 0) && (mSnaps[time % NUM_SNAPSHOTS].isValid()) &&
+			(mSnaps[time % NUM_SNAPSHOTS].getTime() == time) &&
+			(mSnaps[time % NUM_SNAPSHOTS].getCeilingMoverType() != SEC_INVALID ||
+			 mSnaps[time % NUM_SNAPSHOTS].getFloorMoverType() != SEC_INVALID));
+}
+
+//
+// SectorSnapshotManager::empty()
+//
+// Returns true if the container does not contain any valid snapshots 
+//
+bool SectorSnapshotManager::empty()
+{
+	return (!mValidSnapshot(mMostRecent));
+}
+
+//
+// SectorSnapshotManager::addSnapshot()
+//
+// Inserts a new snapshot into the container, provided it is valid and not
+// too old
+//
+void SectorSnapshotManager::addSnapshot(const SectorSnapshot &newsnap)
+{
+	int time = newsnap.getTime();
+	
+	if (!newsnap.isValid())
+	{
+		#ifdef _SNAPSHOT_DEBUG_
+		Printf(PRINT_HIGH, "Snapshot %i: Not adding invalid sector snapshot\n", time);
+		#endif // _SNAPSHOT_DEBUG_
+		return;
+	}
+	
+	if (mMostRecent > newsnap.getTime() + NUM_SNAPSHOTS)
+	{
+		#ifdef _SNAPSHOT_DEBUG_
+		Printf(PRINT_HIGH, "Snapshot %i: Not adding expired sector snapshot\n", time);
+		#endif // _SNAPSHOT_DEBUG_
+		return;
+	}
+
+	mSnaps[time % NUM_SNAPSHOTS] = newsnap;
+
+	if (time > mMostRecent)
+		mMostRecent = time;
+}
+
+
+//
+// SectorSnapshotManager::getSnapshot()
+//
+// Returns a snapshot from the container at a specified time.
+// If there is not a snapshot matching the time, one is generated by
+// running the moving sector's thinker function.
+//
+SectorSnapshot SectorSnapshotManager::getSnapshot(int time) const
+{
+	if (time <= 0 || mMostRecent <= 0)
+		return SectorSnapshot();
+	
+	// Return the requested snapshot if availible
+	if (mValidSnapshot(time))
+		return mSnaps[time % NUM_SNAPSHOTS];
+	
+	// Find the snapshot in the container that preceeds the desired time
+	int prevsnaptime = time;
+	while (--prevsnaptime > mMostRecent - NUM_SNAPSHOTS)
+	{
+		if (mValidSnapshot(prevsnaptime))
+		{
+			const SectorSnapshot *snap = &mSnaps[prevsnaptime % NUM_SNAPSHOTS];
+			
+			// turn off any sector movement sounds from RunThink()
+			bool oldpredicting = predicting;
+			predicting = true;
+		
+			// create a temporary sector for the snapshot and run the
+			// sector movement til we get to the desired time
+			sector_t tempsector;
+			P_CopySector(&tempsector, snap->getSector());
+			
+			// set values for the Z parameter of the sector's planes so that
+			// P_SetCeilingHeight/P_SetFloorHeight will work properly
+			tempsector.floorplane.c = tempsector.floorplane.invc = FRACUNIT;
+			tempsector.ceilingplane.c = tempsector.ceilingplane.invc = -FRACUNIT;
+						
+			snap->toSector(&tempsector);
+
+			for (int i = 0; i < time - prevsnaptime; i++)
+			{
+				if (tempsector.ceilingdata)
+					tempsector.ceilingdata->RunThink();			
+				if (tempsector.floordata && 
+					tempsector.floordata != tempsector.ceilingdata)
+					tempsector.floordata->RunThink();
+			}
+			
+			SectorSnapshot newsnap(time, &tempsector);
+
+			// clean up allocated memory
+			if (tempsector.ceilingdata)
+				tempsector.ceilingdata->Destroy();
+			if (tempsector.floordata)
+				tempsector.floordata->Destroy();
+
+			// restore sector movement sounds
+			predicting = oldpredicting;
+			
+			return newsnap;
+		}
+	}
+		
+	// Could not find a valid snapshot so return a blank (invalid) one
+	return SectorSnapshot();
+}
+
+
+bool P_CeilingSnapshotDone(SectorSnapshot *snap)
+{
+	if (!snap || !snap->isValid() || snap->getCeilingMoverType() == SEC_INVALID)
+		return true;
+			
+	if ((snap->getCeilingMoverType() == SEC_CEILING &&
+		 snap->getCeilingStatus() == DCeiling::destroy) ||
+		(snap->getCeilingMoverType() == SEC_DOOR &&
+		 snap->getCeilingStatus() == DDoor::destroy) ||
+		(snap->getCeilingMoverType() == SEC_PILLAR &&
+		 snap->getCeilingStatus() == DPillar::destroy) ||
+		(snap->getCeilingMoverType() == SEC_ELEVATOR &&
+		 snap->getCeilingStatus() == DElevator::destroy))
+		return true;
+		
+	return false;
+}
+
+bool P_FloorSnapshotDone(SectorSnapshot *snap)
+{
+	if (!snap || !snap->isValid() || snap->getFloorMoverType() == SEC_INVALID)
+		return true;
+			
+	if ((snap->getFloorMoverType() == SEC_FLOOR &&
+		 snap->getFloorStatus() == DFloor::destroy) ||
+		(snap->getFloorMoverType() == SEC_PLAT &&
+		 snap->getFloorStatus() == DPlat::destroy) ||
+		(snap->getFloorMoverType() == SEC_PILLAR &&
+		 snap->getFloorStatus() == DPillar::destroy) ||
+		(snap->getFloorMoverType() == SEC_ELEVATOR &&
+		 snap->getFloorStatus() == DElevator::destroy))
+		return true;
+		
+	return false;
 }
 
 VERSION_CONTROL (p_snapshot_cpp, "$Id: p_snapshot.cpp 2785 2012-02-18 23:22:07Z dr_sean $")

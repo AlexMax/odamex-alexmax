@@ -127,6 +127,8 @@ typedef enum {
 
 	Line_SetIdentification = 121,
 
+    ThrustThingZ = 128,
+
 	UsePuzzleItem = 129,
 
 	Thing_Activate = 130,
@@ -336,6 +338,8 @@ extern lnSpecFunc LineSpecials[256];
 BOOL EV_CeilingCrushStop (int tag);
 int EV_DoDonut (int tag, fixed_t pillarspeed, fixed_t slimespeed);
 void EV_StopPlat (int tag);
+
+bool P_LineSpecialMovesSector(line_s *line);
 
 extern int TeleportSide;
 

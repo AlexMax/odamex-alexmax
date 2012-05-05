@@ -916,6 +916,10 @@ player_s::player_s()
 	joinafterspectatortime = level.time - TICRATE*5;
 	timeout_callvote = 0;
 	timeout_vote = 0;
+
+	ready = false;
+	timeout_ready = 0;
+
 	prefcolor = 0;
 
 	LastMessage.Time = 0;
@@ -925,6 +929,8 @@ player_s::player_s()
 	BlendG = 0;
 	BlendB = 0;
 	BlendA = 0;
+	
+	memset(netcmds, 0, sizeof(ticcmd_t) * BACKUPTICS);
 }
 
 player_s &player_s::operator =(const player_s &other)
@@ -935,6 +941,7 @@ player_s &player_s::operator =(const player_s &other)
 	playerstate = other.playerstate;
 	mo = other.mo;
 	cmd = other.cmd;
+	cmds = other.cmds;
 	userinfo = other.userinfo;
 	fov = other.fov;
 	viewz = other.viewz;
@@ -1013,6 +1020,9 @@ player_s &player_s::operator =(const player_s &other)
 	timeout_callvote = other.timeout_callvote;
 	timeout_vote = other.timeout_vote;
 
+	ready = other.ready;
+	timeout_ready = other.timeout_ready;
+
 	prefcolor = other.prefcolor;
 
 	for(i = 0; i < BACKUPTICS; i++)
@@ -1029,6 +1039,8 @@ player_s &player_s::operator =(const player_s &other)
 	client = other.client;
 
 	snapshots = other.snapshots;
+	
+	to_spawn = other.to_spawn;
 
 	return *this;
 }

@@ -60,6 +60,7 @@
 #include "cl_maplist.h"
 #include "cl_vote.h"
 #include "p_mobj.h"
+#include "p_pspr.h"
 
 #include <string>
 #include <vector>
@@ -122,12 +123,16 @@ std::string server_host = "";	// hostname of server
 // [SL] 2011-06-27 - Class to record and playback network recordings
 NetDemo netdemo;
 // [SL] 2011-07-06 - not really connected (playing back a netdemo)
-bool simulated_connection = false;	
+bool simulated_connection = false;
+bool forcenetdemosplit = false;		// need to split demo due to svc_reconnect
 
 extern NetGraph netgraph;
 
 // [SL] 2012-03-07 - Players that were teleported during the current gametic
 std::set<byte> teleported_players;
+
+// [SL] 2012-04-06 - moving sector snapshots received from the server
+std::map<unsigned short, SectorSnapshotManager> sector_snaps;
 
 EXTERN_CVAR (sv_weaponstay)
 
@@ -262,7 +267,6 @@ void P_ExplodeMissile (AActor* mo);
 void G_SetDefaultTurbo (void);
 void P_CalcHeight (player_t *player);
 bool P_CheckMissileSpawn (AActor* th);
-void P_MovePsprites (player_t* player);
 void CL_SetMobjSpeedAndAngle(void);
 
 void P_PlayerLookUpDown (player_t *p);
@@ -271,15 +275,53 @@ gender_t D_GenderByName (const char *gender);
 int V_GetColorFromString (const DWORD *palette, const char *colorstring);
 void AM_Stop();
 
-void CL_ClearWorldIndexSync()
+//
+// CL_CalculateWorldIndexSync
+//
+// Calculates world_index based on the most recently received gametic from the
+// server and the number of tics the client wants to withold for interpolation.
+//
+static int CL_CalculateWorldIndexSync()
 {
-	last_svgametic = world_index = 0;
-	world_index_accum = 0.0f;
+	return last_svgametic ? last_svgametic - cl_interp : 0;
 }
 
-int CL_CalculateWorldIndexSync()
+//
+// CL_CalculateWorldIndexDriftCorrection
+//
+// [SL] 2012-03-17 - Try to maintain sync with the server by gradually
+// slowing down or speeding up world_index
+//
+static int CL_CalculateWorldIndexDriftCorrection()
 {
-	return last_svgametic - cl_interp;
+	static const float CORRECTION_PERIOD = 1.0f / 16.0f;
+
+	int delta = CL_CalculateWorldIndexSync() - world_index;
+	if (delta == 0)
+		world_index_accum = 0.0f;
+	else
+		world_index_accum += CORRECTION_PERIOD * delta;
+	
+	// truncate the decimal portion of world_index_accum	
+	int correction = int(world_index_accum);
+	
+	// reset world_index_accum if our correction will affect world_index
+	if (correction != 0)
+		world_index_accum = 0.0f;
+		
+	return correction;	
+}
+
+//
+// CL_ResyncWorldIndex
+//
+// Recalculate world_index based and resets world_index_accum, which keeps
+// track of how much the sync has drifted.
+//
+static void CL_ResyncWorldIndex()
+{
+	world_index = CL_CalculateWorldIndexSync();
+	world_index_accum = 0.0f;
 }
 
 void Host_EndGame(const char *msg)
@@ -321,6 +363,8 @@ void CL_QuitNetGame(void)
 	P_ClearAllNetIds();
 	players.clear();
 
+	recv_full_update = false;
+	
 	if (netdemo.isRecording())
 		netdemo.stopRecording();
 
@@ -359,6 +403,11 @@ void CL_QuitNetGame(void)
 
 void CL_Reconnect(void)
 {
+	recv_full_update = false;
+	
+	if (netdemo.isRecording())
+		forcenetdemosplit = true;	
+		
 	if (connected)
 	{
 		MSG_WriteMarker(&net_buffer, clc_disconnect);
@@ -461,6 +510,9 @@ BEGIN_COMMAND (connect)
 	    return;
 	}
 	
+	C_FullConsole();
+	gamestate = GS_CONNECTING;
+
 	CL_QuitNetGame();
 
 	if (argc > 1)
@@ -712,6 +764,9 @@ BEGIN_COMMAND (spectate)
 }
 END_COMMAND (spectate)
 
+BEGIN_COMMAND (ready) {
+	MSG_WriteMarker(&net_buffer, clc_ready);
+} END_COMMAND (ready)
 
 BEGIN_COMMAND (join)
 {
@@ -1028,6 +1083,14 @@ void CL_SetupUserInfo(void)
 	if (p->mo)
 		p->mo->sprite = skins[p->userinfo.skin].sprite;
 
+	// [SL] 2012-04-30 - Were we looking through a teammate's POV who changed
+	// to the other team?
+	bool teammate = p->userinfo.team == consoleplayer().userinfo.team;
+	bool teamgame = (sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF);
+
+	if (p->id == displayplayer_id && !consoleplayer().spectator && teamgame && !teammate)
+		displayplayer_id = consoleplayer_id;
+
 	extern bool st_firsttime;
 	st_firsttime = true;
 }
@@ -1273,6 +1336,8 @@ bool CL_PrepareConnect(void)
 		Printf(PRINT_HIGH, "Will download \"%s\" from server\n", missing_file.c_str());
 	}
 
+	recv_full_update = false;
+	
 	connecttimeout = 0;
 	CL_TryToConnect(server_token);
 
@@ -1594,8 +1659,6 @@ void CL_UpdateLocalPlayer(void)
 	CL_ClearPlayerJustTeleported(&p);
 
 	consoleplayer().snapshots.addSnapshot(newsnapshot);
-
-//	real_plats.Clear();
 }
 
 
@@ -1873,14 +1936,16 @@ void CL_SpawnPlayer()
 	{
 		// denis - if this concerns the local player, restart the status bar
 		ST_Start ();
+		
+		// [SL] 2012-04-23 - Clear predicted sectors
+		movingsectors.clear();
 	}
 	
 	if (p->id == displayplayer().id)
 	{	
 		// [SL] 2012-03-08 - Resync with the server's incoming tic since we don't care
 		// about players/sectors jumping to new positions when the displayplayer spawns
-		world_index = CL_CalculateWorldIndexSync();
-		world_index_accum = 0.0f;
+		CL_ResyncWorldIndex();
 	}
 
 	int snaptime = last_svgametic;
@@ -2078,6 +2143,27 @@ void CL_KillMobj(void)
 ///// CL_Fire* called when someone uses a weapon  /////////
 ///////////////////////////////////////////////////////////
 
+// [tm512] attempt at squashing weapon desyncs.
+// The server will send us what weapon we fired, and if that
+// doesn't match the weapon we have up at the moment, fix it
+// and request that we get a full update of playerinfo - apr 14 2012
+void CL_FireWeapon (void)
+{
+	player_t *p = &consoleplayer ();
+	weapontype_t firedweap = (weapontype_t) MSG_ReadByte ();
+	int servertic = MSG_ReadLong ();
+
+	if (firedweap != p->readyweapon)
+	{
+		DPrintf("CL_FireWeapon: weapon misprediction\n");
+		A_ForceWeaponFire(p->mo, firedweap, servertic);
+		
+		// Request the player's ammo status from the server
+		MSG_WriteMarker (&net_buffer, clc_getplayerinfo);
+	}
+
+}
+
 //
 // CL_FirePistol
 //
@@ -2149,31 +2235,22 @@ void CL_FireChainGun(void)
 
 //
 // CL_ChangeWeapon
-//
-// Immediately changes the client's weapon to the weapon specified by the
-// server.  Sets the weapons animation state as well.
+// [ML] From Zdaemon .99
 //
 void CL_ChangeWeapon (void)
 {
 	player_t *player = &consoleplayer();
-	
-	int when = MSG_ReadLong();
-	weapontype_t newweapon = static_cast<weapontype_t>(MSG_ReadByte());
-	statenum_t stnum = static_cast<statenum_t>(MSG_ReadShort());
-	byte tics = MSG_ReadByte();
-
-	if (newweapon > NUMWEAPONS)
-		return;
+	weapontype_t newweapon = (weapontype_t)MSG_ReadByte();
 
 	// ensure that the client has the weapon
 	player->weaponowned[newweapon] = true;
 
-	A_ForceWeaponChange(player->mo, newweapon, stnum, tics);
-
-	// Move the animation forward to account for latency
-	for (int i = 0; i < gametic - when; i++)
-		P_MovePsprites(player);
+	// [SL] 2011-09-22 - Only change the weapon if the client doesn't already
+	// have that weapon up.
+	if (player->readyweapon != newweapon)
+		player->pendingweapon = newweapon;
 }
+
 
 //
 // CL_Sound
@@ -2237,38 +2314,50 @@ void CL_SoundOrigin(void)
 }
 
 //
+// CL_ClearSectorSnapshots
+//
+// Removes all sector snapshots at the start of a map, etc
+//
+void CL_ClearSectorSnapshots()
+{
+	sector_snaps.clear();
+}
+
+//
 // CL_UpdateSector
 // Updates floorheight and ceilingheight of a sector.
 //
 void CL_UpdateSector(void)
 {
-	unsigned short s = (unsigned short)MSG_ReadShort();
-	unsigned short fh = MSG_ReadShort();
-	unsigned short ch = MSG_ReadShort();
+	unsigned short sectornum = (unsigned short)MSG_ReadShort();
+	unsigned short floorheight = MSG_ReadShort();
+	unsigned short ceilingheight = MSG_ReadShort();
 
 	unsigned short fp = MSG_ReadShort();
 	unsigned short cp = MSG_ReadShort();
 
-	if(!sectors || s >= numsectors)
+	if (!sectors || sectornum >= numsectors)
 		return;
 
-	sector_t *sec = &sectors[s];
-
-	P_SetFloorHeight(sec, fh << FRACBITS);
-	P_SetCeilingHeight(sec, ch << FRACBITS);
+	sector_t *sector = &sectors[sectornum];
+	P_SetCeilingHeight(sector, ceilingheight << FRACBITS);	
+	P_SetFloorHeight(sector, floorheight << FRACBITS);
 
 	if(fp >= numflats)
 		fp = numflats;
 
-	sec->floorpic = fp;
+	sector->floorpic = fp;
 
 	if(cp >= numflats)
 		cp = numflats;
 
-	sec->ceilingpic = cp;
-	sec->moveable = true;
+	sector->ceilingpic = cp;
+	sector->moveable = true;
 
-	P_ChangeSector (sec, false);
+	P_ChangeSector(sector, false);
+	
+	SectorSnapshot snap(last_svgametic, sector);
+	sector_snaps[sectornum].addSnapshot(snap);
 }
 
 //
@@ -2277,221 +2366,151 @@ void CL_UpdateSector(void)
 //
 void CL_UpdateMovingSector(void)
 {
-	int tic = MSG_ReadLong();
-	unsigned short s = (unsigned short)MSG_ReadShort();
+	unsigned short sectornum = (unsigned short)MSG_ReadShort();
 
-    fixed_t fh = MSG_ReadLong(); // floor height
-    fixed_t ch = MSG_ReadLong(); // ceiling height
-    byte Type = MSG_ReadByte();
+    fixed_t ceilingheight = MSG_ReadShort() << FRACBITS;
+    fixed_t floorheight = MSG_ReadShort() << FRACBITS;
 
-    // Replaces the data in the corresponding struct
-    // 0 = floors, 1 = ceilings, 2 = elevators/pillars 
-    byte ReplaceType;
-
-	plat_pred_t pred;
+	byte movers = MSG_ReadByte();
+	movertype_t ceiling_mover = static_cast<movertype_t>(movers & 0x0F);
+	movertype_t floor_mover = static_cast<movertype_t>((movers & 0xF0) >> 4);
 	
-	memset(&pred, 0, sizeof(pred));
+	if (ceiling_mover == SEC_ELEVATOR)
+		floor_mover = SEC_INVALID;
+	if (ceiling_mover == SEC_PILLAR)
+		floor_mover = SEC_INVALID;
 
-	pred.secnum = s;
-	pred.tic = tic;
-	pred.floorheight = fh;
-	pred.ceilingheight = ch;
+	SectorSnapshot snap(last_svgametic);
+	
+	snap.setCeilingHeight(ceilingheight);
+	snap.setFloorHeight(floorheight);
 
-	switch(Type)
+	if (floor_mover == SEC_FLOOR)
 	{
-        // Floors
-        case 0:
-        {
-            pred.Floor.m_Type = (DFloor::EFloor)MSG_ReadLong();
-            pred.Floor.m_Crush = MSG_ReadBool();
-            pred.Floor.m_Direction = MSG_ReadLong();
-            pred.Floor.m_NewSpecial = MSG_ReadShort();
-            pred.Floor.m_Texture = MSG_ReadShort();
-            pred.Floor.m_FloorDestHeight = MSG_ReadLong();
-            pred.Floor.m_Speed = MSG_ReadLong();
-            pred.Floor.m_ResetCount = MSG_ReadLong();
-            pred.Floor.m_OrgHeight = MSG_ReadLong();
-            pred.Floor.m_Delay = MSG_ReadLong();
-            pred.Floor.m_PauseTime = MSG_ReadLong();
-            pred.Floor.m_StepTime = MSG_ReadLong(); 
-            pred.Floor.m_PerStepTime = MSG_ReadLong();
-
-            if(!sectors || s >= numsectors)
-                return;
-
-            sector_t *sec = &sectors[s];
-
-            if(!sec->floordata)
-                sec->floordata = new DFloor(sec);
-
-            ReplaceType = 0;
-        }
-        break;
-
-        // Platforms
-	    case 1:
-	    {
-            pred.Floor.m_Speed = MSG_ReadLong();
-            pred.Floor.m_Low = MSG_ReadLong();
-            pred.Floor.m_High = MSG_ReadLong();
-            pred.Floor.m_Wait = MSG_ReadLong();
-            pred.Floor.m_Count = MSG_ReadLong();
-            pred.Floor.m_Status = MSG_ReadLong();
-            pred.Floor.m_OldStatus = MSG_ReadLong();
-            pred.Floor.m_Crush = MSG_ReadBool();
-            pred.Floor.m_Tag = MSG_ReadLong();
-            pred.Floor.m_Type = MSG_ReadLong();
-
-            if(!sectors || s >= numsectors)
-                return;
-
-            sector_t *sec = &sectors[s];
-
-            if(!sec->floordata)
-                sec->floordata = new DPlat(sec);
-
-            ReplaceType = 0;
-	    }
-	    break;
-
-        // Ceilings
-        case 2:
-        {
-            pred.Ceiling.m_Type = (DCeiling::ECeiling)MSG_ReadLong();
-            pred.Ceiling.m_BottomHeight = MSG_ReadLong();
-            pred.Ceiling.m_TopHeight = MSG_ReadLong();
-            pred.Ceiling.m_Speed = MSG_ReadLong();
-            pred.Ceiling.m_Speed1 = MSG_ReadLong();
-            pred.Ceiling.m_Speed2 = MSG_ReadLong();
-            pred.Ceiling.m_Crush = MSG_ReadBool();
-            pred.Ceiling.m_Silent = MSG_ReadLong();
-            pred.Ceiling.m_Direction = MSG_ReadLong();
-            pred.Ceiling.m_Texture = MSG_ReadLong();
-            pred.Ceiling.m_NewSpecial = MSG_ReadLong();
-            pred.Ceiling.m_Tag = MSG_ReadLong();
-            pred.Ceiling.m_OldDirection = MSG_ReadLong();
-
-            if(!sectors || s >= numsectors)
-                return;
-
-            sector_t *sec = &sectors[s];
-
-            if(!sec->ceilingdata)
-                sec->ceilingdata = new DCeiling(sec);
-
-            ReplaceType = 1;
-        }
-        break;
-
-        // Doors
-        case 3:
-        {
-            int LineIndex;
-
-            pred.Ceiling.m_Type = (DDoor::EVlDoor)MSG_ReadLong();
-            pred.Ceiling.m_TopHeight = MSG_ReadLong();
-            pred.Ceiling.m_Speed = MSG_ReadLong();
-            pred.Ceiling.m_Direction = MSG_ReadLong();
-            pred.Ceiling.m_TopWait = MSG_ReadLong();
-            pred.Ceiling.m_TopCountdown = MSG_ReadLong();
-			pred.Ceiling.m_Status = MSG_ReadLong();
-            LineIndex = MSG_ReadLong();
-
-            if (!lines || LineIndex >= numlines || LineIndex < 0)
-                return;
-
-            pred.Ceiling.m_Line = &lines[LineIndex];
-
-            if(!sectors || s >= numsectors)
-                return;
-
-            sector_t *sec = &sectors[s];
-
-            if(!sec->ceilingdata)
-                sec->ceilingdata = new DDoor(sec);
-
-            ReplaceType = 1;
-        }
-        break;
-
-        // Elevators
-        case 4:
-        {
-            pred.Both.m_Type = (DElevator::EElevator)MSG_ReadLong();
-            pred.Both.m_Direction = MSG_ReadLong();
-            pred.Both.m_FloorDestHeight = MSG_ReadLong();
-            pred.Both.m_CeilingDestHeight = MSG_ReadLong();
-            pred.Both.m_Speed = MSG_ReadLong();
-
-            if(!sectors || s >= numsectors)
-                return;
-
-            sector_t *sec = &sectors[s];
-
-            if(!sec->ceilingdata && !sec->floordata)
-                sec->ceilingdata = sec->floordata = new DElevator(sec);
-
-            ReplaceType = 2;
-        }
-        break;
-
-        // Pillars
-        case 5:
-        {
-            pred.Both.m_Type = (DPillar::EPillar)MSG_ReadLong();
-            pred.Both.m_FloorSpeed = MSG_ReadLong();
-            pred.Both.m_CeilingSpeed = MSG_ReadLong();
-            pred.Both.m_FloorTarget = MSG_ReadLong();
-            pred.Both.m_CeilingTarget = MSG_ReadLong();
-            pred.Both.m_Crush = MSG_ReadBool();
-
-            if(!sectors || s >= numsectors)
-                return;
-
-            sector_t *sec = &sectors[s];
-
-            if(!sec->ceilingdata && !sec->floordata)
-                sec->ceilingdata = sec->floordata = new DPillar();
-
-            ReplaceType = 2;
-        }
-        break;
-
-	    default:
-            return;
+		// Floors/Stairbuilders
+		snap.setFloorMoverType(SEC_FLOOR);
+		snap.setFloorType(static_cast<DFloor::EFloor>(MSG_ReadByte()));
+		snap.setFloorStatus(MSG_ReadByte());
+		snap.setFloorCrush(MSG_ReadBool());        
+		snap.setFloorDirection(char(MSG_ReadByte()));
+		snap.setFloorSpecial(MSG_ReadShort());
+		snap.setFloorTexture(MSG_ReadShort());
+		snap.setFloorDestination(MSG_ReadShort() << FRACBITS);
+		snap.setFloorSpeed(MSG_ReadShort() << FRACBITS);
+		snap.setResetCounter(MSG_ReadLong());
+		snap.setOrgHeight(MSG_ReadShort() << FRACBITS);
+		snap.setDelay(MSG_ReadLong());
+		snap.setPauseTime(MSG_ReadLong());
+		snap.setStepTime(MSG_ReadLong());          
+		snap.setPerStepTime(MSG_ReadLong());
+		snap.setFloorOffset(MSG_ReadShort() << FRACBITS);
+		snap.setFloorChange(MSG_ReadByte());
+		
+		int LineIndex = MSG_ReadLong();
+		
+		if (!lines || LineIndex >= numlines || LineIndex < 0)
+			snap.setFloorLine(NULL);
+		else
+			snap.setFloorLine(&lines[LineIndex]);
+	}
+	
+	if (floor_mover == SEC_PLAT)
+	{
+		// Platforms/Lifts
+		snap.setFloorMoverType(SEC_PLAT);		
+		snap.setFloorSpeed(MSG_ReadShort() << FRACBITS);
+		snap.setFloorLow(MSG_ReadShort() << FRACBITS);
+		snap.setFloorHigh(MSG_ReadShort() << FRACBITS);
+		snap.setFloorWait(MSG_ReadLong());
+		snap.setFloorCounter(MSG_ReadLong());
+		snap.setFloorStatus(MSG_ReadByte());
+		snap.setOldFloorStatus(MSG_ReadByte());
+		snap.setFloorCrush(MSG_ReadBool());
+		snap.setFloorTag(MSG_ReadShort());
+		snap.setFloorType(MSG_ReadByte());
+		snap.setFloorOffset(MSG_ReadShort() << FRACBITS);
+		snap.setFloorLip(MSG_ReadShort() << FRACBITS);		
 	}
 
-    size_t i;
-
-	for(i = 0; i < real_plats.Size(); i++)
+	if (ceiling_mover == SEC_CEILING)
 	{
-		if(real_plats[i].secnum == s)
-		{
-            real_plats[i].tic = pred.tic;
+		// Ceilings / Crushers
+		snap.setCeilingMoverType(SEC_CEILING);
+		snap.setCeilingType(MSG_ReadByte());
+		snap.setCeilingLow(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingHigh(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingSpeed(MSG_ReadShort() << FRACBITS);
+		snap.setCrusherSpeed1(MSG_ReadShort() << FRACBITS);
+		snap.setCrusherSpeed2(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingCrush(MSG_ReadBool());
+		snap.setSilent(MSG_ReadBool());
+		snap.setCeilingDirection(char(MSG_ReadByte()));
+		snap.setCeilingTexture(MSG_ReadShort());
+		snap.setCeilingSpecial(MSG_ReadShort());
+		snap.setCeilingTag(MSG_ReadShort());
+		snap.setCeilingOldDirection(char(MSG_ReadByte()));
+    }
 
-			if (ReplaceType == 0)
-            {
-                real_plats[i].floorheight = pred.floorheight;
-                real_plats[i].Floor = pred.Floor;
-            }
-            else if (ReplaceType == 1)
-            {
-                real_plats[i].ceilingheight = pred.ceilingheight;
-                real_plats[i].Ceiling = pred.Ceiling;
-            }
-            else
-            {
-                real_plats[i].floorheight = pred.floorheight;
-                real_plats[i].ceilingheight = pred.ceilingheight;
-                real_plats[i].Both = pred.Both;
-            }
+	if (ceiling_mover == SEC_DOOR)
+	{
+		// Doors
+		snap.setCeilingMoverType(SEC_DOOR);		
+		snap.setCeilingType(static_cast<DDoor::EVlDoor>(MSG_ReadByte()));
+		snap.setCeilingHigh(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingSpeed(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingWait(MSG_ReadLong());
+		snap.setCeilingCounter(MSG_ReadLong());
+		snap.setCeilingStatus(MSG_ReadByte());
+		
+		int LineIndex = MSG_ReadLong();
 
-			break;
-		}
+		// If the moving sector's line is -1, it is likely a type 666 door
+		if (!lines || LineIndex >= numlines || LineIndex < 0)
+			snap.setCeilingLine(NULL);
+		else
+			snap.setCeilingLine(&lines[LineIndex]);
 	}
 
-	if(i == real_plats.Size())
-		real_plats.Push(pred);
+	if (ceiling_mover == SEC_ELEVATOR)
+    {
+		// Elevators
+		snap.setCeilingMoverType(SEC_ELEVATOR);			
+		snap.setFloorMoverType(SEC_ELEVATOR);	
+		snap.setCeilingType(static_cast<DElevator::EElevator>(MSG_ReadByte()));
+		snap.setFloorType(snap.getCeilingType());
+		snap.setCeilingStatus(MSG_ReadByte());
+		snap.setFloorStatus(snap.getCeilingStatus());
+		snap.setCeilingDirection(char(MSG_ReadByte()));
+		snap.setFloorDirection(snap.getCeilingDirection());
+		snap.setFloorDestination(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingDestination(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingSpeed(MSG_ReadShort() << FRACBITS);
+		snap.setFloorSpeed(snap.getCeilingSpeed());
+	}
+
+	if (ceiling_mover == SEC_PILLAR)
+	{
+		// Pillars
+		snap.setCeilingMoverType(SEC_PILLAR);		
+		snap.setFloorMoverType(SEC_PILLAR);		
+		snap.setCeilingType(static_cast<DPillar::EPillar>(MSG_ReadByte()));
+		snap.setFloorType(snap.getCeilingType());
+		snap.setCeilingStatus(MSG_ReadByte());
+		snap.setFloorStatus(snap.getCeilingStatus());		
+		snap.setFloorSpeed(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingSpeed(MSG_ReadShort() << FRACBITS);
+		snap.setFloorDestination(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingDestination(MSG_ReadShort() << FRACBITS);
+		snap.setCeilingCrush(MSG_ReadBool());
+		snap.setFloorCrush(snap.getCeilingCrush());
+	}
+	
+	if (!sectors || sectornum >= numsectors)
+		return;
+
+	snap.setSector(&sectors[sectornum]);
+	
+	sector_snaps[sectornum].addSnapshot(snap);
 }
 
 
@@ -2641,6 +2660,20 @@ void CL_ForceSetTeam (void)
 
 	if(t < NUMTEAMS || t == TEAM_NONE)
 		consoleplayer().userinfo.team = (team_t)t;
+
+	// Setting the cl_team will send a playerinfo packet back to the server.
+	// Unfortunately, this is unavoidable until we rework the team system.
+	switch (consoleplayer().userinfo.team) {
+	case TEAM_BLUE:
+		cl_team.Set("BLUE");
+		break;
+	case TEAM_RED:
+		cl_team.Set("RED");
+		break;
+	default:
+		cl_team.Set("NONE");
+		break;
+	}
 }
 
 //
@@ -2695,6 +2728,9 @@ void CL_MobjTranslation()
 	AActor *mo = P_FindThingById(MSG_ReadShort());
 	byte table = MSG_ReadByte();
 
+    if (!mo)
+        return;
+
 	mo->translation = translationtables + 256 * table;
 }
 
@@ -2745,6 +2781,11 @@ void CL_ActivateLine(void)
 		return;
 	}
 
+	// [SL] 2012-04-25 - Clients will receive updates for sectors so they do not
+	// need to create moving sectors on their own in response to svc_activateline
+	if (P_LineSpecialMovesSector(&lines[l]))
+		return;
+		
 	switch (activationType)
 	{
 	case 0:
@@ -2757,8 +2798,8 @@ void CL_ActivateLine(void)
 		P_ShootSpecialLine(mo, &lines[l], true);
 		break;
     case 3:
-        P_PushSpecialLine(mo, &lines[l], side, true);
-        break;
+		P_PushSpecialLine(mo, &lines[l], side, true);
+		break;
 	}
 }
 
@@ -2772,10 +2813,12 @@ void CL_LoadMap(void)
 {
 	const char *mapname = MSG_ReadString ();
 
-	bool splitnetdemo = netdemo.isRecording() && cl_splitnetdemos;
+	bool splitnetdemo = (netdemo.isRecording() && cl_splitnetdemos) || forcenetdemosplit;
+	forcenetdemosplit = false;
+	
 	if (splitnetdemo)
 		netdemo.stopRecording();
-
+	
 	if(gamestate == GS_DOWNLOAD)
 		return;
 
@@ -2784,15 +2827,16 @@ void CL_LoadMap(void)
 
 	G_InitNew (mapname);
 
-	real_plats.Clear();
-
+	movingsectors.clear();
 	teleported_players.clear();
-	
+
+	CL_ClearSectorSnapshots();	
 	for (size_t i = 0; i < players.size(); i++)
 		players[i].snapshots.clearSnapshots();
 		
 	// reset the world_index (force it to sync)
-	CL_ClearWorldIndexSync();
+	CL_ResyncWorldIndex();
+	last_svgametic = 0;
 
 	CTF_CheckFlags(consoleplayer());
 
@@ -2860,9 +2904,13 @@ EXTERN_CVAR (st_scale)
 void CL_Spectate()
 {
 	player_t &player = CL_FindPlayer(MSG_ReadByte());
-	
+
+	bool wasalive = !player.spectator && player.mo && player.mo->health > 0;
 	player.spectator = MSG_ReadByte();
-	
+
+	if (player.spectator && wasalive)
+		P_DisconnectEffect(player.mo);
+
 	if (&player == &consoleplayer()) {
 		st_scale.Callback (); // refresh status bar size
 		if (player.spectator) {
@@ -2875,10 +2923,15 @@ void CL_Spectate()
 			displayplayer_id = consoleplayer_id; // get out of spynext
 		}
 	}
-	
+
 	// GhostlyDeath -- If the player matches our display player...
 	if (&player == &displayplayer())
 		displayplayer_id = consoleplayer_id;
+}
+
+void CL_ReadyState() {
+	player_t &player = CL_FindPlayer(MSG_ReadByte());
+	player.ready = MSG_ReadBool();
 }
 
 // client source (once)
@@ -2916,6 +2969,7 @@ void CL_InitCommands(void)
 //	cmds[svc_spawnhiddenplayer]	= &CL_SpawnHiddenPlayer;
 	cmds[svc_damageplayer]		= &CL_DamagePlayer;
 	cmds[svc_firepistol]		= &CL_FirePistol;
+	cmds[svc_fireweapon]		= &CL_FireWeapon;
 
 	cmds[svc_fireshotgun]		= &CL_FireShotgun;
 	cmds[svc_firessg]			= &CL_FireSSG;
@@ -2959,7 +3013,8 @@ void CL_InitCommands(void)
 	cmds[svc_launcher_challenge]= &CL_Clear;
 	
 	cmds[svc_spectate]   		= &CL_Spectate;
-	
+	cmds[svc_readystate]		= &CL_ReadyState;
+
 	cmds[svc_touchspecial]      = &CL_TouchSpecialThing;
 
 	cmds[svc_netdemocap]        = &CL_LocalDemoTic;
@@ -3089,7 +3144,18 @@ void CL_SendCmd(void)
 	MSG_WriteShort(&net_buffer,	curcmd->ucmd.forwardmove);
 	MSG_WriteShort(&net_buffer,	curcmd->ucmd.sidemove);
 	MSG_WriteShort(&net_buffer,	curcmd->ucmd.upmove);
-	MSG_WriteByte(&net_buffer,	curcmd->ucmd.impulse);
+
+	// [SL] 2011-11-20 - Player isn't requesting a weapon change
+	// send player's weapon to server and server will correct it if wrong
+	if (!curcmd->ucmd.impulse && !(curcmd->ucmd.buttons & BT_CHANGE))
+	{
+		if (p->pendingweapon != wp_nochange)
+			MSG_WriteByte(&net_buffer, p->pendingweapon);
+		else
+			MSG_WriteByte(&net_buffer, p->readyweapon);
+	}
+	else
+		MSG_WriteByte(&net_buffer, curcmd->ucmd.impulse);
 
 #ifdef _UNLAG_DEBUG_
 	if 	(player.size() == 2 && 
@@ -3272,6 +3338,24 @@ void CL_LocalDemoTic()
 
 }
 
+void CL_RemoveCompletedMovingSectors()
+{
+	std::map<unsigned short, SectorSnapshotManager>::iterator itr;
+	itr = sector_snaps.begin();
+	
+	while (itr != sector_snaps.end())
+	{
+		SectorSnapshotManager *mgr = &(itr->second);
+		int time = mgr->getMostRecentTime();
+		
+		// are all the snapshots in the container invalid or too old?
+		if (world_index - time > NUM_SNAPSHOTS || mgr->empty())
+			sector_snaps.erase(itr++);
+		else
+			++itr;
+	}
+}
+
 CVAR_FUNC_IMPL (cl_interp)
 {
 	if (var < 0.0f)
@@ -3279,66 +3363,64 @@ CVAR_FUNC_IMPL (cl_interp)
 	if (var > 4.0f)
 		var.Set(4.0f);
 
-	// Resync the world index since the sync offset has changed		
-	world_index = CL_CalculateWorldIndexSync();
-	world_index_accum = 0.0f;
+	// Resync the world index since the sync offset has changed	
+	CL_ResyncWorldIndex();	
 	
 	netgraph.setInterpolation(var);
 }
 
 //
-// CL_SimulateWorld
+// CL_SimulateSectors
 //
-// 
-void CL_SimulateWorld()
+// Iterates through the list of moving sector snapshot containers
+// and loads the world_index snapshot for each sector that is not
+// currently being predicted.  Predicted sectors are handled elsewhere.
+//
+void CL_SimulateSectors()
 {
-	if (gamestate != GS_LEVEL || netdemo.isPaused())
-		return;
-		
-	// if the world_index falls outside this range, resync it
-	static const int MAX_BEHIND = 16;
-	static const int MAX_AHEAD = 16;
+	// Get rid of snapshots for sectors that are done moving
+	CL_RemoveCompletedMovingSectors();
 
-	int lower_sync_limit = CL_CalculateWorldIndexSync() - MAX_BEHIND;
-	int upper_sync_limit = CL_CalculateWorldIndexSync() + MAX_AHEAD;
-	
-	// Was the displayplayer just teleported?
-	bool continuous = displayplayer().snapshots.getSnapshot(world_index).isContinuous();
-	
-	// Reset the synchronization with the server if needed
-	if (world_index <= 0 || !continuous ||
-		world_index > upper_sync_limit || world_index < lower_sync_limit)
+	// Move sectors	
+	std::map<unsigned short, SectorSnapshotManager>::iterator itr;
+	for (itr = sector_snaps.begin(); itr != sector_snaps.end(); ++itr)
 	{
-		#ifdef _WORLD_INDEX_DEBUG_
-		std::string reason;
-		if (!continuous)
-			reason = "discontinuous";
-		else if (world_index > upper_sync_limit)
-			reason = "too far ahead of server";
-		else if (world_index < lower_sync_limit)
-			reason == "too far behind server";
+		unsigned short sectornum = itr->first;
+		if (sectornum >= numsectors)
+			continue;
 			
-		Printf(PRINT_HIGH, "Gametic %i, world_index %i, Resynching world index (%s).\n",
-			gametic, world_index, reason.c_str());
-		#endif // _WORLD_INDEX_DEBUG_
-		
-		world_index = CL_CalculateWorldIndexSync();
-		world_index_accum = 0.0f;
-	}
-	
-	// Not using interpolation?  Use the last update always
-	if (!cl_interp)
-		world_index = last_svgametic;
-		
-	#ifdef _WORLD_INDEX_DEBUG_
-	Printf(PRINT_HIGH, "Gametic %i, simulating world_index %i\n",
-		gametic, world_index);
-	#endif // _WORLD_INDEX_DEBUG_
+		sector_t *sector = &sectors[sectornum];
 
-	// [SL] 2012-03-29 - Add sync information to the netgraph
-	netgraph.setWorldIndexSync(world_index - (last_svgametic - cl_interp));
-	
-	// Move players
+		// will this sector be handled when predicting sectors?
+		if (CL_SectorIsPredicting(sector))
+			continue;
+
+		// Fetch the snapshot for this world_index and run the sector's
+		// thinkers to play any sector sounds
+		SectorSnapshot snap = itr->second.getSnapshot(world_index);
+		if (snap.isValid())
+		{
+			snap.toSector(sector);
+
+			if (sector->ceilingdata)
+				sector->ceilingdata->RunThink();
+			if (sector->floordata && sector->ceilingdata != sector->floordata)
+				sector->floordata->RunThink();
+
+			snap.toSector(sector);
+		}				
+	}
+}
+
+//
+// CL_SimulatePlayers()
+//
+// Iterates through the players vector and loads the world_index snapshot
+// for all players except consoleplayer, as this is handled by the prediction
+// functions.
+//
+void CL_SimulatePlayers()
+{
 	for (size_t i = 0; i < players.size(); i++)
 	{
 		player_t *player = &players[i];
@@ -3346,7 +3428,7 @@ void CL_SimulateWorld()
 			continue;
 		
 		// Consoleplayer is handled in CL_PredictWorld
-		if (player->id == consoleplayer().id)
+		if (player->id == consoleplayer_id)
 			continue;
 		
 		PlayerSnapshot snap = player->snapshots.getSnapshot(world_index);
@@ -3379,22 +3461,77 @@ void CL_SimulateWorld()
 			snap.toPlayer(player);
 		}
 	}
+}
+
+
+//
+// CL_SimulateWorld
+//
+// Maintains synchronization with the server by manipulating world_index.
+// Loads snapshots for all moving sectors and players for the server gametic
+// denoted by world_index.
+//
+void CL_SimulateWorld()
+{
+	if (gamestate != GS_LEVEL || netdemo.isPaused())
+		return;
+		
+	// if the world_index falls outside this range, resync it
+	static const int MAX_BEHIND = 16;
+	static const int MAX_AHEAD = 16;
+
+	int lower_sync_limit = CL_CalculateWorldIndexSync() - MAX_BEHIND;
+	int upper_sync_limit = CL_CalculateWorldIndexSync() + MAX_AHEAD;
+	
+	// Was the displayplayer just teleported?
+	bool continuous = displayplayer().snapshots.getSnapshot(world_index).isContinuous();
+	
+	// Reset the synchronization with the server if needed
+	if (world_index <= 0 || !continuous ||
+		world_index > upper_sync_limit || world_index < lower_sync_limit)
+	{
+		#ifdef _WORLD_INDEX_DEBUG_
+		std::string reason;
+		if (!continuous)
+			reason = "discontinuous";
+		else if (world_index > upper_sync_limit)
+			reason = "too far ahead of server";
+		else if (world_index < lower_sync_limit)
+			reason == "too far behind server";
+			
+		Printf(PRINT_HIGH, "Gametic %i, world_index %i, Resynching world index (%s).\n",
+			gametic, world_index, reason.c_str());
+		#endif // _WORLD_INDEX_DEBUG_
+		
+		CL_ResyncWorldIndex();
+	}
+	
+	// Not using interpolation?  Use the last update always
+	if (!cl_interp)
+		world_index = last_svgametic;
+		
+	#ifdef _WORLD_INDEX_DEBUG_
+	Printf(PRINT_HIGH, "Gametic %i, simulating world_index %i\n",
+		gametic, world_index);
+	#endif // _WORLD_INDEX_DEBUG_
+
+	// [SL] 2012-03-29 - Add sync information to the netgraph
+	netgraph.setWorldIndexSync(world_index - (last_svgametic - cl_interp));
+
+	CL_SimulateSectors();
+	CL_SimulatePlayers();		
 
 	// [SL] 2012-03-17 - Try to maintain sync with the server by gradually
 	// slowing down or speeding up world_index
-	world_index_accum += float(last_svgametic - cl_interp - world_index) / float(MAX_AHEAD);
-	int drift_correction = int(world_index_accum + 0.5f);	// round
+	int drift_correction = CL_CalculateWorldIndexDriftCorrection();
 	
 	#ifdef _WORLD_INDEX_DEBUG_
 	if (drift_correction != 0)
 		Printf(PRINT_HIGH, "Gametic %i, increasing world index by %i.\n",
 				gametic, drift_correction);
 	#endif // _WORLD_INDEX_DEBUG_
-	
-	// [SL] 2012-04-06 - Sync correction still needs work.  Just increment index by 1 for now
-	drift_correction = 0;
-	
-	world_index += 1 + drift_correction;
+
+	world_index = world_index + 1 + drift_correction;
 }
 
 void OnChangedSwitchTexture (line_t *line, int useAgain) {}

@@ -20,7 +20,7 @@
 //	AUTHOR:	Russell Rice, John D Corrado
 //
 //-----------------------------------------------------------------------------
-
+#include <iostream>
 
 #include "dlg_main.h"
 #include "query_thread.h"
@@ -40,6 +40,7 @@
 #include <wx/iconbndl.h>
 #include <wx/regex.h>
 #include <wx/process.h>
+#include <wx/xrc/xmlres.h>
 
 #ifdef __WXMSW__
     #include <windows.h>
@@ -81,14 +82,14 @@ BEGIN_EVENT_TABLE(dlgMain, wxFrame)
 
     EVT_MENU(XRCID("Id_MnuItmDownloadWad"), dlgMain::OnOpenOdaGet)
 
-	EVT_MENU(XRCID("Id_MnuItmSettings"), dlgMain::OnOpenSettingsDialog)
+	EVT_MENU(wxID_PREFERENCES, dlgMain::OnOpenSettingsDialog)
 
 	EVT_MENU(XRCID("Id_MnuItmVisitWebsite"), dlgMain::OnOpenWebsite)
 	EVT_MENU(XRCID("Id_MnuItmVisitForum"), dlgMain::OnOpenForum)
 	EVT_MENU(XRCID("Id_MnuItmVisitWiki"), dlgMain::OnOpenWiki)
     EVT_MENU(XRCID("Id_MnuItmViewChangelog"), dlgMain::OnOpenChangeLog)
     EVT_MENU(XRCID("Id_MnuItmSubmitBugReport"), dlgMain::OnOpenReportBug)
-	EVT_MENU(XRCID("Id_MnuItmAboutOdamex"), dlgMain::OnAbout)
+	EVT_MENU(wxID_ABOUT, dlgMain::OnAbout)
 
 	EVT_SHOW(dlgMain::OnShow)
 	EVT_CLOSE(dlgMain::OnClose)
@@ -133,6 +134,26 @@ dlgMain::dlgMain(wxWindow* parent, wxWindowID id)
 
     SetLabel(Version);
 
+    #ifdef __WXMAC__
+    {
+        // Remove the file menu on Mac as it will be empty
+        wxMenu* fileMenu = GetMenuBar()->Remove(GetMenuBar()->FindMenu(_("File")));
+        if(fileMenu)
+        {
+            wxMenuItem* prefMenuItem = fileMenu->Remove(wxID_PREFERENCES);
+            wxMenu* helpMenu = GetMenuBar()->GetMenu(GetMenuBar()->FindMenu(_("Help")));
+
+            // Before deleting the file menu the preferences menu item must be moved or
+            // it will not work after this even though it has been placed somewhere else.
+            // Attaching it to the help menu is the only way to not duplicate it as Help is
+            // a special menu just as Preferences is a special menu itme.
+            if(helpMenu)
+                helpMenu->Append(prefMenuItem);
+
+            delete fileMenu;
+        }
+    }
+    #endif
 
     launchercfg_s.get_list_on_start = 1;
     launchercfg_s.show_blocked_servers = 0;
@@ -221,7 +242,7 @@ void dlgMain::OnWindowCreate(wxWindowCreateEvent &event)
         Move(WindowPosX, WindowPosY);
 
     // Set whether this window is maximized or not
-    ConfigInfo.Read(wxT("MainWindowMaximized"), &WindowMaximized, true);
+    ConfigInfo.Read(wxT("MainWindowMaximized"), &WindowMaximized, false);
 
     Maximize(WindowMaximized);
 }
@@ -1013,8 +1034,7 @@ wxInt32 dlgMain::GetSelectedServerListIndex()
         return -1;
     }
 
-    i = m_LstCtrlServers->GetNextItem(-1, wxLIST_NEXT_ALL,
-        wxLIST_STATE_SELECTED);
+    i = m_LstCtrlServers->GetFirstSelected();
 
     return i;
 }
@@ -1031,7 +1051,7 @@ wxInt32 dlgMain::GetSelectedServerArrayIndex()
         return -1;
 
     item.SetId(i);
-    item.SetColumn(7);
+    item.SetColumn(serverlist_field_address);
     item.SetMask(wxLIST_MASK_TEXT);
 
     m_LstCtrlServers->GetItem(item);

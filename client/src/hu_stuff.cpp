@@ -262,8 +262,24 @@ void HU_Drawer (void)
 		static const char *prompt;
 		int i, x, c, y, promptwidth;
 
-		y = (!viewactive ? -30 : -10) * scaledyfac;
-		y += (screen->height == realviewheight && viewactive) ? screen->height : ST_Y;
+		// Determine what Y height to display the chat prompt at.
+		// * screen->height is the "actual" screen height.
+		// * realviewheight is how big the view is, taking into account the
+		//   status bar and current "screen size".
+		// * viewactive is false if you have a fullscreen automap or
+		//   intermission on-screen.
+		// * ST_Y is the current Y height of the status bar.
+
+		if (!viewactive && gamestate != GS_INTERMISSION) {
+			// Fullscreen automap is visible
+			y = ST_Y - (20 * scaledyfac);
+		} else if (viewactive && screen->height != realviewheight) {
+			// Status bar is visible
+			y = ST_Y - (10 * scaledyfac);
+		} else {
+			// Must be fullscreen HUD or intermission
+			y = screen->height - (10 * scaledyfac);
+		}
 
 		if (headsupactive == 2)
 			prompt = "Say (TEAM): ";
@@ -1017,11 +1033,11 @@ void drawLowTeamScores(player_t *player, int y, byte extra_rows) {
 	              hud::X_CENTER, hud::Y_MIDDLE,
 	              hud::X_LEFT, hud::Y_TOP,
 	              "Name", CR_GREY, true);
-	hud::DrawText(-17, y, hud_scalescoreboard,
-	              hud::X_CENTER, hud::Y_MIDDLE,
-	              hud::X_RIGHT, hud::Y_TOP,
-	              "PPL", CR_GREY, true);
 	if (sv_gametype == GM_CTF) {
+		hud::DrawText(34, y, hud_scalescoreboard,
+		              hud::X_CENTER, hud::Y_MIDDLE,
+		              hud::X_RIGHT, hud::Y_TOP,
+		              "PPL", CR_GREY, true);
 		hud::DrawText(62, y, hud_scalescoreboard,
 		              hud::X_CENTER, hud::Y_MIDDLE,
 		              hud::X_RIGHT, hud::Y_TOP,
@@ -1031,6 +1047,10 @@ void drawLowTeamScores(player_t *player, int y, byte extra_rows) {
 		              hud::X_RIGHT, hud::Y_TOP,
 		              "FRG", CR_GREY, true);
 	} else {
+		hud::DrawText(22, y, hud_scalescoreboard,
+		              hud::X_CENTER, hud::Y_MIDDLE,
+		              hud::X_RIGHT, hud::Y_TOP,
+		              "PPL", CR_GREY, true);
 		hud::DrawText(50, y, hud_scalescoreboard,
 		              hud::X_CENTER, hud::Y_MIDDLE,
 		              hud::X_RIGHT, hud::Y_TOP,
@@ -1084,11 +1104,11 @@ void drawLowTeamScores(player_t *player, int y, byte extra_rows) {
 		              hud::X_CENTER, hud::Y_MIDDLE,
 		              hud::X_LEFT, hud::Y_TOP,
 		              str.c_str(), color, true);
-		hud::DrawText(-17, y + ty[i] + 3, hud_scalescoreboard,
-		              hud::X_CENTER, hud::Y_MIDDLE,
-		              hud::X_RIGHT, hud::Y_TOP,
-		              TeamPlayers(color, i).c_str(), color, true);
 		if (sv_gametype == GM_CTF) {
+			hud::DrawText(34, y + ty[i] + 3, hud_scalescoreboard,
+			              hud::X_CENTER, hud::Y_MIDDLE,
+			              hud::X_RIGHT, hud::Y_TOP,
+			              TeamPlayers(color, i).c_str(), color, true);
 			hud::DrawText(62, y + ty[i] + 3, hud_scalescoreboard,
 			              hud::X_CENTER, hud::Y_MIDDLE,
 			              hud::X_RIGHT, hud::Y_TOP,
@@ -1099,6 +1119,10 @@ void drawLowTeamScores(player_t *player, int y, byte extra_rows) {
 			              hud::X_RIGHT, hud::Y_TOP,
 			              str.c_str(), color, true);
 		} else {
+			hud::DrawText(22, y + ty[i] + 3, hud_scalescoreboard,
+			              hud::X_CENTER, hud::Y_MIDDLE,
+			              hud::X_RIGHT, hud::Y_TOP,
+			              TeamPlayers(color, i).c_str(), color, true);
 			hud::DrawText(50, y + ty[i] + 3, hud_scalescoreboard,
 			              hud::X_CENTER, hud::Y_MIDDLE,
 			              hud::X_RIGHT, hud::Y_TOP,

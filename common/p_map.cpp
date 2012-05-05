@@ -1341,34 +1341,51 @@ void P_ApplyTorque (AActor *mo)
 //
 BOOL P_ThingHeightClip (AActor* thing)
 {
+	if (!thing)
+		return true;
+		
+	AActor *other = P_CheckOnmobj(thing);
+	
 	// [SL] 2012-02-04 - Changed to <= instead of == to account for imprecise
 	// slope plane calculations
 	bool onfloor = (thing->z <= thing->floorz);
 
-    P_CheckPosition (thing, thing->x, thing->y);
-    // what about stranding a monster partially off an edge?
+	P_CheckPosition (thing, thing->x, thing->y);
+	// what about stranding a monster partially off an edge?
 
-    thing->floorz = tmfloorz;
-    thing->ceilingz = tmceilingz;
-    thing->dropoffz = tmdropoffz;
-    thing->floorsector = tmfloorsector;
+	thing->floorz = tmfloorz;
+	thing->ceilingz = tmceilingz;
+	thing->dropoffz = tmdropoffz;
+	thing->floorsector = tmfloorsector;
 
-    if (onfloor)
-    {
-        // walking monsters rise and fall with the floor
-        thing->z = thing->floorz;
-    }
-    else
-    {
-        // don't adjust a floating monster unless forced to
-        if (thing->z+thing->height > thing->ceilingz)
-            thing->z = thing->ceilingz - thing->height;
-    }
+	if (co_realactorheight && other)
+	{
+		// standing on another actor
+		thing->z = other->z + other->height;	
 
-    if (thing->ceilingz - thing->floorz < thing->height)
-        return false;
+		if (thing->ceilingz - thing->z < thing->height)
+			return false;
+			
+		return true;
+	}
+	
+	if (onfloor)
+	{
+		// walking monsters rise and fall with the floor
+		thing->z = thing->floorz;
+	}
+	else
+	{
+		// don't adjust a floating monster unless forced to
+		if (thing->z+thing->height > thing->ceilingz)
+			thing->z = thing->ceilingz - thing->height;
+	}
 
-    return true;
+	// thing won't fit
+	if (thing->ceilingz - thing->floorz < thing->height)
+		return false;
+
+	return true;
 }
 
 
@@ -3004,6 +3021,9 @@ BOOL PIT_ChangeSector (AActor *thing)
 
 bool P_ChangeSector (sector_t *sector, bool crunch)
 {
+	if (!sector)
+		return true;
+
 	int x, y;
 
 	nofit = false;
@@ -3045,6 +3065,9 @@ msecnode_t *P_GetSecnode()
 
 void P_PutSecnode (msecnode_t *node)
 {
+	if (!node)
+		return;
+
 	node->m_snext = headsecnode;
 	headsecnode = node;
 }
@@ -3058,6 +3081,9 @@ void P_PutSecnode (msecnode_t *node)
 
 msecnode_t *P_AddSecnode (sector_t *s, AActor *thing, msecnode_t *nextnode)
 {
+	if (!s)
+		return NULL;
+
 	msecnode_t *node;
 
 	node = nextnode;
@@ -3623,6 +3649,80 @@ fixed_t P_HighestHeightOfFloor(sector_t *sector)
 	}
 
 	return height;
+}
+
+//
+// P_CopySector
+//
+void P_CopySector(sector_t *dest, sector_t *src)
+{
+	if (!dest || !src)
+		return;
+		
+	dest->floorheight			= src->floorheight;
+	dest->ceilingheight			= src->ceilingheight;
+	dest->floorpic				= src->floorpic;
+	dest->ceilingpic			= src->ceilingpic;
+	dest->lightlevel			= src->lightlevel;
+	dest->special				= src->special;
+	dest->tag					= src->tag;
+	dest->nexttag				= src->nexttag;
+	dest->firsttag				= src->firsttag;
+	dest->soundtraversed		= src->soundtraversed;
+	dest->validcount			= src->validcount;
+	dest->seqType				= src->seqType;
+	dest->sky					= src->sky;
+	dest->friction				= src->friction;
+	dest->movefactor			= src->movefactor;
+	dest->moveable				= src->moveable;
+	dest->stairlock				= src->stairlock;
+	dest->prevsec				= src->prevsec;
+	dest->floor_xoffs			= src->floor_xoffs;
+	dest->floor_yoffs			= src->floor_yoffs;	
+	dest->ceiling_xoffs			= src->ceiling_xoffs;
+	dest->ceiling_yoffs			= src->ceiling_yoffs;
+	dest->floor_xscale			= src->floor_xscale;
+	dest->floor_yscale			= src->floor_yscale;
+	dest->ceiling_xscale		= src->ceiling_xscale;
+	dest->ceiling_yscale		= src->ceiling_yscale;
+	dest->floor_angle			= src->floor_angle;
+	dest->ceiling_angle			= src->ceiling_angle;
+	dest->base_floor_angle		= src->base_floor_angle;	
+	dest->base_ceiling_angle	= src->base_ceiling_angle;
+	dest->base_floor_yoffs		= src->base_floor_yoffs;
+	dest->base_ceiling_yoffs	= src->base_ceiling_yoffs;
+	dest->bottommap				= src->bottommap;
+	dest->midmap				= src->midmap;
+	dest->topmap				= src->topmap;
+	dest->gravity				= src->gravity;
+	dest->damage				= src->damage;
+	dest->mod					= src->mod;
+	dest->floorcolormap			= src->floorcolormap;
+	dest->ceilingcolormap		= src->ceilingcolormap;
+	dest->alwaysfake			= src->alwaysfake;
+	dest->waterzone				= src->waterzone;
+	dest->MoreFlags				= src->MoreFlags;
+	
+	dest->heightsec				= src->heightsec;
+	dest->floorlightsec			= src->floorlightsec;
+	dest->ceilinglightsec		= src->ceilinglightsec;
+	
+	dest->linecount				= src->linecount;
+	dest->lines					= src->lines;
+		
+	memcpy(dest->blockbox, src->blockbox, sizeof(src->blockbox));
+	memcpy(dest->soundorg, src->soundorg, sizeof(src->soundorg));
+	
+	dest->floorplane			= src->floorplane;
+	dest->ceilingplane			= src->ceilingplane;
+	
+	dest->touching_thinglist	= src->touching_thinglist;
+	dest->thinglist				= src->thinglist;
+	dest->soundtarget			= src->soundtarget;
+	
+	dest->ceilingdata			= src->ceilingdata;
+	dest->floordata				= src->floordata;
+	dest->lightingdata			= src->lightingdata;
 }
 
 

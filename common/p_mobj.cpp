@@ -110,6 +110,7 @@ AActor::AActor () :
     touching_sectorlist(NULL), deadtic(0), oldframe(0), rndindex(0), netid(0),
     tid(0)
 {
+	memset(args, 0, sizeof(args));
 	self.init(this);
 }
 
@@ -132,6 +133,7 @@ AActor::AActor (const AActor &other) :
     deadtic(other.deadtic), oldframe(other.oldframe),
     rndindex(other.rndindex), netid(other.netid), tid(other.tid)
 {
+	memcpy(args, other.args, sizeof(args));
 	self.init(this);
 }
 
@@ -191,6 +193,7 @@ AActor &AActor::operator= (const AActor &other)
     netid = other.netid;
     tid = other.tid;
     special = other.special;
+    memcpy(args, other.args, sizeof(args));
 
 	return *this;
 }
@@ -280,6 +283,8 @@ AActor::AActor (fixed_t ix, fixed_t iy, fixed_t iz, mobjtype_t itype) :
 	{
 		z = iz;
 	}
+	
+	memset(args, 0, sizeof(args));
 }
 
 //
@@ -1444,16 +1449,16 @@ void PlayerLandedOnThing(AActor *mo, AActor *onmobj)
 		if (mo->health > 0)
 		{
 			if (mo->momz < (fixed_t)(level.gravity * mo->subsector->sector->gravity * -983.04f))
-				UV_SoundAvoidPlayer(mo, CHAN_VOICE, "player/male/grunt1", ATTN_NORM);
+				UV_SoundAvoidPlayer(mo, CHAN_VOICE, "player/male/land1", ATTN_NORM);
 
 			if (onmobj != NULL)
-				UV_SoundAvoidPlayer(mo, CHAN_VOICE, "player/male/grunt1", ATTN_NORM);
+				UV_SoundAvoidPlayer(mo, CHAN_VOICE, "player/male/land1", ATTN_NORM);
 		}
 	}
 	else
 	{
 		// [SL] 2011-06-16 - Vanilla Doom Oomphiness
-		UV_SoundAvoidPlayer(mo, CHAN_VOICE, "player/male/grunt1", ATTN_NORM);
+		UV_SoundAvoidPlayer(mo, CHAN_VOICE, "player/male/land1", ATTN_NORM);
 	}
 //	mo->player->centering = true;
 }

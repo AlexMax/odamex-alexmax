@@ -232,6 +232,9 @@ public:
 	int timeout_callvote;       // [AM] Tic when a vote last finished.
 	int timeout_vote;           // [AM] Tic when a player last voted.
 
+	bool ready;                 // [AM] Player is ready.
+	int timeout_ready;          // [AM] Tic when a player last toggled his ready state.
+
     int			prefcolor;			// Nes - Preferred color. Server only.
 	float		BlendR;		        // [RH] Final blending values
 	float		BlendG;
@@ -424,7 +427,6 @@ typedef struct wbstartstruct_s
 
 	std::vector<wbplayerstruct_s> plyr;
 } wbstartstruct_t;
-
 
 #endif // __D_PLAYER_H__
 

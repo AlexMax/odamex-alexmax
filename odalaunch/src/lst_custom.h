@@ -31,10 +31,10 @@
 #include <wx/image.h>
 #include <wx/imaglist.h>
 
-class wxAdvancedListCtrl : public wxListCtrl
+class wxAdvancedListCtrl : public wxListView
 {      
     public:
-        wxAdvancedListCtrl() { };
+        wxAdvancedListCtrl();
         virtual ~wxAdvancedListCtrl() { };
         
         void SetSortColumnAndOrder(wxInt32 &Column, wxInt32 &Order)
@@ -49,6 +49,11 @@ class wxAdvancedListCtrl : public wxListCtrl
         {
             Column = SortCol;
             Order = SortOrder;
+        }
+
+        void SetSortColumnIsSpecial(const wxInt32 &Column)
+        {
+            m_SpecialColumn = Column;
         }
 
         void Sort();
@@ -77,6 +82,8 @@ class wxAdvancedListCtrl : public wxListCtrl
 
         wxColour ItemShade;
         wxColour BgColor;
+
+        wxInt32 m_SpecialColumn;
         
     protected:               
         DECLARE_DYNAMIC_CLASS(wxAdvancedListCtrl)

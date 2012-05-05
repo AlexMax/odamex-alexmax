@@ -99,7 +99,6 @@ EXTERN_CVAR(sv_website)
 EXTERN_CVAR(sv_waddownload)
 EXTERN_CVAR(sv_maxrate)
 EXTERN_CVAR(sv_emptyreset)
-EXTERN_CVAR(sv_emptyfreeze)
 EXTERN_CVAR(sv_clientcount)
 EXTERN_CVAR(sv_globalspectatorchat)
 EXTERN_CVAR(sv_allowtargetnames)
@@ -267,7 +266,6 @@ client_c clients;
 
 QWORD gametime;
 
-void SV_SendPlayerInfo(player_t &player);
 void SV_UpdateConsolePlayer(player_t &player);
 
 void SV_CheckTeam (player_t & playernum);
@@ -534,12 +532,7 @@ void SV_RemoveDisconnectedPlayer(player_t &player)
 	AActor *mo;
 	TThinkerIterator<AActor> iterator;
 	while ( (mo = iterator.Next() ) )
-	{
-		mo->players_aware.erase(
-				std::remove(mo->players_aware.begin(),
-							mo->players_aware.end(), player.id),
-				mo->players_aware.end());
-	}
+		mo->players_aware.unset(player.id);
 
 	// remove this player's actor object
 	if (player.mo)
@@ -612,6 +605,16 @@ void SV_GetPackets (void)
 		else
 			i++;
 	}
+
+	// [SL] 2011-05-18 - Handle sv_emptyreset
+	static size_t last_player_count = players.size();
+	if (sv_emptyreset && players.empty() &&
+		last_player_count > 0 && gamestate == GS_LEVEL)
+	{
+		// The last player just disconnected so reset the level
+        G_DeferedInitNew(level.mapname);
+    }
+	last_player_count = players.size();
 }
 
 
@@ -1241,14 +1244,13 @@ bool SV_AwarenessUpdate(player_t &player, AActor *mo)
          ((HasBehavior && P_CheckSightEdges2(player.mo, mo, 5)) || (!HasBehavior && P_CheckSightEdges(player.mo, mo, 5)))/*player.awaresector[sectors - mo->subsector->sector]*/)
 		ok = true;
 
-	std::vector<size_t>::iterator a = std::find(mo->players_aware.begin(), mo->players_aware.end(), player.id);
-	bool previously_ok = (a != mo->players_aware.end());
-
+	bool previously_ok = mo->players_aware.get(player.id);
+	
 	client_t *cl = &player.client;
 
 	if(!ok && previously_ok)
 	{
-		mo->players_aware.erase(a);
+		mo->players_aware.unset(player.id);
 
 		MSG_WriteMarker (&cl->reliablebuf, svc_removemobj);
 		MSG_WriteShort (&cl->reliablebuf, mo->netid);
@@ -1257,7 +1259,7 @@ bool SV_AwarenessUpdate(player_t &player, AActor *mo)
 	}
 	else if(!previously_ok && ok)
 	{
-		mo->players_aware.push_back(player.id);
+		mo->players_aware.set(player.id);
 
 		if(!mo->player || mo->player->playerstate != PST_LIVE)
 		{
@@ -1310,7 +1312,7 @@ bool SV_IsPlayerAllowedToSee(player_t &p, AActor *mo)
 	if (mo->flags & MF_SPECTATOR)
 		return false; // GhostlyDeath -- always false, as usual!
 	else
-		return std::find(mo->players_aware.begin(), mo->players_aware.end(), p.id) != mo->players_aware.end();
+		return mo->players_aware.get(p.id);
 }
 
 #define HARDWARE_CAPABILITY 1000
@@ -1363,43 +1365,18 @@ void SV_UpdateHiddenMobj (void)
 //
 void SV_UpdateSectors(client_t* cl)
 {
-	for (int s=0; s<numsectors; s++)
+	for (int sectornum = 0; sectornum < numsectors; sectornum++)
 	{
-		sector_t* sec = &sectors[s];
+		sector_t* sector = &sectors[sectornum];
 
-		if (sec->moveable)
+		if (sector->moveable)
 		{
-			MSG_WriteMarker (&cl->reliablebuf, svc_sector);
-			MSG_WriteShort (&cl->reliablebuf, s);
-			MSG_WriteShort (&cl->reliablebuf, P_FloorHeight(sec)>>FRACBITS);
-			MSG_WriteShort (&cl->reliablebuf, P_CeilingHeight(sec)>>FRACBITS);
-			MSG_WriteShort (&cl->reliablebuf, sec->floorpic);
-			MSG_WriteShort (&cl->reliablebuf, sec->ceilingpic);
-
-			/*if(sec->floordata->IsKindOf(RUNTIME_CLASS(DMover)))
-			{
-				DMover *d = sec->floordata;
-				MSG_WriteByte(&cl->netbuf, 1);
-				MSG_WriteByte(&cl->netbuf, d->get_speed());
-				MSG_WriteByte(&cl->netbuf, d->get_dest());
-				MSG_WriteByte(&cl->netbuf, d->get_crush());
-				MSG_WriteByte(&cl->netbuf, d->get_floorOrCeiling());
-				MSG_WriteByte(&cl->netbuf, d->get_direction());
-			}
-			else
-				MSG_WriteByte(&cl->netbuf, 0);
-
-			if(sec->ceilingdata->IsKindOf(RUNTIME_CLASS(DMover)))
-			{
-				MSG_WriteByte(&cl->netbuf, 1);
-				MSG_WriteByte(&cl->netbuf, d->get_speed());
-				MSG_WriteByte(&cl->netbuf, d->get_dest());
-				MSG_WriteByte(&cl->netbuf, d->get_crush());
-				MSG_WriteByte(&cl->netbuf, d->get_floorOrCeiling());
-				MSG_WriteByte(&cl->netbuf, d->get_direction());
-			}
-			else
-				MSG_WriteByte(&cl->netbuf, 0);*/
+			MSG_WriteMarker(&cl->reliablebuf, svc_sector);
+			MSG_WriteShort(&cl->reliablebuf, sectornum);
+			MSG_WriteShort(&cl->reliablebuf, P_FloorHeight(sector) >> FRACBITS);
+			MSG_WriteShort(&cl->reliablebuf, P_CeilingHeight(sector) >> FRACBITS);
+			MSG_WriteShort(&cl->reliablebuf, sector->floorpic);
+			MSG_WriteShort(&cl->reliablebuf, sector->ceilingpic);
 		}
 	}
 }
@@ -1411,186 +1388,197 @@ void SV_UpdateSectors(client_t* cl)
 //
 void SV_DestroyFinishedMovingSectors()
 {
-	for (int i = 0; i < numsectors; i++)
+	std::list<movingsector_t>::iterator itr;
+	itr = movingsectors.begin();
+	
+	while (itr != movingsectors.end())
 	{
-		if (sectors[i].floordata &&
-			sectors[i].floordata->IsA(RUNTIME_CLASS(DPlat)))
+		sector_t *sector = itr->sector;
+		
+		if (P_MovingCeilingCompleted(sector))
 		{
-			DPlat *plat = (DPlat *)sectors[i].floordata;
-			if (plat->m_Status == DPlat::destroy)
-			{
-				sectors[i].floordata = NULL;
-				plat->Destroy();
-			}
+			itr->moving_ceiling = false;
+			if (sector->ceilingdata)
+				sector->ceilingdata->Destroy();
+			sector->ceilingdata = NULL;
+		}
+		if (P_MovingFloorCompleted(sector))
+		{
+			itr->moving_floor = false;
+			if (sector->floordata)
+				sector->floordata->Destroy();
+			sector->floordata = NULL;
 		}
 
-		if (sectors[i].ceilingdata &&
-			sectors[i].ceilingdata->IsA(RUNTIME_CLASS(DDoor)))
-		{
-			DDoor *door = (DDoor *)sectors[i].ceilingdata;
-			if (door->m_Status == DDoor::destroy)
-			{
-				sectors[i].ceilingdata = NULL;
-				door->Destroy();
-			}
-		}
+		if (!itr->moving_ceiling && !itr->moving_floor)
+			movingsectors.erase(itr++);
+		else
+			++itr;
 	}
 }
+
+//
+// SV_SendMovingSectorUpdate
+//
+// 
+void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
+{
+	if (!sector || !validplayer(player))
+		return;
+
+	int sectornum = sector - sectors;
+	if (sectornum < 0 || sectornum >= numsectors)
+		return;
+		
+	buf_t *netbuf = &(player.client.netbuf);
+    
+	// Determine which moving planes are in this sector
+	movertype_t floor_mover = SEC_INVALID, ceiling_mover = SEC_INVALID;
+
+	if (sector->ceilingdata && sector->ceilingdata->IsA(RUNTIME_CLASS(DCeiling)))
+		ceiling_mover = SEC_CEILING;
+	if (sector->ceilingdata && sector->ceilingdata->IsA(RUNTIME_CLASS(DDoor)))
+		ceiling_mover = SEC_DOOR;
+	if (sector->floordata && sector->floordata->IsA(RUNTIME_CLASS(DFloor)))
+		floor_mover = SEC_FLOOR;
+	if (sector->floordata && sector->floordata->IsA(RUNTIME_CLASS(DPlat)))
+		floor_mover = SEC_PLAT;
+	if (sector->ceilingdata && sector->ceilingdata->IsA(RUNTIME_CLASS(DElevator)))
+	{
+		ceiling_mover = SEC_ELEVATOR;
+		floor_mover = SEC_INVALID;
+	}
+	if (sector->ceilingdata && sector->ceilingdata->IsA(RUNTIME_CLASS(DPillar)))
+	{
+		ceiling_mover = SEC_PILLAR;
+		floor_mover = SEC_INVALID;
+	}
+
+	// no moving planes?  skip it.
+	if (ceiling_mover == SEC_INVALID && floor_mover == SEC_INVALID)
+		return;
+
+	// Create bitfield to denote moving planes in this sector
+	byte movers = byte(ceiling_mover) | (byte(floor_mover) << 4);
+				
+	MSG_WriteMarker(netbuf, svc_movingsector);
+	MSG_WriteShort(netbuf, sectornum);
+	MSG_WriteShort(netbuf, P_CeilingHeight(sector) >> FRACBITS);
+	MSG_WriteShort(netbuf, P_FloorHeight(sector) >> FRACBITS);
+	MSG_WriteByte(netbuf, movers);
+
+	if (ceiling_mover == SEC_ELEVATOR)
+	{
+		DElevator *Elevator = (DElevator *)sector->ceilingdata;
+
+        MSG_WriteByte(netbuf, Elevator->m_Type);
+        MSG_WriteByte(netbuf, Elevator->m_Status);
+        MSG_WriteByte(netbuf, Elevator->m_Direction);
+        MSG_WriteShort(netbuf, Elevator->m_FloorDestHeight >> FRACBITS);
+        MSG_WriteShort(netbuf, Elevator->m_CeilingDestHeight >> FRACBITS);
+        MSG_WriteShort(netbuf, Elevator->m_Speed >> FRACBITS);
+	}
+	
+	if (ceiling_mover == SEC_PILLAR)
+	{
+		DPillar *Pillar = (DPillar *)sector->ceilingdata;
+
+        MSG_WriteByte(netbuf, Pillar->m_Type);
+        MSG_WriteByte(netbuf, Pillar->m_Status);
+        MSG_WriteShort(netbuf, Pillar->m_FloorSpeed >> FRACBITS);
+        MSG_WriteShort(netbuf, Pillar->m_CeilingSpeed >> FRACBITS);
+        MSG_WriteShort(netbuf, Pillar->m_FloorTarget >> FRACBITS);
+        MSG_WriteShort(netbuf, Pillar->m_CeilingTarget >> FRACBITS);
+        MSG_WriteBool(netbuf, Pillar->m_Crush);
+	}
+
+	if (ceiling_mover == SEC_CEILING)
+	{
+		DCeiling *Ceiling = (DCeiling *)sector->ceilingdata;
+		
+        MSG_WriteByte(netbuf, Ceiling->m_Type);
+        MSG_WriteShort(netbuf, Ceiling->m_BottomHeight >> FRACBITS);
+        MSG_WriteShort(netbuf, Ceiling->m_TopHeight >> FRACBITS);
+        MSG_WriteShort(netbuf, Ceiling->m_Speed >> FRACBITS);
+        MSG_WriteShort(netbuf, Ceiling->m_Speed1 >> FRACBITS);
+        MSG_WriteShort(netbuf, Ceiling->m_Speed2 >> FRACBITS);
+        MSG_WriteBool(netbuf, Ceiling->m_Crush);
+        MSG_WriteBool(netbuf, Ceiling->m_Silent);
+        MSG_WriteByte(netbuf, Ceiling->m_Direction);
+        MSG_WriteShort(netbuf, Ceiling->m_Texture);
+        MSG_WriteShort(netbuf, Ceiling->m_NewSpecial);
+        MSG_WriteShort(netbuf, Ceiling->m_Tag);
+        MSG_WriteByte(netbuf, Ceiling->m_OldDirection);
+	}
+
+	if (ceiling_mover == SEC_DOOR)
+	{
+		DDoor *Door = (DDoor *)sector->ceilingdata;
+
+        MSG_WriteByte(netbuf, Door->m_Type);
+        MSG_WriteShort(netbuf, Door->m_TopHeight >> FRACBITS);
+        MSG_WriteShort(netbuf, Door->m_Speed >> FRACBITS);
+        MSG_WriteLong(netbuf, Door->m_TopWait);
+        MSG_WriteLong(netbuf, Door->m_TopCountdown);
+		MSG_WriteByte(netbuf, Door->m_Status);
+		// Check for an invalid m_Line (doors triggered by tag 666)
+        MSG_WriteLong(netbuf, Door->m_Line ? (Door->m_Line - lines) : -1);
+	}
+
+	if (floor_mover == SEC_FLOOR)
+	{
+		DFloor *Floor = (DFloor *)sector->floordata;
+
+        MSG_WriteByte(netbuf, Floor->m_Type);
+        MSG_WriteByte(netbuf, Floor->m_Status);
+        MSG_WriteBool(netbuf, Floor->m_Crush);
+        MSG_WriteByte(netbuf, Floor->m_Direction);
+        MSG_WriteShort(netbuf, Floor->m_NewSpecial);
+        MSG_WriteShort(netbuf, Floor->m_Texture);
+        MSG_WriteShort(netbuf, Floor->m_FloorDestHeight >> FRACBITS);
+        MSG_WriteShort(netbuf, Floor->m_Speed >> FRACBITS);
+        MSG_WriteLong(netbuf, Floor->m_ResetCount);
+        MSG_WriteShort(netbuf, Floor->m_OrgHeight >> FRACBITS);
+        MSG_WriteLong(netbuf, Floor->m_Delay);
+        MSG_WriteLong(netbuf, Floor->m_PauseTime);
+        MSG_WriteLong(netbuf, Floor->m_StepTime);
+        MSG_WriteLong(netbuf, Floor->m_PerStepTime);
+        MSG_WriteShort(netbuf, Floor->m_Height >> FRACBITS);
+        MSG_WriteByte(netbuf, Floor->m_Change);
+		MSG_WriteLong(netbuf, Floor->m_Line ? (Floor->m_Line - lines) : -1);
+	}
+
+	if (floor_mover == SEC_PLAT)
+	{
+		DPlat *Plat = (DPlat *)sector->floordata;
+
+        MSG_WriteShort(netbuf, Plat->m_Speed >> FRACBITS);
+        MSG_WriteShort(netbuf, Plat->m_Low >> FRACBITS);
+        MSG_WriteShort(netbuf, Plat->m_High >> FRACBITS);
+        MSG_WriteLong(netbuf, Plat->m_Wait);
+        MSG_WriteLong(netbuf, Plat->m_Count);
+        MSG_WriteByte(netbuf, Plat->m_Status);
+        MSG_WriteByte(netbuf, Plat->m_OldStatus);
+        MSG_WriteBool(netbuf, Plat->m_Crush);
+        MSG_WriteShort(netbuf, Plat->m_Tag);
+        MSG_WriteByte(netbuf, Plat->m_Type);
+        MSG_WriteShort(netbuf, Plat->m_Height >> FRACBITS);
+        MSG_WriteShort(netbuf, Plat->m_Lip >> FRACBITS);
+	}
+}	
 
 //
 // SV_UpdateMovingSectors
 // Update doors, floors, ceilings etc... that are actively moving
 //
-void SV_UpdateMovingSectors(player_t &pl)
+void SV_UpdateMovingSectors(player_t &player)
 {
-    client_t *cl = &pl.client;
-
-	for (int s = 0; s < numsectors; ++s)
+	std::list<movingsector_t>::iterator itr;
+	for (itr = movingsectors.begin(); itr != movingsectors.end(); ++itr)
 	{
-        sector_t* sec = &sectors[s];
-
-        if (sec->floordata)
-        {
-            if(sec->floordata->IsA(RUNTIME_CLASS(DElevator)))
-            {
-				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
-				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
-				MSG_WriteShort (&cl->netbuf, s);
-				MSG_WriteLong (&cl->netbuf, P_FloorHeight(sec));
-                MSG_WriteLong (&cl->netbuf, P_CeilingHeight(sec));
-                MSG_WriteByte (&cl->netbuf, 4);
-
-				DElevator *Elevator = (DElevator *)sec->floordata;
-
-                MSG_WriteLong (&cl->netbuf, Elevator->m_Type);
-                MSG_WriteLong (&cl->netbuf, Elevator->m_Direction);
-                MSG_WriteLong (&cl->netbuf, Elevator->m_FloorDestHeight);
-                MSG_WriteLong (&cl->netbuf, Elevator->m_CeilingDestHeight);
-                MSG_WriteLong (&cl->netbuf, Elevator->m_Speed);
-            }
-            else
-            if(sec->floordata->IsA(RUNTIME_CLASS(DPillar)))
-            {
-				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
-				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
-				MSG_WriteShort (&cl->netbuf, s);
-				MSG_WriteLong (&cl->netbuf, P_FloorHeight(sec));
-                MSG_WriteLong (&cl->netbuf, P_CeilingHeight(sec));
-                MSG_WriteByte (&cl->netbuf, 5);
-
-				DPillar *Pillar = (DPillar *)sec->floordata;
-
-                MSG_WriteLong (&cl->netbuf, Pillar->m_Type);
-                MSG_WriteLong (&cl->netbuf, Pillar->m_FloorSpeed);
-                MSG_WriteLong (&cl->netbuf, Pillar->m_CeilingSpeed);
-                MSG_WriteLong (&cl->netbuf, Pillar->m_FloorTarget);
-                MSG_WriteLong (&cl->netbuf, Pillar->m_CeilingTarget);
-                MSG_WriteBool (&cl->netbuf, Pillar->m_Crush);
-            }
-        }
-
-		if(sec->floordata)
-		{
-			if(sec->floordata->IsA(RUNTIME_CLASS(DFloor)))
-			{
-				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
-				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
-				MSG_WriteShort (&cl->netbuf, s);
-				MSG_WriteLong (&cl->netbuf, P_FloorHeight(sec));
-                MSG_WriteLong (&cl->netbuf, P_CeilingHeight(sec));
-                MSG_WriteByte (&cl->netbuf, 0);
-
-				DFloor *Floor = (DFloor *)sec->floordata;
-
-                MSG_WriteLong(&cl->netbuf, Floor->m_Type);
-                MSG_WriteBool(&cl->netbuf, Floor->m_Crush);
-                MSG_WriteLong(&cl->netbuf, Floor->m_Direction);
-                MSG_WriteShort(&cl->netbuf, Floor->m_NewSpecial);
-                MSG_WriteShort(&cl->netbuf, Floor->m_Texture);
-                MSG_WriteLong(&cl->netbuf, Floor->m_FloorDestHeight);
-                MSG_WriteLong(&cl->netbuf, Floor->m_Speed);
-                MSG_WriteLong(&cl->netbuf, Floor->m_ResetCount);
-                MSG_WriteLong(&cl->netbuf, Floor->m_OrgHeight);
-                MSG_WriteLong(&cl->netbuf, Floor->m_Delay);
-                MSG_WriteLong(&cl->netbuf, Floor->m_PauseTime);
-                MSG_WriteLong(&cl->netbuf, Floor->m_StepTime);
-                MSG_WriteLong(&cl->netbuf, Floor->m_PerStepTime);
-			}
-			else
-			if(sec->floordata->IsA(RUNTIME_CLASS(DPlat)))
-			{
-				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
-				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
-				MSG_WriteShort (&cl->netbuf, s);
-				MSG_WriteLong (&cl->netbuf, P_FloorHeight(sec));
-                MSG_WriteLong (&cl->netbuf, P_CeilingHeight(sec));
-                MSG_WriteByte (&cl->netbuf, 1);
-
-				DPlat *Plat = (DPlat *)sec->floordata;
-
-                MSG_WriteLong(&cl->netbuf, Plat->m_Speed);
-                MSG_WriteLong(&cl->netbuf, Plat->m_Low);
-                MSG_WriteLong(&cl->netbuf, Plat->m_High);
-                MSG_WriteLong(&cl->netbuf, Plat->m_Wait);
-                MSG_WriteLong(&cl->netbuf, Plat->m_Count);
-                MSG_WriteLong(&cl->netbuf, Plat->m_Status);
-                MSG_WriteLong(&cl->netbuf, Plat->m_OldStatus);
-                MSG_WriteBool(&cl->netbuf, Plat->m_Crush);
-                MSG_WriteLong(&cl->netbuf, Plat->m_Tag);
-                MSG_WriteLong(&cl->netbuf, Plat->m_Type);
-			}
-		}
-
-		if (sec->ceilingdata)
-        {
-            if(sec->ceilingdata->IsA(RUNTIME_CLASS(DCeiling)))
-            {
-				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
-				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
-				MSG_WriteShort (&cl->netbuf, s);
-				MSG_WriteLong (&cl->netbuf, P_FloorHeight(sec));
-                MSG_WriteLong (&cl->netbuf, P_CeilingHeight(sec));
-                MSG_WriteByte (&cl->netbuf, 2);
-
-				DCeiling *Ceiling = (DCeiling *)sec->ceilingdata;
-
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_Type);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_BottomHeight);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_TopHeight);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_Speed);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_Speed1);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_Speed2);
-                MSG_WriteBool (&cl->netbuf, Ceiling->m_Crush);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_Silent);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_Direction);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_Texture);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_NewSpecial);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_Tag);
-                MSG_WriteLong (&cl->netbuf, Ceiling->m_OldDirection);
-            }
-            else
-            if(sec->ceilingdata->IsA(RUNTIME_CLASS(DDoor)))
-            {
-				MSG_WriteMarker (&cl->netbuf, svc_movingsector);
-				MSG_WriteLong (&cl->netbuf, cl->lastclientcmdtic);
-				MSG_WriteShort (&cl->netbuf, s);
-				MSG_WriteLong (&cl->netbuf, P_FloorHeight(sec));
-                MSG_WriteLong (&cl->netbuf, P_CeilingHeight(sec));
-                MSG_WriteByte (&cl->netbuf, 3);
-
-				DDoor *Door = (DDoor *)sec->ceilingdata;
-
-                MSG_WriteLong (&cl->netbuf, Door->m_Type);
-                MSG_WriteLong (&cl->netbuf, Door->m_TopHeight);
-                MSG_WriteLong (&cl->netbuf, Door->m_Speed);
-                MSG_WriteLong (&cl->netbuf, Door->m_Direction);
-                MSG_WriteLong (&cl->netbuf, Door->m_TopWait);
-                MSG_WriteLong (&cl->netbuf, Door->m_TopCountdown);
-				MSG_WriteLong (&cl->netbuf, Door->m_Status);
-				// Check for an invalid m_Line (doors triggered by tag 666)
-                MSG_WriteLong (&cl->netbuf, Door->m_Line ? (Door->m_Line - lines) : -1);
-            }
-        }
+		sector_t *sector = itr->sector;
+		
+		SV_SendMovingSectorUpdate(player, sector);
 	}
 }
 
@@ -1632,7 +1620,7 @@ void SV_ClientFullUpdate (player_t &pl)
 				return;
 	}
 
-	// update frags/points/spectate
+	// update frags/points/spectate/ready
 	for (i = 0; i < players.size(); i++)
 	{
 		if (!players[i].ingame())
@@ -1650,6 +1638,10 @@ void SV_ClientFullUpdate (player_t &pl)
 		MSG_WriteMarker (&cl->reliablebuf, svc_spectate);
 		MSG_WriteByte (&cl->reliablebuf, players[i].id);
 		MSG_WriteByte (&cl->reliablebuf, players[i].spectator);
+
+		MSG_WriteMarker (&cl->reliablebuf, svc_readystate);
+		MSG_WriteByte (&cl->reliablebuf, players[i].id);
+		MSG_WriteByte (&cl->reliablebuf, players[i].ready);
 	}
 
 	// [deathz0r] send team frags/captures if teamplay is enabled
@@ -2060,11 +2052,14 @@ void SV_ConnectClient (void)
 	// send a map name
 	MSG_WriteMarker   (&cl->reliablebuf, svc_loadmap);
 	MSG_WriteString (&cl->reliablebuf, level.mapname);
-	G_DoReborn (players[n]);
-	SV_ClientFullUpdate (players[n]);
+
 	// [SL] 2011-12-07 - Force the player to jump to intermission if not in a level
 	if (gamestate == GS_INTERMISSION)
 		MSG_WriteMarker(&cl->reliablebuf, svc_exitlevel);
+
+	G_DoReborn (players[n]);
+	SV_ClientFullUpdate (players[n]);
+
 	MSG_WriteMarker(&cl->reliablebuf, svc_fullupdatedone);
 	SV_SendPacket (players[n]);
 
@@ -2866,22 +2861,6 @@ void SV_RemoveCorpses (void)
 	}
 }
 
-
-void SV_SendCurrentWeapon(player_t *player)
-{
-	if (!player)
-		return;
-
-	buf_t *netbuffer = &player->client.reliablebuf;
-	struct pspdef_s *psp = &player->psprites[player->psprnum];
-
-	MSG_WriteMarker(netbuffer, svc_changeweapon);
-	MSG_WriteLong(netbuffer, player->tic);
-	MSG_WriteByte(netbuffer, static_cast<byte>(player->readyweapon));
-	MSG_WriteShort(netbuffer, psp->state - states); 
-	MSG_WriteByte(netbuffer, psp->tics);
-}
-
 //
 // SV_SendPingRequest
 // Pings the client and requests a reply
@@ -3126,16 +3105,16 @@ int SV_CalculateNumTiccmds(player_t &player)
 		// Player is not moving
 		return 2 * minimum_cmds;
 	}
-	if (!P_VisibleToPlayers(player.mo) && P_AtInterval(TICRATE/2))
-	{
-		// Every half second, run two commands if no one can see this player
-		return 2 * minimum_cmds;
-	}
 	if (player.cmds.size() > maximum_queue_size)
 	{
 		// The player experienced a large latency spike so try to catch up by
 		// processing more than one ticcmd at the expense of appearing perfectly
 		//  smooth
+		return 2 * minimum_cmds;
+	}
+	if (P_AtInterval(TICRATE/2) && !P_VisibleToPlayers(player.mo))
+	{
+		// Every half second, run two commands if no one can see this player
 		return 2 * minimum_cmds;
 	}
 
@@ -3211,19 +3190,6 @@ void SV_ProcessPlayerCmd(player_t &player)
 		if (ucmd->buttons & BT_ATTACK)
 		{
 			Unlag::getInstance().setRoundtripDelay(player.id, player.cmds.front().svgametic);
-
-			// Handle the client holding the wrong weapon
-			if (ucmd->impulse >= 25 && ucmd->impulse < 25 + NUMWEAPONS)
-			{
-				weapontype_t clientweapon =
-					static_cast<weapontype_t>(ucmd->impulse - 25);
-				if (player.readyweapon != clientweapon)
-				{
-					SV_SendPlayerInfo(player);
-					SV_SendCurrentWeapon(&player);
-				}
-					
-			}
 		}
 
 		// Apply this ticcmd using the game logic
@@ -3337,7 +3303,7 @@ void SV_UpdateConsolePlayer(player_t &player)
 
     MSG_WriteByte (&cl->netbuf, mo->waterlevel);
 
-    SV_UpdateMovingSectors(player); // denis - fixme - todo - only info about the sector player is standing on info should be sent. note that this is not player->mo->subsector->sector
+    SV_UpdateMovingSectors(player);
 }
 
 //
@@ -3547,6 +3513,73 @@ BEGIN_COMMAND (forcespec) {
 	player_t &player = idplayer(pid);
 	SV_SetPlayerSpec(player, true);
 } END_COMMAND (forcespec)
+
+// Change the player's ready state and broadcast it to all connected players.
+void SV_SetReady(player_t &player, bool setting, bool silent)
+{
+	if (!validplayer(player) || !player.ingame())
+		return;
+
+	// Change the player's ready state only if the new state is different from
+	// the current state.
+	bool changed = true;
+	if (player.ready && !setting) {
+		player.ready = false;
+		if (!silent) {
+			SV_PlayerPrintf(PRINT_HIGH, player.id, "You are no longer ready.\n");
+		}
+	} else if (!player.ready && setting) {
+		player.ready = true;
+		if (!silent) {
+			SV_PlayerPrintf(PRINT_HIGH, player.id, "You are now ready.\n");
+		}
+	} else {
+		changed = false;
+	}
+
+	if (changed) {
+		// Broadcast the new ready state to all connected players.
+		for (size_t j = 0;j < players.size();j++) {
+			MSG_WriteMarker(&(players[j].client.reliablebuf), svc_readystate);
+			MSG_WriteByte(&(players[j].client.reliablebuf), player.id);
+			MSG_WriteBool(&(players[j].client.reliablebuf), setting);
+		}
+	}
+}
+
+void SV_Ready(player_t &player)
+{
+	// If the player is not ingame, he shouldn't be sending us ready packets.
+	if (!player.ingame()) {
+		return;
+	}
+
+	if (player.timeout_ready > level.time) {
+		// We must be on a new map.  Reset the timeout.
+		player.timeout_ready = 0;
+	}
+
+	// Check to see if the player's timeout has expired.
+	if (player.timeout_ready > 0) {
+		int timeout = level.time - player.timeout_ready;
+
+		// Players can only toggle their ready state every 3 seconds.
+		int timeout_check = 3 * TICRATE;
+		int timeout_waitsec = 3 - (timeout / TICRATE);
+
+		if (timeout < timeout_check) {
+			SV_PlayerPrintf(PRINT_HIGH, player.id, "Please wait another %d second%s to change your ready state.\n",
+			                timeout_waitsec, timeout_waitsec != 1 ? "s" : "");
+			return;
+		}
+	}
+
+	// Set the timeout.
+	player.timeout_ready = level.time;
+
+	// Toggle ready state
+	SV_SetReady(player, !player.ready);
+}
 
 //
 // SV_RConLogout
@@ -3765,6 +3798,9 @@ void SV_WantWad(player_t &player)
 //
 // SV_ParseCommands
 //
+
+void SV_SendPlayerInfo(player_t &player);
+
 void SV_ParseCommands(player_t &player)
 {
 	 while(validplayer(player))
@@ -3782,6 +3818,10 @@ void SV_ParseCommands(player_t &player)
 
 		case clc_userinfo:
 			SV_SetupUserInfo(player);
+			break;
+
+		case clc_getplayerinfo:
+			SV_SendPlayerInfo (player);
 			break;
 
 		case clc_say:
@@ -3836,6 +3876,10 @@ void SV_ParseCommands(player_t &player)
             {
                 SV_Spectate (player);
             }
+			break;
+
+		case clc_ready:
+			SV_Ready(player);
 			break;
 
 		case clc_kill:
@@ -4125,28 +4169,6 @@ void SV_GameTics (void)
 	SV_UpdateMaster();
 }
 
-//
-// SV_SetMoveableSectors
-//
-void SV_SetMoveableSectors()
-{
-	// [csDoom] if the floor or the ceiling of a sector is moving,
-	// mark it as moveable
-	for (int i=0; i<numsectors; i++)
-	{
-		sector_t* sec = &sectors[i];
-
- 		if ((sec->ceilingdata && sec->ceilingdata->IsKindOf (RUNTIME_CLASS(DMover)))
- 		|| (sec->floordata && sec->floordata->IsKindOf (RUNTIME_CLASS(DMover))))
-		{
- 			sec->moveable = true;
-			// [SL] 2011-05-11 - Register this sector as a moveable sector with the
-			// reconciliation system for unlagging
-			Unlag::getInstance().registerSector(sec);
-		}
-	}
-}
-
 void SV_TouchSpecial(AActor *special, player_t *player)
 {
     client_t *cl = &player->client;
@@ -4168,7 +4190,6 @@ void SV_StepTics (QWORD tics)
 	// run the newtime tics
 	while (tics--)
 	{
-		SV_SetMoveableSectors();
 		C_Ticker ();
 
 		SV_GameTics ();
@@ -4217,25 +4238,10 @@ void SV_RunTics (void)
 		}
 	}
 
-	// Check if the level should be reset
-	static size_t previous_player_count = 0;
-	if (sv_emptyreset && players.empty() && 
-		previous_player_count > 0 && gamestate == GS_LEVEL)
+	if(newtics > 0 && !step_mode)
 	{
-		// The last player just disconnected so reset the level
-		G_DeferedInitNew(level.mapname);
-	} 
-	previous_player_count = players.size();
-
-	// Run the tickers if there are players or we're starting a new level
-	if (!(sv_emptyfreeze && players.empty() && gamestate == GS_LEVEL) || 
-		gameaction == ga_newgame)
-	{
-		if(newtics > 0 && !step_mode)
-		{
-			SV_StepTics(newtics);
-			gametime = nowtime;
-		}
+		SV_StepTics(newtics);
+		gametime = nowtime;
 	}
 
 	// wait until a network message arrives or next tick starts
@@ -4529,11 +4535,8 @@ void ClientObituary (AActor *self, AActor *inflictor, AActor *attacker)
 		if (messagenum)
 			message = GStrings(messagenum);
 	}
-	
-	if (!attacker)
-		return;
 
-	if (message)
+	if (message && attacker && attacker->player)
 	{
 		SexMessage (message, gendermessage, gender,
 			self->player->userinfo.netname, attacker->player->userinfo.netname);
@@ -4545,6 +4548,7 @@ void ClientObituary (AActor *self, AActor *inflictor, AActor *attacker)
 		self->player->userinfo.netname, self->player->userinfo.netname);
 	SV_BroadcastPrintf (PRINT_MEDIUM, "%s\n", gendermessage);
 }
+
 void SV_SendDamagePlayer(player_t *player, int damage)
 {
 	for (size_t i=0; i < players.size(); i++)
@@ -4635,15 +4639,18 @@ void SV_SendDestroyActor(AActor *mo)
 {
 	if (mo->netid && mo->type != MT_PUFF)
 	{
-		for (size_t i = 0; i < mo->players_aware.size(); i++)
+		for (size_t i = 0; i < players.size(); i++)
 		{
-			client_t *cl = &idplayer(mo->players_aware[i]).client;
+			if (mo->players_aware.get(players[i].id))
+			{
+				client_t *cl = &players[i].client;
 
-            // denis - todo - need a queue for destroyed (lost awareness)
-            // objects, as a flood of destroyed things could easily overflow a
-            // buffer
-			MSG_WriteMarker(&cl->reliablebuf, svc_removemobj);
-			MSG_WriteShort(&cl->reliablebuf, mo->netid);
+            	// denis - todo - need a queue for destroyed (lost awareness)
+            	// objects, as a flood of destroyed things could easily overflow a
+            	// buffer
+				MSG_WriteMarker(&cl->reliablebuf, svc_removemobj);
+				MSG_WriteShort(&cl->reliablebuf, mo->netid);			
+			}
 		}
 	}
 

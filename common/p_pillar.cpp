@@ -29,9 +29,27 @@
 #include "g_level.h"
 #include "s_sound.h"
 
+extern bool predicting;
+
+void P_SetPillarDestroy(DPillar *pillar)
+{
+	if (!pillar)
+		return;
+
+	pillar->m_Status = DPillar::destroy;
+	
+	if (clientside && pillar->m_Sector)
+	{
+		pillar->m_Sector->ceilingdata = NULL;
+		pillar->m_Sector->floordata = NULL;		
+		pillar->Destroy();
+	}
+}
+
 IMPLEMENT_SERIAL (DPillar, DMover)
 
-DPillar::DPillar ()
+DPillar::DPillar () :
+	m_Status(init)
 {
 }
 
@@ -41,6 +59,7 @@ void DPillar::Serialize (FArchive &arc)
 	if (arc.IsStoring ())
 	{
 		arc << m_Type
+			<< m_Status
 			<< m_FloorSpeed
 			<< m_CeilingSpeed
 			<< m_FloorTarget
@@ -50,12 +69,24 @@ void DPillar::Serialize (FArchive &arc)
 	else
 	{
 		arc >> m_Type
+			>> m_Status
 			>> m_FloorSpeed
 			>> m_CeilingSpeed
 			>> m_FloorTarget
 			>> m_CeilingTarget
 			>> m_Crush;
 	}
+}
+
+void DPillar::PlayPillarSound()
+{
+	if (predicting || !m_Sector)
+		return;
+	
+	if (m_Status == init)
+		S_Sound(m_Sector->soundorg, CHAN_BODY, "plats/pt1_mid", 1, ATTN_NORM);
+	else if (m_Status == finished)
+		S_StopSound(m_Sector->soundorg);
 }
 
 void DPillar::RunThink ()
@@ -75,14 +106,15 @@ void DPillar::RunThink ()
 
 	if (r == pastdest && s == pastdest)
 	{
-		S_StopSound (m_Sector->soundorg);
-		Destroy ();
+		m_Status = finished;
+		PlayPillarSound();
+		P_SetPillarDestroy(this);
 	}
 }
 
 DPillar::DPillar (sector_t *sector, EPillar type, fixed_t speed,
 				  fixed_t height, fixed_t height2, bool crush)
-	: DMover (sector)
+	: DMover (sector), m_Status(init)
 {
 	fixed_t	ceilingdist, floordist;
 
@@ -150,7 +182,7 @@ DPillar::DPillar (sector_t *sector, EPillar type, fixed_t speed,
 		m_FloorSpeed = FixedDiv (FixedMul (speed, floordist), ceilingdist);
 	}
 
-	S_Sound (sector->soundorg, CHAN_BODY, "plats/pt1_mid", 1, ATTN_NORM);
+	PlayPillarSound();
 }
 
 BOOL EV_DoPillar (DPillar::EPillar type, int tag, fixed_t speed, fixed_t height,
@@ -176,6 +208,7 @@ BOOL EV_DoPillar (DPillar::EPillar type, int tag, fixed_t speed, fixed_t height,
 
 		rtn = true;
 		new DPillar (sec, type, speed, height, height2, crush);
+		P_AddMovingCeiling(sec);
 	}
 	return rtn;
 }

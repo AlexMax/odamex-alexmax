@@ -902,6 +902,7 @@ void InitNetMessageFormats()
       MSG(clc_callvote,           "x"),
       MSG(clc_vote,               "x"),
       MSG(clc_maplist,            "x"),
+      MSG(clc_getplayerinfo,      "x"),
       MSG(clc_launcher_challenge, "x"),
       MSG(clc_challenge,          "x")
    };
@@ -1045,8 +1046,8 @@ bool NetWaitOrTimeout(size_t ms)
 			Printf(PRINT_HIGH, "select returned SOCKET_ERROR: %d\n", WSAGetLastError());
 	#else
 		// handle -1
-		if(ret < 0)
-			Printf(PRINT_HIGH, "select returned %d: %d\n", ret, errno);
+		if(ret == -1 && ret != EINTR)
+			Printf(PRINT_HIGH, "select returned -1: %s\n", strerror(errno));
 	#endif
 
 	return false;

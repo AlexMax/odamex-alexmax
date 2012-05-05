@@ -28,6 +28,7 @@
 #include	"p_local.h"
 #include	"p_inter.h"
 #include	"p_ctf.h"
+#include	"p_mobj.h"
 #include    "st_stuff.h"
 
 flagdata CTFdata[NUMFLAGS];
@@ -252,7 +253,9 @@ void CTF_MoveFlags ()
 
 void TintScreen(int color)
 {
-	if (screenblocks < 11)
+	// draw border around the screen excluding the status bar
+	// NOTE: status bar is not currently drawn when spectating
+	if (screenblocks < 11 && !consoleplayer().spectator)
 	{
 			screen->Clear (0,
 						   0,
@@ -278,6 +281,8 @@ void TintScreen(int color)
 						   screen->height - ST_HEIGHT,
 						   color);
 	}
+
+	// if there's no status bar, draw border around the full screen
 	else
 	{
 			screen->Clear (0,
@@ -392,6 +397,50 @@ void CTF_DrawHud (void)
 	}
 }
 
+FArchive &operator<< (FArchive &arc, flagdata &flag)
+{
+	int netid = flag.actor ? flag.actor->netid : 0;
+	
+	arc << flag.flaglocated
+		<< netid
+		<< flag.flagger
+		<< flag.pickup_time
+		<< flag.x << flag.y << flag.z
+		<< flag.timeout
+		<< static_cast<byte>(flag.state)
+		<< flag.sb_tick;
+		
+	arc << 0;
+
+	return arc;
+}
+
+FArchive &operator>> (FArchive &arc, flagdata &flag)
+{
+	int netid;
+	byte state;
+	int dummy;
+	
+	arc >> flag.flaglocated
+		>> netid
+		>> flag.flagger
+		>> flag.pickup_time
+		>> flag.x >> flag.y >> flag.z
+		>> flag.timeout
+		>> state
+		>> flag.sb_tick;
+		
+	arc >> dummy;
+	
+	flag.state = static_cast<flag_state_t>(state);
+	AActor *mo = P_FindThingById(netid);
+	if (mo)
+		flag.actor = mo->ptr();
+	else
+		flag.actor = AActor::AActorPtr();
+	
+	return arc;
+}
 
 VERSION_CONTROL (cl_ctf_cpp, "$Id$")
 

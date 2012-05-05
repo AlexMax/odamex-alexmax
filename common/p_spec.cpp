@@ -46,9 +46,11 @@
 #include "r_local.h"
 #include "p_local.h"
 #include "p_lnspec.h"
+#include "p_spec.h"
 #include "p_acs.h"
 
 #include "g_game.h"
+#include "p_unlag.h"
 
 #include "s_sound.h"
 #include "sc_man.h"
@@ -60,6 +62,191 @@
 
 // [RH] Needed for sky scrolling
 #include "r_sky.h"
+
+std::list<movingsector_t> movingsectors;
+
+//
+// P_FindMovingSector
+//
+std::list<movingsector_t>::iterator P_FindMovingSector(sector_t *sector)
+{
+	std::list<movingsector_t>::iterator itr;
+	for (itr = movingsectors.begin(); itr != movingsectors.end(); ++itr)
+		if (sector == itr->sector)
+			return itr;
+	
+	// not found
+	return movingsectors.end();
+}
+
+//
+// P_AddMovingCeiling
+//
+// Updates the movingsectors list to include the passed sector, which
+// tracks which sectors currently have a moving ceiling/floor
+//
+void P_AddMovingCeiling(sector_t *sector)
+{
+	if (!sector)
+		return;
+		
+	movingsector_t *movesec;
+	
+	// Check if this already exists
+	std::list<movingsector_t>::iterator itr = P_FindMovingSector(sector);
+	if (itr != movingsectors.end())
+	{
+		// this sector already is moving
+		movesec = &(*itr);
+	}
+	else
+	{
+		movingsectors.push_back(movingsector_t());	
+		movesec = &(movingsectors.back());
+	}
+	
+	movesec->sector = sector;
+	movesec->moving_ceiling = true;
+
+	sector->moveable = true;
+	// [SL] 2012-05-04 - Register this sector as a moveable sector with the
+	// reconciliation system for unlagging
+	Unlag::getInstance().registerSector(sector);
+}
+
+//
+// P_AddMovingFloor
+//
+// Updates the movingsectors list to include the passed sector, which
+// tracks which sectors currently have a moving ceiling/floor
+//
+void P_AddMovingFloor(sector_t *sector)
+{
+	if (!sector)
+		return;
+		
+	movingsector_t *movesec;
+	
+	// Check if this already exists
+	std::list<movingsector_t>::iterator itr = P_FindMovingSector(sector);
+	if (itr != movingsectors.end())
+	{
+		// this sector already is moving
+		movesec = &(*itr);
+	}
+	else
+	{
+		movingsectors.push_back(movingsector_t());	
+		movesec = &(movingsectors.back());
+	}
+	
+	movesec->sector = sector;
+	movesec->moving_floor = true;
+
+	sector->moveable = true;
+	// [SL] 2012-05-04 - Register this sector as a moveable sector with the
+	// reconciliation system for unlagging
+	Unlag::getInstance().registerSector(sector);
+}
+
+//
+// P_RemoveMovingCeiling
+//
+// Removes the passed sector from the movingsectors list, which tracks
+// which sectors currently have a moving ceiling/floor
+//
+void P_RemoveMovingCeiling(sector_t *sector)
+{
+	if (!sector)
+		return;
+		
+	std::list<movingsector_t>::iterator itr = P_FindMovingSector(sector);
+	if (itr != movingsectors.end())	
+	{
+		itr->moving_ceiling = false;
+
+		// Does this sector have a moving floor as well?  If so, just
+		// mark the ceiling as invalid but don't remove from the list
+		if (!itr->moving_floor)
+			movingsectors.erase(itr);
+			
+		return;
+	}
+}
+
+//
+// P_RemoveMovingFloor
+//
+// Removes the passed sector from the movingsectors list, which tracks
+// which sectors currently have a moving ceiling/floor
+//
+void P_RemoveMovingFloor(sector_t *sector)
+{
+	if (!sector)
+		return;
+		
+	std::list<movingsector_t>::iterator itr = P_FindMovingSector(sector);
+	if (itr != movingsectors.end())	
+	{
+		itr->moving_floor = false;
+
+		// Does this sector have a moving ceiling as well?  If so, just
+		// mark the floor as invalid but don't remove from the list
+		if (!itr->moving_ceiling)
+			movingsectors.erase(itr);
+			
+		return;
+	}
+}
+
+bool P_MovingCeilingCompleted(sector_t *sector)
+{
+	if (!sector || !sector->ceilingdata)
+		return true;
+	
+	if (sector->ceilingdata->IsA(RUNTIME_CLASS(DDoor)))
+	{
+		DDoor *door = static_cast<DDoor *>(sector->ceilingdata);
+		return (door->m_Status == DDoor::destroy);
+	}
+	if (sector->ceilingdata->IsA(RUNTIME_CLASS(DCeiling)))
+	{
+		DCeiling *ceiling = static_cast<DCeiling *>(sector->ceilingdata);
+		return (ceiling->m_Status == DCeiling::destroy);
+	}
+	if (sector->ceilingdata->IsA(RUNTIME_CLASS(DPillar)))
+	{
+		DPillar *pillar = static_cast<DPillar *>(sector->ceilingdata);
+		return (pillar->m_Status == DPillar::destroy);	
+	}
+	if (sector->ceilingdata->IsA(RUNTIME_CLASS(DElevator)))
+	{
+		DElevator *elevator = static_cast<DElevator *>(sector->ceilingdata);
+		return (elevator->m_Status == DElevator::destroy);	
+	}
+		
+	return false;
+}
+
+bool P_MovingFloorCompleted(sector_t *sector)
+{
+	if (!sector || !sector->floordata)
+		return true;
+	
+	if (sector->floordata->IsA(RUNTIME_CLASS(DPlat)))
+	{
+		DPlat *plat = static_cast<DPlat *>(sector->floordata);
+		return (plat->m_Status == DPlat::destroy);
+	}
+	if (sector->floordata->IsA(RUNTIME_CLASS(DFloor)))
+	{
+		DFloor *floor = static_cast<DFloor *>(sector->floordata);
+		return (floor->m_Status == DFloor::destroy);
+	}
+	
+	return false;
+}
+
 
 EXTERN_CVAR (sv_allowexit)
 extern bool	HasBehavior;
@@ -542,32 +729,30 @@ fixed_t P_FindHighestFloorSurrounding (sector_t *sec)
 fixed_t P_FindNextHighestFloor (sector_t *sec)
 {
 	sector_t *other;
-	fixed_t height, heightdiff = MAXINT;
-	height = P_FloorHeight(sec->lines[0]->v1->x, sec->lines[0]->v1->y, sec);	
+	fixed_t ogheight = P_FloorHeight(sec);
+	fixed_t height = MAXINT;
 
     for (int i = 0; i < sec->linecount; i++)
     {
 		if (NULL != (other = getNextSector(sec->lines[i], sec)))
         {
-			fixed_t ofloor = P_FloorHeight(sec->lines[i]->v1->x, sec->lines[i]->v1->y, other);
-			fixed_t floor = P_FloorHeight(sec->lines[i]->v1->x, sec->lines[i]->v1->y, sec);
-			
-			if (ofloor > floor && ofloor - floor < heightdiff)
-			{
-				heightdiff = ofloor - floor;
+        	vertex_t *v = sec->lines[i]->v1;
+			fixed_t ofloor = P_FloorHeight(v->x, v->y, other);
+
+			if (ofloor < height && ofloor > ogheight)
 				height = ofloor;
-			}
 
-			ofloor = P_FloorHeight(sec->lines[i]->v2->x, sec->lines[i]->v2->y, other);
-			floor = P_FloorHeight(sec->lines[i]->v2->x, sec->lines[i]->v2->y, sec);
+			v = sec->lines[i]->v2;
+			ofloor = P_FloorHeight(v->x, v->y, other);
 
-            if (ofloor > floor && ofloor - floor < heightdiff)
-            {
-                heightdiff = ofloor - floor;
+			if (ofloor < height && ofloor > ogheight)
                 height = ofloor;
-            }
         }
     }
+    
+    if (height == MAXINT)
+    	height = ogheight;
+
     return height;
 }
 
@@ -587,32 +772,30 @@ fixed_t P_FindNextHighestFloor (sector_t *sec)
 fixed_t P_FindNextLowestFloor(sector_t *sec)
 {
 	sector_t *other;
-	fixed_t height, heightdiff = MAXINT;
-	height = P_FloorHeight(sec->lines[0]->v1->x, sec->lines[0]->v1->y, sec);	
+	fixed_t ogheight = P_FloorHeight(sec);
+	fixed_t height = MININT;
 
     for (int i = 0; i < sec->linecount; i++)
     {
 		if (NULL != (other = getNextSector(sec->lines[i], sec)))
         {
-			fixed_t ofloor = P_FloorHeight(sec->lines[i]->v1->x, sec->lines[i]->v1->y, other);
-			fixed_t floor = P_FloorHeight(sec->lines[i]->v1->x, sec->lines[i]->v1->y, sec);
-			
-			if (ofloor < floor && floor - ofloor < heightdiff)
-			{
-				heightdiff = ofloor - floor;
+        	vertex_t *v = sec->lines[i]->v1;
+			fixed_t ofloor = P_FloorHeight(v->x, v->y, other);
+
+			if (ofloor > height && ofloor < ogheight)
 				height = ofloor;
-			}
 
-			ofloor = P_FloorHeight(sec->lines[i]->v2->x, sec->lines[i]->v2->y, other);
-			floor = P_FloorHeight(sec->lines[i]->v2->x, sec->lines[i]->v2->y, sec);
+			v = sec->lines[i]->v2;
+			ofloor = P_FloorHeight(v->x, v->y, other);
 
-            if (ofloor < floor && floor - ofloor < heightdiff)
-            {
-                heightdiff = ofloor - floor;
+			if (ofloor > height && ofloor < ogheight)
                 height = ofloor;
-            }
         }
     }
+    
+    if (height == MININT)
+    	height = ogheight;
+
     return height;
 }
 
@@ -631,32 +814,30 @@ fixed_t P_FindNextLowestFloor(sector_t *sec)
 fixed_t P_FindNextLowestCeiling (sector_t *sec)
 {
 	sector_t *other;
-	fixed_t height, heightdiff = MAXINT;
-	height = P_CeilingHeight(sec->lines[0]->v1->x, sec->lines[0]->v1->y, sec);	
+	fixed_t ogheight = P_CeilingHeight(sec);
+	fixed_t height = MININT;
 
     for (int i = 0; i < sec->linecount; i++)
     {
 		if (NULL != (other = getNextSector(sec->lines[i], sec)))
         {
-			fixed_t oceil = P_CeilingHeight(sec->lines[i]->v1->x, sec->lines[i]->v1->y, other);
-			fixed_t ceil = P_CeilingHeight(sec->lines[i]->v1->x, sec->lines[i]->v1->y, sec);
-			
-			if (oceil < ceil && ceil - oceil < heightdiff)
-			{
-				heightdiff = ceil - oceil;
-				height = oceil;
-			}
+        	vertex_t *v = sec->lines[i]->v1;
+			fixed_t oceiling = P_CeilingHeight(v->x, v->y, other);
 
-			oceil = P_CeilingHeight(sec->lines[i]->v2->x, sec->lines[i]->v2->y, other);
-			ceil = P_CeilingHeight(sec->lines[i]->v2->x, sec->lines[i]->v2->y, sec);
+			if (oceiling > height && oceiling < ogheight)
+				height = oceiling;
 
-            if (oceil < ceil && ceil - oceil < heightdiff)
-            {
-                heightdiff = ceil - oceil;
-                height = oceil;
-            }
+			v = sec->lines[i]->v2;
+			oceiling = P_CeilingHeight(v->x, v->y, other);
+
+			if (oceiling > height && oceiling < ogheight)
+                height = oceiling;
         }
     }
+    
+    if (height == MININT)
+    	height = ogheight;
+
     return height;
 }
 
@@ -676,32 +857,30 @@ fixed_t P_FindNextLowestCeiling (sector_t *sec)
 fixed_t P_FindNextHighestCeiling (sector_t *sec)
 {
 	sector_t *other;
-	fixed_t height, heightdiff = MAXINT;
-	height = P_CeilingHeight(sec->lines[0]->v1->x, sec->lines[0]->v1->y, sec);
+	fixed_t ogheight = P_CeilingHeight(sec);
+	fixed_t height = MAXINT;
 
     for (int i = 0; i < sec->linecount; i++)
     {
 		if (NULL != (other = getNextSector(sec->lines[i], sec)))
         {
-			fixed_t oceil = P_CeilingHeight(sec->lines[i]->v1->x, sec->lines[i]->v1->y, other);
-			fixed_t ceil = P_CeilingHeight(sec->lines[i]->v1->x, sec->lines[i]->v1->y, sec);
-			
-			if (oceil > ceil && oceil - ceil < heightdiff)
-			{
-				heightdiff = oceil - ceil;
-				height = oceil;
-			}
+        	vertex_t *v = sec->lines[i]->v1;
+			fixed_t oceiling = P_CeilingHeight(v->x, v->y, other);
 
-			oceil = P_CeilingHeight(sec->lines[i]->v2->x, sec->lines[i]->v2->y, other);
-			ceil = P_CeilingHeight(sec->lines[i]->v2->x, sec->lines[i]->v2->y, sec);
+			if (oceiling < height && oceiling > ogheight)
+				height = oceiling;
 
-            if (oceil > ceil && oceil - ceil < heightdiff)
-            {
-                heightdiff = oceil - ceil;
-                height = oceil;
-            }
+			v = sec->lines[i]->v2;
+			oceiling = P_CeilingHeight(v->x, v->y, other);
+
+			if (oceiling < height && oceiling > ogheight)
+                height = oceiling;
         }
     }
+    
+    if (height == MAXINT)
+    	height = ogheight;
+
     return height;
 }
 

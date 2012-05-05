@@ -31,9 +31,25 @@
 #include "doomstat.h"
 #include "r_state.h"
 
+extern bool predicting;
+
 //
 // CEILINGS
 //
+
+void P_SetCeilingDestroy(DCeiling *ceiling)
+{
+	if (!ceiling)
+		return;
+
+	ceiling->m_Status = DCeiling::destroy;
+	
+	if (clientside && ceiling->m_Sector)
+	{
+		ceiling->m_Sector->ceilingdata = NULL;
+		ceiling->Destroy();
+	}
+}
 
 IMPLEMENT_SERIAL (DCeiling, DMovingCeiling)
 
@@ -47,6 +63,7 @@ void DCeiling::Serialize (FArchive &arc)
 	if (arc.IsStoring ())
 	{
 		arc << m_Type
+			<< m_Status
 			<< m_BottomHeight
 			<< m_TopHeight
 			<< m_Speed
@@ -63,6 +80,7 @@ void DCeiling::Serialize (FArchive &arc)
 	else
 	{
 		arc >> m_Type
+			>> m_Status
 			>> m_BottomHeight
 			>> m_TopHeight
 			>> m_Speed
@@ -80,6 +98,9 @@ void DCeiling::Serialize (FArchive &arc)
 
 void DCeiling::PlayCeilingSound ()
 {
+	if (predicting || !m_Sector)
+		return;
+	
 	if (m_Sector->seqType >= 0)
 	{
 		SN_StartSequence (m_Sector, m_Sector->seqType, SEQ_PLATFORM);
@@ -192,12 +213,12 @@ void DCeiling::RunThink ()
 }
 
 DCeiling::DCeiling (sector_t *sec)
-	: DMovingCeiling (sec)
+	: DMovingCeiling (sec), m_Status(init)
 {
 }
 
 DCeiling::DCeiling (sector_t *sec, fixed_t speed1, fixed_t speed2, int silent)
-	: DMovingCeiling (sec)
+	: DMovingCeiling (sec), m_Status(init)
 {
 	m_Crush = false;
 	m_Speed = m_Speed1 = speed1;
@@ -278,6 +299,7 @@ manual_ceiling:
 		// new door thinker
 		rtn = 1;
 		ceiling = new DCeiling (sec, speed, speed2, silent);
+		P_AddMovingCeiling(sec);
 
 		switch (type)
 		{
