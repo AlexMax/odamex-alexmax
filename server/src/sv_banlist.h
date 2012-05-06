@@ -31,33 +31,38 @@
 #include "d_player.h"
 #include "i_net.h"
 
-struct IPRange {
+class IPRange {
 private:
 	byte ip[4];
 	bool mask[4];
 public:
 	IPRange(void);
 	bool check(const netadr_t& address);
+	void set(const netadr_t& address);
 	bool set(const std::string& input);
 	std::string string(void);
 };
 
 struct Ban {
-	IPRange range;
+	Ban(void) : expire(0) { };
 	time_t expire;
 	std::string name;
+	IPRange range;
 	std::string reason;
 };
 
 class Banlist {
 public:
-	bool add(std::string address);
-	void check(std::string address);
-	void debug(void);
-	void list(void);
+	bool add(const std::string& address, const time_t expire = 0,
+	         const std::string& name = std::string(),
+	         const std::string& reason = std::string());
+	bool add(player_t& player, const time_t expire = 0,
+	         const std::string& reason = std::string());
+	bool check(const netadr_t& address, Ban& baninfo);
+	bool query(const std::string& query);
 	void remove(std::string address);
 private:
-	std::list<IPRange> ipv4banlist;
+	std::list<Ban> banlist;
 };
 
 bool SV_BanCheck(client_t *cl, int n);

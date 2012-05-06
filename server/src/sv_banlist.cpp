@@ -34,6 +34,8 @@
 
 Banlist banlist;
 
+//// IPRange ////
+
 // Constructor
 IPRange::IPRange() {
 	for (byte i = 0;i < 4;i++) {
@@ -51,6 +53,14 @@ bool IPRange::check(const netadr_t& address) {
 	}
 
 	return true;
+}
+
+// Set the object's range to a specific address.
+void IPRange::set(const netadr_t& address) {
+	for (byte i = 0;i < 4;i++) {
+		this->ip[i] = address.ip[i];
+		this->mask[i] = false;
+	}
 }
 
 // Set the object's range against the given address in string form.
@@ -103,30 +113,76 @@ std::string IPRange::string() {
 	return buffer.str();
 }
 
-BEGIN_COMMAND (testrange) {
-	IPRange ip;
-	if (ip.set("192.168.*.*")) {
-		Printf(PRINT_HIGH, "%s\n", ip.string().c_str());
+//// Banlist ////
 
-		netadr_t address;
-		address.ip[0] = 192;
-		address.ip[1] = 169;
-		address.ip[2] = 0;
-		address.ip[3] = 1;
+bool Banlist::add(const std::string& address, const time_t expire,
+                  const std::string& name, const std::string& reason) {
+	Ban ban;
 
-		if (ip.check(address)) {
-			Printf(PRINT_HIGH, "Yes!\n");
-		} else {
-			Printf(PRINT_HIGH, "No!\n");
-		}
+	// Did we pass a valid address?
+	if (!ban.range.set(address)) {
+		return false;
 	}
-} END_COMMAND (testrange)
 
-bool Banlist::add(std::string address) { return true; }
-void Banlist::check(std::string address) { }
-void Banlist::debug() { }
-void Banlist::list() { }
+	// Fill in the rest of the ban information
+	ban.expire = expire;
+	ban.name = name;
+	ban.reason = reason;
+
+	// Add the ban to the banlist
+	this->banlist.push_back(ban);
+
+	return true;
+}
+
+// We have a specific client that we want to add to the banlist.
+bool Banlist::add(player_t& player, const time_t expire,
+                  const std::string& reason) {
+	// Player must be valid.
+	if (!validplayer(player)) {
+		return false;
+	}
+
+	// Fill in ban info
+	Ban ban;
+	ban.expire = expire;
+	ban.name = player.userinfo.netname;
+	ban.range.set(player.client.address);
+	ban.reason = reason;
+
+	// Add the ban to the banlist
+	this->banlist.push_back(ban);
+
+	return true;
+}
+
+bool Banlist::check(const netadr_t& address, Ban& baninfo) { return true; }
+
+bool Banlist::query(const std::string& query) {
+	if (this->banlist.empty()) {
+		return false;
+	}
+
+	for (std::list<Ban>::iterator it = this->banlist.begin();
+	     it != this->banlist.end();++it) {
+		Printf(PRINT_HIGH, "%s, %d, %s, %s\n",
+		       it->range.string().c_str(),
+		       it->expire, it->name.c_str(), it->reason.c_str());
+	}
+
+	return true;
+}
+
 void Banlist::remove(std::string address) { }
+
+//// Console commands ////
+
+BEGIN_COMMAND (testban) {
+	std::string q;
+
+	banlist.add("1.2.3.4");
+	banlist.query(q);
+} END_COMMAND (testban)
 
 //// Old banlist code below ////
 
