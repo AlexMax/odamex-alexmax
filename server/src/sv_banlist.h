@@ -31,15 +31,22 @@
 #include "d_player.h"
 #include "i_net.h"
 
-class ipv4range {
+struct IPRange {
 private:
 	byte ip[4];
 	bool mask[4];
 public:
-	ipv4range(void);
+	IPRange(void);
 	bool check(const netadr_t& address);
 	bool set(const std::string& input);
 	std::string string(void);
+};
+
+struct Ban {
+	IPRange range;
+	time_t expire;
+	std::string name;
+	std::string reason;
 };
 
 class Banlist {
@@ -50,7 +57,7 @@ public:
 	void list(void);
 	void remove(std::string address);
 private:
-	std::list<ipv4range> ipv4banlist;
+	std::list<IPRange> ipv4banlist;
 };
 
 bool SV_BanCheck(client_t *cl, int n);

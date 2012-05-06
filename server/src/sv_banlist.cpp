@@ -34,7 +34,8 @@
 
 Banlist banlist;
 
-ipv4range::ipv4range() {
+// Constructor
+IPRange::IPRange() {
 	for (byte i = 0;i < 4;i++) {
 		this->ip[i] = (byte)0;
 		this->mask[i] = false;
@@ -42,7 +43,7 @@ ipv4range::ipv4range() {
 }
 
 // Check a given address against the ip + range in the object.
-bool ipv4range::check(const netadr_t& address) {
+bool IPRange::check(const netadr_t& address) {
 	for (byte i = 0;i < 4;i++) {
 		if (!(this->ip[i] == address.ip[i] || mask[i] == true)) {
 			return false;
@@ -53,7 +54,7 @@ bool ipv4range::check(const netadr_t& address) {
 }
 
 // Set the object's range against the given address in string form.
-bool ipv4range::set(const std::string& input) {
+bool IPRange::set(const std::string& input) {
 	StringTokens tokens = TokenizeString(input, ".");
 
 	// An IP address contains 4 octets
@@ -84,7 +85,7 @@ bool ipv4range::set(const std::string& input) {
 }
 
 // Return the range as a string, with stars representing masked octets.
-std::string ipv4range::string() {
+std::string IPRange::string() {
 	std::ostringstream buffer;
 
 	for (byte i = 0;i < 4;i++) {
@@ -103,7 +104,7 @@ std::string ipv4range::string() {
 }
 
 BEGIN_COMMAND (testrange) {
-	ipv4range ip;
+	IPRange ip;
 	if (ip.set("192.168.*.*")) {
 		Printf(PRINT_HIGH, "%s\n", ip.string().c_str());
 
