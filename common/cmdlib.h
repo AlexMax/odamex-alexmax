@@ -95,6 +95,8 @@ std::string JoinStrings(const std::vector<std::string> &pieces, const std::strin
 typedef std::vector<std::string> StringTokens;
 StringTokens TokenizeString(const std::string& str, const std::string& delim);
 
+bool StrToTime(std::string str, time_t &tim);
+
 bool CheckWildcards (const char *pattern, const char *text);
 void ReplaceString (const char **ptr, const char *str);
 

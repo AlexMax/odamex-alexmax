@@ -22,6 +22,7 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <ctime>
 #include <stdio.h>
 #include <stdlib.h>
 #include <sstream>
@@ -327,6 +328,111 @@ StringTokens TokenizeString(const std::string& str, const std::string& delim) {
 	}
 
 	return tokens;
+}
+
+// [AM] Turn a string representation of a length of time into a time_t
+//      relative to the current time.
+bool StrToTime(std::string str, time_t &tim) {
+	tim = time(NULL);
+	str = TrimString(str);
+	str = StdStringToLower(str);
+
+	if (str.empty()) {
+		return false;
+	}
+
+	// We use 0 as a synonym for forever.
+	if (str.compare(std::string("eternity").substr(0, str.size())) == 0 ||
+		str.compare(std::string("forever").substr(0, str.size())) == 0 ||
+		str.compare(std::string("permanent").substr(0, str.size())) == 0) {
+		tim = 0;
+		return true;
+	}
+
+	// Gather tokens from string representation.
+	typedef std::pair<unsigned short, std::string> token_t;
+	typedef std::vector<token_t> tokens_t;
+	tokens_t tokens;
+
+	size_t i, j;
+	size_t size = str.size();
+	i = j = 0;
+
+	while (i < size) {
+		unsigned short num = 0;
+		std::string timeword;
+
+		// Grab a number.
+		j = i;
+		while (str[j] >= '0' && str[j] <= '9' && j < size) {
+			j++;
+		}
+
+		if (i == j) {
+			// There is no number.
+			return false;
+		}
+
+		if (!(j < size)) {
+			// We were expecting a number but ran off the end of the string.
+			return false;
+		}
+
+		std::istringstream num_buffer(str.substr(i, j - i));
+		num_buffer >> num;
+
+		i = j;
+
+		// Skip whitespace
+		while ((str[i] == ' ') && i < size) {
+			i++; j++;
+		}
+
+		// Grab a time word
+		while (str[j] >= 'a' && str[j] <= 'z' && j < size) {
+			j++;
+		}
+
+		if (i == j) {
+			// There is no time word.
+			return false;
+		}
+
+		timeword = str.substr(i, j - i);
+		i = j;
+
+		// Push to tokens vector
+		token_t token;
+		token.first = num;
+		token.second = timeword;
+		tokens.push_back(token);
+
+		// Skip whitespace and commas.
+		while ((str[i] == ' ' || str[i] == ',') && i < size) {
+			i++;
+		}
+	}
+
+	for (tokens_t::iterator it = tokens.begin();it != tokens.end();++it) {
+		if (it->second.compare(std::string("seconds").substr(0, it->second.size())) == 0) {
+			tim += it->first;
+		} else if (it->second.compare(std::string("minutes").substr(0, it->second.size())) == 0) {
+			tim += it->first * 60;
+		} else if (it->second.compare(std::string("hours").substr(0, it->second.size())) == 0) {
+			tim += it->first * 3600;
+		} else if (it->second.compare(std::string("days").substr(0, it->second.size())) == 0) {
+			tim += it->first * 86400;
+		} else if (it->second.compare(std::string("months").substr(0, it->second.size())) == 0) {
+			tim += it->first * 2592000;
+		} else if (it->second.compare(std::string("years").substr(0, it->second.size())) == 0) {
+			tim += it->first * 31536000;
+		} else {
+			// Unrecognized timeword
+			return false;
+		}
+	}
+
+	return true;
 }
 
 // [SL] Reimplement std::isspace 

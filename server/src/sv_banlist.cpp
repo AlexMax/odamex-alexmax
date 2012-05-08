@@ -177,11 +177,64 @@ void Banlist::remove(std::string address) { }
 
 //// Console commands ////
 
-BEGIN_COMMAND (testban) {
-	std::string q;
+BEGIN_COMMAND (ban) {
+	std::vector<std::string> arguments = VectorArgs(argc, argv);
 
-	banlist.add("1.2.3.4");
-	banlist.query(q);
+	// We need at least one argument.
+	if (arguments.size() < 1) {
+		Printf(PRINT_HIGH, "ban: needs a player id (try 'players'), an optional length (default is forever) and an optional reason.\n");
+		return;
+	}
+
+	byte id;
+	std::istringstream id_buffer(arguments[0]);
+	id_buffer >> id;
+	if (!id_buffer) {
+		Printf(PRINT_HIGH, "ban: invalid player id.\n");
+		return;
+	}
+
+	player_t player = idplayer(id);
+	if (!validplayer(player)) {
+		Printf(PRINT_HIGH, "ban: invalid player id.\n");
+		return;
+	}
+
+	// If a length is specified, turn the length into an expire time.
+	time_t tim;
+	if (arguments.size() > 1) {
+		if (!StrToTime(arguments[1], tim)) {
+			Printf(PRINT_HIGH, "ban: invalid ban time (try a period of time like \"2 hours\" or \"permanent\")\n");
+			return;
+		}
+	} else {
+		// Default is a permaban.
+		tim = 0;
+	}
+
+	// If a reason is specified, add it too.
+	if (arguments.size() > 2) {
+
+	}
+
+	banlist.add(player, tim, "No Reason.");
+} END_COMMAND (ban)
+
+BEGIN_COMMAND (testban) {
+	time_t ti;
+	tm *tmp;
+
+	if (StrToTime("   1y, 12mo,30d 24h,,,60m    60seconds  ", ti)) {
+		char buffer[20];
+		tmp = localtime(&ti);
+		if (strftime(buffer, 20, "%Y-%m-%d %H:%M:%S", tmp)) {
+			Printf(PRINT_HIGH, "You will be unbanned on %s\n", buffer);
+		} else {
+			Printf(PRINT_HIGH, "You screwed up with strftime!\n");
+		}
+	} else {
+		Printf(PRINT_HIGH, "Failed.\n");
+	}
 } END_COMMAND (testban)
 
 //// Old banlist code below ////
@@ -485,7 +538,7 @@ bool SV_BanCheck (client_t *cl, int n)
 	return false;
 }
 
-BEGIN_COMMAND(addban) {
+/*BEGIN_COMMAND(addban) {
 	std::string reason;
 
 	if (argc < 2)
@@ -498,7 +551,7 @@ BEGIN_COMMAND(addban) {
 
 	std::string IPtoBan = BuildString(argc - 1, (const char **)(argv + 1));
 	SV_IPListAdd(&BanList, "Ban", IPtoBan, reason);
-} END_COMMAND(addban)
+	} END_COMMAND(addban)*/
 
 BEGIN_COMMAND(delban) {
 	if (argc < 2)
