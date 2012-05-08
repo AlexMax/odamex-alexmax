@@ -47,7 +47,38 @@ IPRange::IPRange() {
 // Check a given address against the ip + range in the object.
 bool IPRange::check(const netadr_t& address) {
 	for (byte i = 0;i < 4;i++) {
-		if (!(this->ip[i] == address.ip[i] || mask[i] == true)) {
+		if (!(this->ip[i] == address.ip[i] || this->mask[i] == true)) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+// Check a given string address against the ip + range in the object.
+bool IPRange::check(const std::string& address) {
+	StringTokens tokens = TokenizeString(address, ".");
+
+	// An IP address contains 4 octets
+	if (tokens.size() != 4) {
+		return false;
+	}
+
+	for (byte i = 0;i < 4;i++) {
+		// * means that octet is masked and we will accept any byte
+		if (tokens[i].compare("*") == 0) {
+			continue;
+		}
+
+		// Convert string into byte.
+		unsigned short octet = 0;
+		std::istringstream buffer(tokens[i]);
+		buffer >> octet;
+		if (!buffer) {
+			return false;
+		}
+
+		if (!(this->ip[i] == octet || this->mask[i] == true)) {
 			return false;
 		}
 	}
@@ -158,18 +189,43 @@ bool Banlist::add(player_t& player, const time_t expire,
 
 bool Banlist::check(const netadr_t& address, Ban& baninfo) { return true; }
 
-bool Banlist::query(const std::string& query) {
+// Return a complete list of bans.
+bool Banlist::query(banlist_results_t &result) {
+	// No banlist?  Return an error state.
 	if (this->banlist.empty()) {
 		return false;
 	}
 
-	for (std::list<Ban>::iterator it = this->banlist.begin();
-	     it != this->banlist.end();++it) {
-		Printf(PRINT_HIGH, "%s, %d, %s, %s\n",
-		       it->range.string().c_str(),
-		       it->expire, it->name.c_str(), it->reason.c_str());
+	result.reserve(this->banlist.size());
+	for (size_t i = 0;i < banlist.size();i++) {
+		result.push_back(banlist_result_t(i, &(this->banlist[i])));
 	}
 
+	return true;
+}
+
+// Run a query on the banlist and return a list of all matching bans.  Matches
+// against IP address/range and partial name.
+bool Banlist::query(const std::string &query, banlist_results_t &result) {
+	// No banlist?  Return an error state.
+	if (this->banlist.empty()) {
+		return false;
+	}
+
+	// No query?  Return everything.
+	if (query.empty()) {
+		return this->query(result);
+	}
+
+	std::string pattern = "*" + (query) + "*";
+	for (size_t i = 0;i < this->banlist.size();i++) {
+		bool f_ip = this->banlist[i].range.check(query);
+		bool f_name = CheckWildcards(pattern.c_str(),
+									 this->banlist[i].name.c_str());
+		if (f_ip || f_name) {
+			result.push_back(banlist_result_t(i, &(this->banlist[i])));
+		}
+	}
 	return true;
 }
 
@@ -177,26 +233,27 @@ void Banlist::remove(std::string address) { }
 
 //// Console commands ////
 
+// Ban bans a player by player id.
 BEGIN_COMMAND (ban) {
 	std::vector<std::string> arguments = VectorArgs(argc, argv);
 
 	// We need at least one argument.
 	if (arguments.size() < 1) {
-		Printf(PRINT_HIGH, "ban: needs a player id (try 'players'), an optional length (default is forever) and an optional reason.\n");
+		Printf(PRINT_HIGH, "Usage: ban <player id> [ban length] [reason].\n");
 		return;
 	}
 
-	byte id;
-	std::istringstream id_buffer(arguments[0]);
-	id_buffer >> id;
-	if (!id_buffer) {
-		Printf(PRINT_HIGH, "ban: invalid player id.\n");
+	size_t pid;
+	std::istringstream buffer(arguments[0]);
+	buffer >> pid;
+	if (!buffer) {
+		Printf(PRINT_HIGH, "ban: need a player id.\n");
 		return;
 	}
 
-	player_t player = idplayer(id);
+	player_t &player = idplayer(pid);
 	if (!validplayer(player)) {
-		Printf(PRINT_HIGH, "ban: invalid player id.\n");
+		Printf(PRINT_HIGH, "ban: %d is not a valid player id.\n", pid);
 		return;
 	}
 
@@ -213,29 +270,92 @@ BEGIN_COMMAND (ban) {
 	}
 
 	// If a reason is specified, add it too.
+	std::string reason;
 	if (arguments.size() > 2) {
-
+		// Account for people who forget their double-quotes.
+		arguments.erase(arguments.begin(), arguments.begin() + 1);
+		reason = JoinStrings(arguments, " ");
 	}
 
-	banlist.add(player, tim, "No Reason.");
+	// Add the ban and kick the player.
+	banlist.add(player, tim, reason);
+	SV_KickPlayer(player, reason);
 } END_COMMAND (ban)
 
-BEGIN_COMMAND (testban) {
-	time_t ti;
-	tm *tmp;
+// addban adds a ban by IP address.
+BEGIN_COMMAND (addban) {
+	std::vector<std::string> arguments = VectorArgs(argc, argv);
 
-	if (StrToTime("   1y, 12mo,30d 24h,,,60m    60seconds  ", ti)) {
-		char buffer[20];
-		tmp = localtime(&ti);
-		if (strftime(buffer, 20, "%Y-%m-%d %H:%M:%S", tmp)) {
-			Printf(PRINT_HIGH, "You will be unbanned on %s\n", buffer);
-		} else {
-			Printf(PRINT_HIGH, "You screwed up with strftime!\n");
+	// We need at least one argument.
+	if (arguments.size() < 1) {
+		Printf(PRINT_HIGH, "Usage: addban <ip address or ip range> [ban length] [player name] [reason]\n");
+		return;
+	}
+
+	std::string address = arguments[0];
+
+	// If a length is specified, turn the length into an expire time.
+	time_t tim;
+	if (arguments.size() > 1) {
+		if (!StrToTime(arguments[1], tim)) {
+			Printf(PRINT_HIGH, "addban: invalid ban time (try a period of time like \"2 hours\" or \"permanent\")\n");
+			return;
 		}
 	} else {
-		Printf(PRINT_HIGH, "Failed.\n");
+		// Default is a permaban.
+		tim = 0;
 	}
-} END_COMMAND (testban)
+
+	// If the player's name is specified, add it too.
+	std::string name;
+	if (arguments.size() > 2) {
+		name = arguments[2];
+	}
+
+	// If a reason is specified, add it too.
+	std::string reason;
+	if (arguments.size() > 2) {
+		// Account for people who forget their double-quotes.
+		arguments.erase(arguments.begin(), arguments.begin() + 1);
+		reason = JoinStrings(arguments, " ");
+	}
+
+	banlist.add(address, tim, name, reason);
+} END_COMMAND (addban)
+
+BEGIN_COMMAND (banlist) {
+	std::vector<std::string> arguments = VectorArgs(argc, argv);
+
+	banlist_results_t result;
+	if (!banlist.query(JoinStrings(arguments, " "), result)) {
+		Printf(PRINT_HIGH, "banlist: banlist is empty.\n");
+		return;
+	}
+
+	if (result.empty()) {
+		Printf(PRINT_HIGH, "banlist: no results found.\n");
+		return;
+	}
+
+	char expire[20];
+	tm *tmp;
+
+	for (banlist_results_t::iterator it = result.begin();
+		 it != result.end();++it) {
+
+		if (it->second->expire == 0) {
+			strncpy(expire, "Permanent", 19);
+		} else {
+			tmp = localtime(&(it->second->expire));
+			if (!strftime(expire, 20, "%Y-%m-%d %H:%M:%S", tmp)) {
+				strncpy(expire, "???", 19);
+			}
+		}
+
+		Printf(PRINT_HIGH, "%d. %s - %s", it->first + 1,
+			   it->second->range.string().c_str(), expire);
+	}
+} END_COMMAND (banlist)
 
 //// Old banlist code below ////
 
@@ -561,9 +681,9 @@ BEGIN_COMMAND(delban) {
 	SV_IPListDelete(&BanList, "Ban", IPtoBan);
 } END_COMMAND(delban)
 
-BEGIN_COMMAND(banlist) {
+/* BEGIN_COMMAND(banlist) {
 	SV_IPListDisplay(&BanList, "Ban");
-} END_COMMAND(banlist)
+	} END_COMMAND(banlist) */
 
 BEGIN_COMMAND(clearbans) {
 	SV_IPListClear(&BanList, "Ban");

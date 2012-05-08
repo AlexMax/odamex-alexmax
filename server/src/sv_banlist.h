@@ -24,9 +24,9 @@
 #ifndef __SV_BANLIST__
 #define __SV_BANLIST__
 
-#include <list>
 #include <sstream>
 #include <string>
+#include <vector>
 
 #include "d_player.h"
 #include "i_net.h"
@@ -38,6 +38,7 @@ private:
 public:
 	IPRange(void);
 	bool check(const netadr_t& address);
+	bool check(const std::string& input);
 	void set(const netadr_t& address);
 	bool set(const std::string& input);
 	std::string string(void);
@@ -51,6 +52,9 @@ struct Ban {
 	std::string reason;
 };
 
+typedef std::pair<size_t, Ban*> banlist_result_t;
+typedef std::vector<banlist_result_t> banlist_results_t;
+
 class Banlist {
 public:
 	bool add(const std::string& address, const time_t expire = 0,
@@ -59,10 +63,11 @@ public:
 	bool add(player_t& player, const time_t expire = 0,
 	         const std::string& reason = std::string());
 	bool check(const netadr_t& address, Ban& baninfo);
-	bool query(const std::string& query);
+	bool query(banlist_results_t &result);
+	bool query(const std::string &query, banlist_results_t &result);
 	void remove(std::string address);
 private:
-	std::list<Ban> banlist;
+	std::vector<Ban> banlist;
 };
 
 bool SV_BanCheck(client_t *cl, int n);
