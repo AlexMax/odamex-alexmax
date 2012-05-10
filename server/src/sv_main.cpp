@@ -2519,6 +2519,20 @@ void STACK_ARGS SV_SpectatorPrintf (int level, const char *fmt, ...)
     }
 }
 
+// Print directly to a specific client.
+void STACK_ARGS SV_ClientPrintf(client_t *cl, int level, const char *fmt, ...) {
+	va_list argptr;
+	char string[2048];
+
+	va_start(argptr, fmt);
+	vsprintf(string, fmt, argptr);
+	va_end(argptr);
+
+	MSG_WriteMarker(&cl->reliablebuf, svc_print);
+	MSG_WriteByte(&cl->reliablebuf, level);
+	MSG_WriteString(&cl->reliablebuf, string);
+}
+
 // Print directly to a specific player.
 void STACK_ARGS SV_PlayerPrintf (int level, int who, const char *fmt, ...) {
 	va_list argptr;

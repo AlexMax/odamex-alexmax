@@ -32,6 +32,8 @@
 #include "sv_banlist.h"
 #include "sv_main.h"
 
+EXTERN_CVAR(sv_email)
+
 Banlist banlist;
 
 //// IPRange ////
@@ -187,7 +189,20 @@ bool Banlist::add(player_t& player, const time_t expire,
 	return true;
 }
 
-bool Banlist::check(const netadr_t& address, Ban& baninfo) { return true; }
+// Check a given address against the banlist.  Sets baninfo and returns
+// true if passed address is banned, otherwise returns false.
+bool Banlist::check(const netadr_t& address, Ban& baninfo) {
+	for (std::vector<Ban>::iterator it = this->banlist.begin();
+		 it != this->banlist.end();++it) {
+		if (it->range.check(address) && it->expire != 0 &&
+			it->expire > time(NULL)) {
+			baninfo = *it;
+			return true;
+		}
+	}
+
+	return false;
+}
 
 // Return a complete list of bans.
 bool Banlist::query(banlist_results_t &result) {
@@ -273,7 +288,7 @@ BEGIN_COMMAND (ban) {
 	std::string reason;
 	if (arguments.size() > 2) {
 		// Account for people who forget their double-quotes.
-		arguments.erase(arguments.begin(), arguments.begin() + 1);
+		arguments.erase(arguments.begin(), arguments.begin() + 2);
 		reason = JoinStrings(arguments, " ");
 	}
 
@@ -356,6 +371,59 @@ BEGIN_COMMAND (banlist) {
 			   it->second->range.string().c_str(), expire);
 	}
 } END_COMMAND (banlist)
+
+// Check to see if a client is on the banlist, and kick them out of the server
+// if they are.  Returns true if the player was banned.
+bool SV_BanCheck(client_t *cl, int n) {
+	Ban ban;
+	if (!banlist.check(cl->address, ban)) {
+		return false;
+	}
+
+	// TODO: Whitelisting
+
+	std::ostringstream buffer;
+	if (ban.expire == 0) {
+		buffer << "You are indefinitely banned from this server.\n";
+	} else {
+		buffer << "You are banned from this server until ";
+
+		char tbuffer[32];
+		if (strftime(tbuffer, 32, "%c %Z", localtime(&ban.expire))) {
+			buffer << tbuffer << ".\n";
+		} else {
+			buffer << ban.expire << " seconds after midnight on January 1st, 1970.\n";
+		}
+	}
+
+	int name = ban.name.compare("");
+	int reason = ban.reason.compare("");
+	if (name != 0 || reason != 0) {
+		buffer << "The given reason was: \"";
+		if (name != 0 && reason == 0) {
+			buffer << ban.name;
+		} else if (name == 0 && reason != 0) {
+			buffer << ban.reason;
+		} else {
+			buffer << ban.name << ": " << ban.reason;
+		}
+		buffer << "\"\n";
+	}
+
+	if (*(sv_email.cstring()) != 0) {
+		buffer << "The server host can be contacted at ";
+		buffer << sv_email.cstring();
+		buffer << " if you feel this ban is in error or wish to contest it.";
+	}
+
+	// Log the banned connection attempt to the server.
+	Printf(PRINT_HIGH, "%s is banned, dropping client.\n", NET_AdrToString(cl->address));
+
+	// Send the message to the client.
+	SV_ClientPrintf(cl, PRINT_HIGH, "%s", buffer.str().c_str());
+
+	return true;
+}
 
 //// Old banlist code below ////
 
@@ -556,7 +624,7 @@ void SV_IPListDelete(std::vector<BanEntry_t> *list, std::string listname, std::s
 //
 //  Checks a connecting player against a banlist
 //
-bool SV_BanCheck (client_t *cl, int n)
+/*bool SV_BanCheck (client_t *cl, int n)
 {
 	for (size_t i = 0; i < BanList.size(); i++)
 	{
@@ -656,7 +724,7 @@ bool SV_BanCheck (client_t *cl, int n)
 	}
 
 	return false;
-}
+}*/
 
 /*BEGIN_COMMAND(addban) {
 	std::string reason;
