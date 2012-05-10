@@ -1968,6 +1968,7 @@ void SV_ConnectClient (void)
 
 	if (SV_BanCheck(cl, n))
 	{
+		cl->displaydisconnect = false;
 		SV_DropClient(players[n]);
 		return;
 	}

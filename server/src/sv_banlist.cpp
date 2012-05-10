@@ -194,8 +194,8 @@ bool Banlist::add(player_t& player, const time_t expire,
 bool Banlist::check(const netadr_t& address, Ban& baninfo) {
 	for (std::vector<Ban>::iterator it = this->banlist.begin();
 		 it != this->banlist.end();++it) {
-		if (it->range.check(address) && it->expire != 0 &&
-			it->expire > time(NULL)) {
+		if (it->range.check(address) && (it->expire == 0 ||
+										 it->expire > time(NULL))) {
 			baninfo = *it;
 			return true;
 		}
