@@ -85,6 +85,20 @@ class player_s;
 // Stores things/mobjs.
 //
 
+enum
+{
+	SECSPAC_Enter		= 1,	// Trigger when player enters
+	SECSPAC_Exit		= 2,	// Trigger when player exits
+	SECSPAC_HitFloor	= 4,	// Trigger when player hits floor
+	SECSPAC_HitCeiling	= 8,	// Trigger when player hits ceiling
+	SECSPAC_Use			= 16,	// Trigger when player uses
+	SECSPAC_UseWall		= 32,	// Trigger when player uses a wall
+	SECSPAC_EyesDive	= 64,	// Trigger when player eyes go below fake floor
+	SECSPAC_EyesSurface = 128,	// Trigger when player eyes go above fake floor
+	SECSPAC_EyesBelowC	= 256,	// Trigger when player eyes go below fake ceiling
+	SECSPAC_EyesAboveC	= 512,	// Triggen when player eyes go above fake ceiling
+};
+
 // Ceiling/floor flags
 enum
 {

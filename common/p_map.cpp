@@ -1055,6 +1055,8 @@ BOOL P_TryMove (AActor *thing, fixed_t x, fixed_t y,
 	int 		side;
 	int 		oldside;
 	line_t* 	ld;
+	sector_t*	oldsec = thing->subsector->sector;	// [RH] for sector actions
+	sector_t*	newsec;
 
 	floatok = false;
 
@@ -1172,6 +1174,29 @@ BOOL P_TryMove (AActor *thing, fixed_t x, fixed_t y,
 				if(ld->special)
 					P_CrossSpecialLine (ld-lines, oldside, thing);
 			}
+		}
+	}
+
+	// [RH] If changing sectors, trigger transitions
+	newsec = thing->subsector->sector;
+	if (oldsec != newsec)
+	{
+		if (oldsec->SecActTarget)
+		{
+			oldsec->SecActTarget->TriggerAction (thing, SECSPAC_Exit);
+		}
+		if (newsec->SecActTarget)
+		{
+			int act = SECSPAC_Enter;
+			if (thing->z <= newsec->floorplane.ZatPoint (thing->x, thing->y))
+			{
+				act |= SECSPAC_HitFloor;
+			}
+			if (thing->z + thing->height >= newsec->ceilingplane.ZatPoint (thing->x, thing->y))
+			{
+				act |= SECSPAC_HitCeiling;
+			}
+			newsec->SecActTarget->TriggerAction (thing, act);
 		}
 	}
 
