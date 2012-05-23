@@ -235,8 +235,8 @@ struct sector_s
 	// flexible in a Bloody way. SecActTarget forms a list of actors
 	// joined by their tracer fields. When a potential sector action
 	// occurs, SecActTarget's TriggerAction method is called.
-	// [ML] Not yet...
-	// ASectorAction *SecActTarget;
+	// [AM] Use the ZDoom 1.22 AActor system instead.
+	AActor *SecActTarget;
 
 	// [SL] 2012-01-16 - planes for sloping ceilings/floors
 	plane_t floorplane, ceilingplane;

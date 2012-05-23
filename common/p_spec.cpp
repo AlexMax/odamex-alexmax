@@ -2808,5 +2808,85 @@ static void P_SpawnPushers(void)
 //
 ////////////////////////////////////////////////////////////////////////////
 
-VERSION_CONTROL (p_spec_cpp, "$Id$")
+// [AM] Trigger a special associated with an AActor.  A substitute for
+//      ZDoom 1.23's ASectorAction::TriggerAction and friends.
+bool A_TriggerAction(AActor *mo, AActor *triggerer, int activationType) {
+	// We must have a tracer.
+	if (mo->tracer == NULL) {
+		return false;
+	}
 
+	// The mobj type must agree with the activation type.
+	switch (mo->type) {
+	case MT_SECACTENTER:
+		if (!(activationType & SECSPAC_Enter)) {
+			return false;
+		}
+		break;
+	case MT_SECACTEXIT:
+		if (!(activationType & SECSPAC_Exit)) {
+			return false;
+		}
+		break;
+	case MT_SECACTHITFLOOR:
+		if (!(activationType & SECSPAC_HitFloor)) {
+			return false;
+		}
+		break;
+	case MT_SECACTHITCEIL:
+		if (!(activationType & SECSPAC_HitCeiling)) {
+			return false;
+		}
+		break;
+	case MT_SECACTUSE:
+		if (!(activationType & SECSPAC_Use)) {
+			return false;
+		}
+		break;
+	case MT_SECACTUSEWALL:
+		if (!(activationType & SECSPAC_UseWall)) {
+			return false;
+		}
+		break;
+	case MT_SECACTEYESDIVE:
+		if (!(activationType & SECSPAC_EyesDive)) {
+			return false;
+		}
+		break;
+	case MT_SECACTEYESSURFACE:
+		if (!(activationType & SECSPAC_EyesSurface)) {
+			return false;
+		}
+		break;
+	case MT_SECACTEYESBELOWC:
+		if (!(activationType & SECSPAC_EyesBelowC)) {
+			return false;
+		}
+		break;
+	case MT_SECACTEYESABOVEC:
+		if (!(activationType & SECSPAC_EyesAboveC)) {
+			return false;
+		}
+		break;
+	default:
+		// This isn't a sector action mobj.
+		return false;
+	}
+
+	// From ZDoom 1.23's ASectorAction::CheckTrigger.
+	if (mo->special &&
+		(triggerer->player ||
+		 ((mo->flags & MF_AMBUSH) && (triggerer->flags2 & MF2_MCROSS)) ||
+		 ((mo->flags2 & MF2_DORMANT) && (triggerer->flags2 & MF2_PCROSS)))) {
+		int savedSide = TeleportSide;
+		TeleportSide = 0;
+		bool res = LineSpecials[mo->special](NULL, triggerer, mo->args[0],
+											 mo->args[1], mo->args[2],
+											 mo->args[3], mo->args[4]);
+		TeleportSide = savedSide;
+		return res;
+	}
+	return false;
+}
+
+VERSION_CONTROL (p_spec_cpp, "$Id$")

@@ -1183,7 +1183,7 @@ BOOL P_TryMove (AActor *thing, fixed_t x, fixed_t y,
 	{
 		if (oldsec->SecActTarget)
 		{
-			oldsec->SecActTarget->TriggerAction (thing, SECSPAC_Exit);
+			A_TriggerAction(oldsec->SecActTarget, thing, SECSPAC_Exit);
 		}
 		if (newsec->SecActTarget)
 		{
@@ -1196,7 +1196,7 @@ BOOL P_TryMove (AActor *thing, fixed_t x, fixed_t y,
 			{
 				act |= SECSPAC_HitCeiling;
 			}
-			newsec->SecActTarget->TriggerAction (thing, act);
+			A_TriggerAction(newsec->SecActTarget, thing, act);
 		}
 	}
 
