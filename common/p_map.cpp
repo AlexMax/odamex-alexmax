@@ -1188,11 +1188,11 @@ BOOL P_TryMove (AActor *thing, fixed_t x, fixed_t y,
 		if (newsec->SecActTarget)
 		{
 			int act = SECSPAC_Enter;
-			if (thing->z <= newsec->floorplane.ZatPoint (thing->x, thing->y))
+			if (thing->z <= P_FloorHeight(thing->x, thing->y, newsec))
 			{
 				act |= SECSPAC_HitFloor;
 			}
-			if (thing->z + thing->height >= newsec->ceilingplane.ZatPoint (thing->x, thing->y))
+			if (thing->z + thing->height >= P_CeilingHeight(thing->x, thing->y, newsec))
 			{
 				act |= SECSPAC_HitCeiling;
 			}
