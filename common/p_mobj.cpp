@@ -1238,6 +1238,14 @@ void P_ZMovement(AActor *mo)
 	{
 		// hit the floor
 
+		// [AM] If there is a actor special for hitting the floor,
+		//      activate it.
+		if (mo->subsector->sector->SecActTarget != NULL &&
+		    P_FloorHeight(mo->x, mo->y, mo->subsector->sector) == mo->floorz) {
+			A_TriggerAction(mo->subsector->sector->SecActTarget,
+			                mo, SECSPAC_HitFloor);
+		}
+
 		// Note (id):
 		//  somebody left this after the setting momz to 0,
 		//  kinda useless there.
