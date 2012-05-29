@@ -1367,6 +1367,15 @@ void P_ZMovement(AActor *mo)
 	if (mo->z + mo->height > mo->ceilingz)
 	{
 		// hit the ceiling
+
+		// [AM] If there is a actor special for hitting the floor,
+		//      activate it.
+		if (mo->subsector->sector->SecActTarget != NULL &&
+		    P_CeilingHeight(mo->x, mo->y, mo->subsector->sector) == mo->ceilingz) {
+			A_TriggerAction(mo->subsector->sector->SecActTarget,
+			                mo, SECSPAC_HitCeiling);
+		}
+
 		if (mo->flags2 & MF2_FLOORBOUNCE)
 		{
 			// reverse momentum here for ceiling bounce
@@ -2410,7 +2419,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 
 	SV_SpawnMobj(mobj);
 
-	if (mthing->type >= 9997 && mthing->type <= 9999) {
+	if (mthing->type >= 9996 && mthing->type <= 9999) {
 		// Add ourselves to this sector's list of actions.
 		mobj->subsector->sector->SecActTarget = mobj;
 		mobj->tracer = mobj->subsector->sector->SecActTarget->ptr();
