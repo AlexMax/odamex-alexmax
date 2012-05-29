@@ -2402,6 +2402,12 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 
 	SV_SpawnMobj(mobj);
 
+	if (mthing->type >= 9997 && mthing->type <= 9999) {
+		// Add ourselves to this sector's list of actions.
+		mobj->subsector->sector->SecActTarget = mobj;
+		mobj->tracer = mobj->subsector->sector->SecActTarget->ptr();
+	}
+
 	if (sv_gametype == GM_CTF) {
 		// [Toke - CTF] Setup flag sockets
 		if (mthing->type == ID_BLUE_FLAG)

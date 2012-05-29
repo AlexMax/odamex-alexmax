@@ -6349,6 +6349,36 @@ mobjinfo_t mobjinfo[NUMMOBJTYPES] = {
 	"MT_SECACTENTER"
 	},
 
+	{		// MT_SECACTEXIT
+	9997,		// doomednum
+	S_TNT1,		// spawnstate
+	1000,		// spawnhealth
+	S_NULL,		// seestate
+	NULL,		// seesound
+	8,		// reactiontime
+	NULL,		// attacksound
+	S_NULL,		// painstate
+	0,		// painchance
+	NULL,		// painsound
+	S_NULL,		// meleestate
+	S_NULL,		// missilestate
+	S_NULL,		// deathstate
+	S_NULL,		// xdeathstate
+	NULL,		// deathsound
+	0,		// speed
+	16*FRACUNIT,		// radius
+	16*FRACUNIT,		// height
+	16*FRACUNIT,	// cdheight
+	100,		// mass
+	0,		// damage
+	NULL,		// activesound
+	0,		// flags
+	MF2_DONTDRAW,		// flags2
+	S_NULL,		// raisestate
+	0x10000,
+	"MT_SECACTEXIT"
+	},
+
 	{		// MT_SECACTHITFLOOR
 	9999,		// doomednum
 	S_TNT1,		// spawnstate
