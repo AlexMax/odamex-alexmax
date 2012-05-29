@@ -2808,72 +2808,8 @@ static void P_SpawnPushers(void)
 //
 ////////////////////////////////////////////////////////////////////////////
 
-// [AM] Trigger a special associated with an AActor.  A substitute for
-//      ZDoom 1.23's ASectorAction::TriggerAction and friends.
-bool A_TriggerAction(AActor *mo, AActor *triggerer, int activationType) {
-	// We must have a tracer.
-	if (mo->tracer == NULL) {
-		return false;
-	}
-
-	// The mobj type must agree with the activation type.
-	switch (mo->type) {
-	case MT_SECACTENTER:
-		if (!(activationType & SECSPAC_Enter)) {
-			return false;
-		}
-		break;
-	case MT_SECACTEXIT:
-		if (!(activationType & SECSPAC_Exit)) {
-			return false;
-		}
-		break;
-	case MT_SECACTHITFLOOR:
-		if (!(activationType & SECSPAC_HitFloor)) {
-			return false;
-		}
-		break;
-	case MT_SECACTHITCEIL:
-		if (!(activationType & SECSPAC_HitCeiling)) {
-			return false;
-		}
-		break;
-	case MT_SECACTUSE:
-		if (!(activationType & SECSPAC_Use)) {
-			return false;
-		}
-		break;
-	case MT_SECACTUSEWALL:
-		if (!(activationType & SECSPAC_UseWall)) {
-			return false;
-		}
-		break;
-	case MT_SECACTEYESDIVE:
-		if (!(activationType & SECSPAC_EyesDive)) {
-			return false;
-		}
-		break;
-	case MT_SECACTEYESSURFACE:
-		if (!(activationType & SECSPAC_EyesSurface)) {
-			return false;
-		}
-		break;
-	case MT_SECACTEYESBELOWC:
-		if (!(activationType & SECSPAC_EyesBelowC)) {
-			return false;
-		}
-		break;
-	case MT_SECACTEYESABOVEC:
-		if (!(activationType & SECSPAC_EyesAboveC)) {
-			return false;
-		}
-		break;
-	default:
-		// This isn't a sector action mobj.
-		return false;
-	}
-
-	// From ZDoom 1.23's ASectorAction::CheckTrigger.
+// [AM] Trigger a special associated with an actor.
+bool A_CheckTrigger(AActor *mo, AActor *triggerer) {
 	if (mo->special &&
 		(triggerer->player ||
 		 ((mo->flags & MF_AMBUSH) && (triggerer->flags2 & MF2_MCROSS)) ||
@@ -2887,6 +2823,61 @@ bool A_TriggerAction(AActor *mo, AActor *triggerer, int activationType) {
 		return res;
 	}
 	return false;
+}
+
+// [AM] Selectively trigger a list of sector action specials that are linked by
+//      their tracer fields based on the passed activation type.
+bool A_TriggerAction(AActor *mo, AActor *triggerer, int activationType) {
+	bool trigger_action = false;
+
+	// The mobj type must agree with the activation type.
+	switch (mo->type) {
+	case MT_SECACTENTER:
+		trigger_action = activationType & SECSPAC_Enter;
+		break;
+	case MT_SECACTEXIT:
+		trigger_action = activationType & SECSPAC_Exit;
+		break;
+	case MT_SECACTHITFLOOR:
+		trigger_action = activationType & SECSPAC_HitFloor;
+		break;
+	case MT_SECACTHITCEIL:
+		trigger_action = activationType & SECSPAC_HitCeiling;
+		break;
+	case MT_SECACTUSE:
+		trigger_action = activationType & SECSPAC_Use;
+		break;
+	case MT_SECACTUSEWALL:
+		trigger_action = activationType & SECSPAC_UseWall;
+		break;
+	case MT_SECACTEYESDIVE:
+		trigger_action = activationType & SECSPAC_EyesDive;
+		break;
+	case MT_SECACTEYESSURFACE:
+		trigger_action = activationType & SECSPAC_EyesSurface;
+		break;
+	case MT_SECACTEYESBELOWC:
+		trigger_action = activationType & SECSPAC_EyesBelowC;
+		break;
+	case MT_SECACTEYESABOVEC:
+		trigger_action = activationType & SECSPAC_EyesAboveC;
+		break;
+	default:
+		// This isn't a sector action mobj.
+		break;
+	}
+
+	if (trigger_action) {
+		trigger_action = A_CheckTrigger(mo, triggerer);
+	}
+
+	// The tracer field could potentially contain a pointer to another
+	// actor special.
+	if (mo->tracer != NULL) {
+		return trigger_action | A_TriggerAction(mo->tracer, triggerer, activationType);
+	}
+
+	return trigger_action;
 }
 
 VERSION_CONTROL (p_spec_cpp, "$Id$")

@@ -2421,8 +2421,10 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 
 	if (mthing->type >= 9996 && mthing->type <= 9999) {
 		// Add ourselves to this sector's list of actions.
+		if (mobj->subsector->sector->SecActTarget != NULL) {
+			mobj->tracer = mobj->subsector->sector->SecActTarget->ptr();
+		}
 		mobj->subsector->sector->SecActTarget = mobj;
-		mobj->tracer = mobj->subsector->sector->SecActTarget->ptr();
 	}
 
 	if (sv_gametype == GM_CTF) {
