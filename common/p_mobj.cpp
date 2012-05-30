@@ -2424,7 +2424,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		if (mobj->subsector->sector->SecActTarget != NULL) {
 			mobj->tracer = mobj->subsector->sector->SecActTarget->ptr();
 		}
-		mobj->subsector->sector->SecActTarget = mobj;
+		mobj->subsector->sector->SecActTarget = mobj->ptr();
 	}
 
 	if (sv_gametype == GM_CTF) {

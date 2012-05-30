@@ -236,7 +236,7 @@ struct sector_s
 	// joined by their tracer fields. When a potential sector action
 	// occurs, SecActTarget's TriggerAction method is called.
 	// [AM] Use the ZDoom 1.22 AActor system instead.
-	AActor *SecActTarget;
+	AActor::AActorPtr SecActTarget;
 
 	// [SL] 2012-01-16 - planes for sloping ceilings/floors
 	plane_t floorplane, ceilingplane;
