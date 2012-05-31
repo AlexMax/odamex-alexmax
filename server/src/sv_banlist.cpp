@@ -343,9 +343,9 @@ BEGIN_COMMAND (addban) {
 
 	// If a reason is specified, add it too.
 	std::string reason;
-	if (arguments.size() > 2) {
+	if (arguments.size() > 3) {
 		// Account for people who forget their double-quotes.
-		arguments.erase(arguments.begin(), arguments.begin() + 1);
+		arguments.erase(arguments.begin(), arguments.begin() + 3);
 		reason = JoinStrings(arguments, " ");
 	}
 
@@ -394,6 +394,8 @@ BEGIN_COMMAND (banlist) {
 
 	for (banlist_results_t::iterator it = result.begin();
 		 it != result.end();++it) {
+		std::ostringstream buffer;
+		buffer << it->first + 1 << ". " << it->second->range.string();
 
 		if (it->second->expire == 0) {
 			strncpy(expire, "Permanent", 19);
@@ -403,9 +405,23 @@ BEGIN_COMMAND (banlist) {
 				strncpy(expire, "???", 19);
 			}
 		}
+		buffer << " " << expire;
 
-		Printf(PRINT_HIGH, "%d. %s - %s", it->first + 1,
-			   it->second->range.string().c_str(), expire);
+		bool has_name = !it->second->name.empty();
+		bool has_reason = !it->second->reason.empty();
+		if (has_name || has_reason) {
+			buffer << " (";
+			if (!has_name) {
+				buffer << "\"" << it->second->reason << "\"";
+			} else if (!has_reason) {
+				buffer << it->second->name;
+			} else {
+				buffer << it->second->name << ": \"" << it->second->reason << "\"";
+			}
+			buffer << ")";
+		}
+
+		Printf(PRINT_HIGH, "%s", buffer.str().c_str());
 	}
 } END_COMMAND (banlist)
 
