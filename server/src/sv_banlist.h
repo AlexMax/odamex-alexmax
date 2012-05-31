@@ -65,7 +65,7 @@ public:
 	bool check(const netadr_t& address, Ban& baninfo);
 	bool query(banlist_results_t &result);
 	bool query(const std::string &query, banlist_results_t &result);
-	void remove(std::string address);
+	bool remove(size_t index);
 private:
 	std::vector<Ban> banlist;
 };

@@ -244,7 +244,21 @@ bool Banlist::query(const std::string &query, banlist_results_t &result) {
 	return true;
 }
 
-void Banlist::remove(std::string address) { }
+// Remove a ban from the banlist by index.
+bool Banlist::remove(size_t index) {
+	// No banlist?  Return an error state.
+	if (this->banlist.empty()) {
+		return false;
+	}
+
+	// Invalid index?  Return an error state.
+	if (this->banlist.size() <= index) {
+		return false;
+	}
+
+	this->banlist.erase(this->banlist.begin() + index);
+	return true;
+}
 
 //// Console commands ////
 
@@ -337,6 +351,29 @@ BEGIN_COMMAND (addban) {
 
 	banlist.add(address, tim, name, reason);
 } END_COMMAND (addban)
+
+BEGIN_COMMAND (delban) {
+	std::vector<std::string> arguments = VectorArgs(argc, argv);
+
+	// We need at least one argument.
+	if (arguments.size() < 1) {
+		Printf(PRINT_HIGH, "Usage: delban <banlist index>\n");
+		return;
+	}
+
+	size_t bid;
+	std::istringstream buffer(arguments[0]);
+	buffer >> bid;
+	if (!buffer || bid == 0) {
+		Printf(PRINT_HIGH, "delban: banlist index must be a nonzero number.\n");
+		return;
+	}
+
+	if (!banlist.remove(bid - 1)) {
+		Printf(PRINT_HIGH, "delban: banlist index does not exist.\n");
+		return;
+	}
+} END_COMMAND (delban)
 
 BEGIN_COMMAND (banlist) {
 	std::vector<std::string> arguments = VectorArgs(argc, argv);
@@ -741,13 +778,13 @@ void SV_IPListDelete(std::vector<BanEntry_t> *list, std::string listname, std::s
 	SV_IPListAdd(&BanList, "Ban", IPtoBan, reason);
 	} END_COMMAND(addban)*/
 
-BEGIN_COMMAND(delban) {
+ /*BEGIN_COMMAND(delban) {
 	if (argc < 2)
 		return;
 
 	std::string IPtoBan = BuildString(argc - 1, (const char **)(argv + 1));
 	SV_IPListDelete(&BanList, "Ban", IPtoBan);
-} END_COMMAND(delban)
+	} END_COMMAND(delban)*/
 
 /* BEGIN_COMMAND(banlist) {
 	SV_IPListDisplay(&BanList, "Ban");
