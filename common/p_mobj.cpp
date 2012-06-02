@@ -1164,6 +1164,7 @@ void P_ZMovement(AActor *mo)
 {
 	fixed_t	dist;
 	fixed_t	delta;
+	fixed_t oldz = mo->z;
 
 	// check for smooth step up
 	if (mo->player && mo->z < mo->floorz)
@@ -1412,50 +1413,42 @@ void P_ZMovement(AActor *mo)
 			return;
 		}
 	}
-	
-	/*  [ML] 7/13/11: This isn't going to be used just yet - no need...
-	if (mo->subsector->sector->heightsec != NULL && mo->subsector->sector->SecActTarget != NULL)
-	{
+
+	// [AM] Handle actor specials that deal with fake floors and ceilings.
+	if (mo->subsector->sector->heightsec != NULL && mo->subsector->sector->SecActTarget != NULL) {
 		sector_t *hs = mo->subsector->sector->heightsec;
 		fixed_t waterz = P_FloorHeight(mo->x, mo->y, hs);
 		fixed_t newz;
 		fixed_t viewheight;
 
-		if (mo->player != NULL)
-		{
+		if (mo->player != NULL) {
 			viewheight = mo->player->viewheight;
-		}
-		else
-		{
+		} else {
 			viewheight = mo->height / 2;
 		}
 
 		newz = mo->z + viewheight;
 		oldz += viewheight;
 
-		if (oldz <= waterz && newz > waterz)
-		{ // View went above fake floor
-			mo->subsector->sector->SecActTarget->TriggerAction (mo, SECSPAC_EyesSurface);
-		}
-		else if (oldz > waterz && newz <= waterz)
-		{ // View went below fake floor
-			mo->subsector->sector->SecActTarget->TriggerAction (mo, SECSPAC_EyesDive);
+		if (oldz <= waterz && newz > waterz) {
+			// View went above fake floor
+			A_TriggerAction(mo->subsector->sector->SecActTarget, mo, SECSPAC_EyesSurface);
+		} else if (oldz > waterz && newz <= waterz) {
+			// View went below fake floor
+			A_TriggerAction(mo->subsector->sector->SecActTarget, mo, SECSPAC_EyesDive);
 		}
 
-		if (!(hs->MoreFlags & SECF_FAKEFLOORONLY))
-		{
-			waterz = hs->ceilingheight;
-			if (oldz <= waterz && newz > waterz)
-			{ // View went above fake floor
-				mo->subsector->sector->SecActTarget->TriggerAction (mo, SECSPAC_EyesAboveC);
-			}
-			else if (oldz > waterz && newz <= waterz)
-			{ // View went below fake floor
-				mo->subsector->sector->SecActTarget->TriggerAction (mo, SECSPAC_EyesBelowC);
+		if (!(hs->MoreFlags & SECF_FAKEFLOORONLY)) {
+			waterz = P_CeilingHeight(mo->x, mo->y, hs);
+			if (oldz <= waterz && newz > waterz) {
+				// View went above fake ceiling
+				A_TriggerAction(mo->subsector->sector->SecActTarget, mo, SECSPAC_EyesAboveC);
+			} else if (oldz > waterz && newz <= waterz) {
+				// View went below fake ceiling
+				A_TriggerAction(mo->subsector->sector->SecActTarget, mo, SECSPAC_EyesBelowC);
 			}
 		}
 	}
-	*/
 }
 
 //
@@ -2419,7 +2412,8 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 
 	SV_SpawnMobj(mobj);
 
-	if (mthing->type >= 9994 && mthing->type <= 9999) {
+	if ((mthing->type >= 9992 && mthing->type <= 9999) ||
+		(mthing->type >= 9982 && mthing->type <= 9983)) {
 		// Add ourselves to this sector's list of actions.
 		if (mobj->subsector->sector->SecActTarget != NULL) {
 			mobj->tracer = mobj->subsector->sector->SecActTarget->ptr();
