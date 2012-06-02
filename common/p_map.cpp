@@ -2647,6 +2647,7 @@ void P_AimCamera (AActor *t1)
 // USE LINES
 //
 AActor *usething;
+bool foundline;
 
 BOOL PTR_UseTraverse (intercept_t *in)
 {
@@ -2658,14 +2659,20 @@ BOOL PTR_UseTraverse (intercept_t *in)
 		P_LineOpeningIntercept(in->d.line, in);
 		if (openrange <= 0)
 		{
-			UV_SoundAvoidPlayer (usething, CHAN_VOICE, "player/male/grunt1", ATTN_NORM);
-
+			// [RH] Give sector a chance to intercept the use
+			sector_t *sec = in->d.line->frontsector;
+			if ((!sec->SecActTarget ||
+			    !A_TriggerAction(sec->SecActTarget, usething, SECSPAC_Use|SECSPAC_UseWall)) &&
+			    usething->player)
+			{
+				UV_SoundAvoidPlayer(usething, CHAN_VOICE, "player/male/grunt1", ATTN_NORM);
+			}
 			// can't use through a wall
 			return false;
 		}
 
-		// not a special line, but keep checking
-		return true;
+		foundline = true;
+		return true; // not a special line, but keep checking
 	}
 
 	int side = (P_PointOnLineSide (usething->x, usething->y, in->d.line) == 1);
@@ -2728,6 +2735,7 @@ void P_UseLines (player_t *player)
 		return;
 
 	usething = player->mo;
+	foundline = false;
 
 	//Added by MC: Check if bot and use special activating (spin round) if it is.
 	angle = player->mo->angle >> ANGLETOFINESHIFT;
@@ -2737,15 +2745,19 @@ void P_UseLines (player_t *player)
 	x2 = x1 + (USERANGE>>FRACBITS)*finecosine[angle];
 	y2 = y1 + (USERANGE>>FRACBITS)*finesine[angle];
 
-	// old code:
-	if (!co_boomlinecheck)
-		P_PathTraverse ( x1, y1, x2, y2, PT_ADDLINES, PTR_UseTraverse );
-	else {
-		// This added test makes the "oof" sound work on 2s lines -- killough:
-		// [ML] It also apparently allows additional silent bfg tricks not present in vanilla...
-		if (P_PathTraverse (x1, y1, x2, y2, PT_ADDLINES, PTR_UseTraverse))
-			if (!P_PathTraverse (x1, y1, x2, y2, PT_ADDLINES, PTR_NoWayTraverse))
-				UV_SoundAvoidPlayer (usething, CHAN_VOICE, "player/male/grunt1", ATTN_NORM);
+	if (P_PathTraverse (x1, y1, x2, y2, PT_ADDLINES, PTR_UseTraverse)) {
+		// [RH] Give sector a chance to eat the use
+		sector_t *sec = usething->subsector->sector;
+		int spac = SECSPAC_Use;
+		if (foundline)
+			spac |= SECSPAC_UseWall;
+		if ((!sec->SecActTarget || !A_TriggerAction(sec->SecActTarget, usething, spac)) &&
+		    (co_boomlinecheck && !P_PathTraverse(x1, y1, x2, y2, PT_ADDLINES, PTR_NoWayTraverse)))
+		{
+			// This added test makes the "oof" sound work on 2s lines -- killough:
+			// [ML] It also apparently allows additional silent bfg tricks not present in vanilla...
+			UV_SoundAvoidPlayer(usething, CHAN_VOICE, "player/male/grunt1", ATTN_NORM);
+		}
 	}
 }
 

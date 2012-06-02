@@ -2419,7 +2419,7 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 
 	SV_SpawnMobj(mobj);
 
-	if (mthing->type >= 9996 && mthing->type <= 9999) {
+	if (mthing->type >= 9994 && mthing->type <= 9999) {
 		// Add ourselves to this sector's list of actions.
 		if (mobj->subsector->sector->SecActTarget != NULL) {
 			mobj->tracer = mobj->subsector->sector->SecActTarget->ptr();
