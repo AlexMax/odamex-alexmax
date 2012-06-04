@@ -31,6 +31,7 @@
 #include	"p_ctf.h"
 #include	"p_mobj.h"
 #include    "st_stuff.h"
+#include	"s_sound.h"
 
 flagdata CTFdata[NUMFLAGS];
 int TEAMpoints[NUMFLAGS];
@@ -161,6 +162,9 @@ void CL_CTFEvent (void)
 				CTFdata[flag].actor->Destroy();
 			break;
 	}
+
+	// [AM] Play CTF sound, moved from server.
+	CTF_Sound(flag, event);
 }
 
 //	CTF_CheckFlags
@@ -437,6 +441,73 @@ FArchive &operator>> (FArchive &arc, flagdata &flag)
 	flag.actor = AActor::AActorPtr();
 
 	return arc;
+}
+
+// [AM] Clientside CTF sounds.
+// 0: Team-agnostic SFX
+// 1: Own team announcer
+// 2: Enemy team announcer
+// 3: Blue team announcer
+// 4: Red team announcer
+static const char *flag_sound[NUM_CTF_SCORE][5] = {
+	{"", "", "", "", ""}, // NONE
+	{"", "", "", "", ""}, // REFRESH
+	{"", "", "", "", ""}, // KILL
+	{"", "", "", "", ""}, // BETRAYAL
+	{"ctf/grab", "ctf/f_grab", "ctf/e_grab", "ctf/b_grab", "ctf/r_grab"}, // GRAB
+	{"ctf/grab", "ctf/f_grab", "ctf/e_grab", "ctf/b_grab", "ctf/r_grab"}, // FIRSTGRAB
+	{"", "", "", "", ""}, // CARRIERKILL
+	{"ctf/return", "ctf/f_return", "ctf/e_return", "ctf/b_return", "ctf/r_return"}, // RETURN
+	{"ctf/capture", "ctf/f_capture", "ctf/e_capture", "ctf/b_capture", "ctf/r_capture"}, // CAPTURE
+	{"ctf/drop", "ctf/f_drop", "ctf/e_drop", "ctf/b_drop", "ctf/r_drop"}, // DROP
+	{"ctf/manualreturn", "ctf/f_manualreturn", "ctf/e_manualreturn", "ctf/b_manualreturn", "ctf/r_manualreturn"}, // MANUALRETURN
+};
+
+EXTERN_CVAR(snd_announcertype)
+
+// [AM] Play sounds based on CTF events and the announcer type
+void CTF_Sound(flag_t f, flag_score_t event) {
+	if (f >= NUMFLAGS) {
+		// Invalid team
+		return;
+	}
+
+	if (event >= NUM_CTF_SCORE) {
+		// Invalid CTF event
+		return;
+	}
+
+	if (strcmp(flag_sound[event][0], "") == 0) {
+		// No sound for this event
+		return;
+	}
+
+	switch (snd_announcertype.asInt()) {
+	case 1:
+		S_Sound(CHAN_ANNOUNCERF, flag_sound[event][0], 1, ATTN_NONE);
+		break;
+	case 3:
+		// Possessive (yours/theirs)
+		if (!consoleplayer().spectator) {
+			if (consoleplayer().userinfo.team == (team_t)f) {
+				S_Sound(CHAN_ANNOUNCERF, flag_sound[event][1], 1, ATTN_NONE);
+			} else {
+				S_Sound(CHAN_ANNOUNCERE, flag_sound[event][2], 1, ATTN_NONE);
+			}
+		}
+		// No break, we want to fall through if we're spectating
+	case 2:
+		// Team colors (red/blue)
+		if (consoleplayer().userinfo.team == (team_t)f && !consoleplayer().spectator) {
+			S_Sound(CHAN_ANNOUNCERF, flag_sound[event][3 + f], 1, ATTN_NONE);
+		} else {
+			S_Sound(CHAN_ANNOUNCERE, flag_sound[event][3 + f], 1, ATTN_NONE);
+		}
+		break;
+	default:
+		// Play no sound at all
+		return;
+	}
 }
 
 VERSION_CONTROL (cl_ctf_cpp, "$Id$")
