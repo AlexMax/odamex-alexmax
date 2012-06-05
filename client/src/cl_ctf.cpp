@@ -483,30 +483,40 @@ void CTF_Sound(flag_t f, flag_score_t event) {
 	}
 
 	switch (snd_announcertype.asInt()) {
-	case 1:
-		S_Sound(CHAN_ANNOUNCERF, flag_sound[event][0], 1, ATTN_NONE);
-		break;
 	case 3:
 		// Possessive (yours/theirs)
 		if (!consoleplayer().spectator) {
 			if (consoleplayer().userinfo.team == (team_t)f) {
-				S_Sound(CHAN_ANNOUNCERF, flag_sound[event][1], 1, ATTN_NONE);
+				if (S_FindSound(flag_sound[event][1]) != -1) {
+					S_Sound(CHAN_ANNOUNCERF, flag_sound[event][1], 1, ATTN_NONE);
+					break;
+				}
 			} else {
-				S_Sound(CHAN_ANNOUNCERE, flag_sound[event][2], 1, ATTN_NONE);
+				if (S_FindSound(flag_sound[event][2]) != -1) {
+					S_Sound(CHAN_ANNOUNCERE, flag_sound[event][2], 1, ATTN_NONE);
+					break;
+				}
 			}
 		}
-		// No break, we want to fall through if we're spectating
+		// fallthrough
 	case 2:
 		// Team colors (red/blue)
-		if (consoleplayer().userinfo.team == (team_t)f && !consoleplayer().spectator) {
-			S_Sound(CHAN_ANNOUNCERF, flag_sound[event][3 + f], 1, ATTN_NONE);
-		} else {
-			S_Sound(CHAN_ANNOUNCERE, flag_sound[event][3 + f], 1, ATTN_NONE);
+		if (S_FindSound(flag_sound[event][3 + f]) != -1) {
+			if (consoleplayer().userinfo.team == (team_t)f && !consoleplayer().spectator) {
+				S_Sound(CHAN_ANNOUNCERF, flag_sound[event][3 + f], 1, ATTN_NONE);
+			} else {
+				S_Sound(CHAN_ANNOUNCERE, flag_sound[event][3 + f], 1, ATTN_NONE);
+			}
+			break;
+		}
+		// fallthrough
+	case 1:
+		if (S_FindSound(flag_sound[event][0]) != -1) {
+			S_Sound(CHAN_ANNOUNCERF, flag_sound[event][0], 1, ATTN_NONE);
 		}
 		break;
 	default:
-		// Play no sound at all
-		return;
+		break;
 	}
 }
 
