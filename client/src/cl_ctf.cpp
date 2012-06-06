@@ -463,9 +463,10 @@ static const char *flag_sound[NUM_CTF_SCORE][5] = {
 	{"ctf/manualreturn", "ctf/f_manualreturn", "ctf/e_manualreturn", "ctf/b_manualreturn", "ctf/r_manualreturn"}, // MANUALRETURN
 };
 
-EXTERN_CVAR(snd_announcertype)
+EXTERN_CVAR(snd_voxtype)
+EXTERN_CVAR(snd_gamesfx)
 
-// [AM] Play sounds based on CTF events and the announcer type
+// [AM] Play appropriate sounds for CTF events.
 void CTF_Sound(flag_t f, flag_score_t event) {
 	if (f >= NUMFLAGS) {
 		// Invalid team
@@ -478,43 +479,44 @@ void CTF_Sound(flag_t f, flag_score_t event) {
 	}
 
 	if (strcmp(flag_sound[event][0], "") == 0) {
-		// No sound for this event
+		// No logical sound for this event
 		return;
 	}
 
-	switch (snd_announcertype.asInt()) {
-	case 3:
+	// Play sound effect
+	if (snd_gamesfx && S_FindSound(flag_sound[event][0]) != -1) {
+		S_Sound(CHAN_GAMEINFO, flag_sound[event][0], 1, ATTN_NONE);
+	}
+
+	// Play announcer sound
+	switch (snd_voxtype.asInt()) {
+	case 2:
 		// Possessive (yours/theirs)
 		if (!consoleplayer().spectator) {
 			if (consoleplayer().userinfo.team == (team_t)f) {
 				if (S_FindSound(flag_sound[event][1]) != -1) {
-					S_Sound(CHAN_ANNOUNCERF, flag_sound[event][1], 1, ATTN_NONE);
+					S_Sound(CHAN_ANNOUNCER, flag_sound[event][1], 1, ATTN_NONE);
 					break;
 				}
 			} else {
 				if (S_FindSound(flag_sound[event][2]) != -1) {
-					S_Sound(CHAN_ANNOUNCERE, flag_sound[event][2], 1, ATTN_NONE);
+					S_Sound(CHAN_ANNOUNCER, flag_sound[event][2], 1, ATTN_NONE);
 					break;
 				}
 			}
 		}
 		// fallthrough
-	case 2:
+	case 1:
 		// Team colors (red/blue)
 		if (S_FindSound(flag_sound[event][3 + f]) != -1) {
 			if (consoleplayer().userinfo.team == (team_t)f && !consoleplayer().spectator) {
-				S_Sound(CHAN_ANNOUNCERF, flag_sound[event][3 + f], 1, ATTN_NONE);
+				S_Sound(CHAN_ANNOUNCER, flag_sound[event][3 + f], 1, ATTN_NONE);
 			} else {
-				S_Sound(CHAN_ANNOUNCERE, flag_sound[event][3 + f], 1, ATTN_NONE);
+				S_Sound(CHAN_ANNOUNCER, flag_sound[event][3 + f], 1, ATTN_NONE);
 			}
 			break;
 		}
 		// fallthrough
-	case 1:
-		if (S_FindSound(flag_sound[event][0]) != -1) {
-			S_Sound(CHAN_ANNOUNCERF, flag_sound[event][0], 1, ATTN_NONE);
-		}
-		break;
 	default:
 		break;
 	}
