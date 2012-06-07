@@ -493,13 +493,13 @@ void CTF_Sound(flag_t f, flag_score_t event) {
 	case 2:
 		// Possessive (yours/theirs)
 		if (!consoleplayer().spectator) {
-			if (consoleplayer().userinfo.team == (team_t)f) {
-				if (S_FindSound(flag_sound[event][1]) != -1) {
+			if (consoleplayer().userinfo.team != (team_t)f) {
+				if (S_FindSound(flag_sound[event][2]) != -1) {
 					S_Sound(CHAN_ANNOUNCER, flag_sound[event][1], 1, ATTN_NONE);
 					break;
 				}
 			} else {
-				if (S_FindSound(flag_sound[event][2]) != -1) {
+				if (S_FindSound(flag_sound[event][1]) != -1) {
 					S_Sound(CHAN_ANNOUNCER, flag_sound[event][2], 1, ATTN_NONE);
 					break;
 				}
@@ -509,7 +509,7 @@ void CTF_Sound(flag_t f, flag_score_t event) {
 	case 1:
 		// Team colors (red/blue)
 		if (S_FindSound(flag_sound[event][3 + f]) != -1) {
-			if (consoleplayer().userinfo.team == (team_t)f && !consoleplayer().spectator) {
+			if (consoleplayer().userinfo.team != (team_t)f && !consoleplayer().spectator) {
 				S_Sound(CHAN_ANNOUNCER, flag_sound[event][3 + f], 1, ATTN_NONE);
 			} else {
 				S_Sound(CHAN_ANNOUNCER, flag_sound[event][3 + f], 1, ATTN_NONE);
