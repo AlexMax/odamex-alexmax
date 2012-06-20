@@ -454,13 +454,13 @@ static const char *flag_sound[NUM_CTF_SCORE][5] = {
 	{"", "", "", "", ""}, // REFRESH
 	{"", "", "", "", ""}, // KILL
 	{"", "", "", "", ""}, // BETRAYAL
-	{"ctf/grab", "ctf/f_grab", "ctf/e_grab", "ctf/b_grab", "ctf/r_grab"}, // GRAB
-	{"ctf/grab", "ctf/f_grab", "ctf/e_grab", "ctf/b_grab", "ctf/r_grab"}, // FIRSTGRAB
+	{"ctf/take", "vox/you/flag/take", "vox/enemy/flag/take", "vox/blue/flag/take", "vox/red/flag/take"}, // GRAB
+	{"ctf/take", "vox/you/flag/take", "vox/enemy/flag/take", "vox/blue/flag/take", "vox/red/flag/take"}, // FIRSTGRAB
 	{"", "", "", "", ""}, // CARRIERKILL
-	{"ctf/return", "ctf/f_return", "ctf/e_return", "ctf/b_return", "ctf/r_return"}, // RETURN
-	{"ctf/capture", "ctf/f_capture", "ctf/e_capture", "ctf/b_capture", "ctf/r_capture"}, // CAPTURE
-	{"ctf/drop", "ctf/f_drop", "ctf/e_drop", "ctf/b_drop", "ctf/r_drop"}, // DROP
-	{"ctf/manualreturn", "ctf/f_manualreturn", "ctf/e_manualreturn", "ctf/b_manualreturn", "ctf/r_manualreturn"}, // MANUALRETURN
+	{"ctf/return", "vox/you/flag/return", "vox/enemy/flag/return", "vox/blue/flag/return", "vox/red/flag/return"}, // RETURN
+	{"ctf/capture", "vox/enemy/score", "vox/you/score", "vox/red/score", "vox/blue/score"}, // CAPTURE
+	{"ctf/drop", "vox/you/flag/drop", "vox/enemy/flag/drop", "vox/blue/flag/drop", "vox/red/flag/drop"}, // DROP
+	{"ctf/manualreturn", "vox/you/flag/manualreturn", "vox/enemy/flag/manualreturn", "vox/blue/flag/manualreturn", "vox/red/flag/manualreturn"}, // MANUALRETURN
 };
 
 EXTERN_CVAR(snd_voxtype)
@@ -495,12 +495,12 @@ void CTF_Sound(flag_t f, flag_score_t event) {
 		if (!consoleplayer().spectator) {
 			if (consoleplayer().userinfo.team != (team_t)f) {
 				if (S_FindSound(flag_sound[event][2]) != -1) {
-					S_Sound(CHAN_ANNOUNCER, flag_sound[event][1], 1, ATTN_NONE);
+					S_Sound(CHAN_ANNOUNCER, flag_sound[event][2], 1, ATTN_NONE);
 					break;
 				}
 			} else {
 				if (S_FindSound(flag_sound[event][1]) != -1) {
-					S_Sound(CHAN_ANNOUNCER, flag_sound[event][2], 1, ATTN_NONE);
+					S_Sound(CHAN_ANNOUNCER, flag_sound[event][1], 1, ATTN_NONE);
 					break;
 				}
 			}
