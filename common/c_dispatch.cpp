@@ -708,6 +708,28 @@ std::string BuildString (size_t argc, std::vector<std::string> args)
 	return out;
 }
 
+// [AM] Take a string, quote it, and escape it, making it suitable for parsing
+//      as an argument.
+std::string C_QuoteString(const std::string &argstr)
+{
+	std::ostringstream buffer;
+	buffer << "\"";
+	for (std::string::const_iterator it = argstr.begin();it != argstr.end();++it)
+	{
+		if (*it == '"')
+		{
+			// Escape this quote.
+			buffer << "\\\"";
+		}
+		else
+		{
+			buffer << *it;
+		}
+	}
+	buffer << "\"";
+	return buffer.str();
+}
+
 static int DumpHash (BOOL aliases)
 {
 	int count = 0;
@@ -729,9 +751,9 @@ static int DumpHash (BOOL aliases)
 	return count;
 }
 
-void DConsoleAlias::Archive (FILE *f)
+void DConsoleAlias::Archive(FILE *f)
 {
-	fprintf (f, "alias \"%s\" \"%s\"\n", m_Name.c_str(), m_Command.c_str());
+	fprintf(f, "alias %s %s\n", C_QuoteString(m_Name).c_str(), C_QuoteString(m_Command).c_str());
 }
 
 void DConsoleAlias::C_ArchiveAliases (FILE *f)
