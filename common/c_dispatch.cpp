@@ -275,18 +275,40 @@ void AddCommandString(const std::string &str, bool onlycvars)
 	// stores a copy of the current substring
 	char *command = new char[totallen + 1];
 
+	// scan for a command ending
 	while (*cstart)
 	{
 		const char *cp = cstart;
 
 		while (*cp != ';' && *cp != '\0')
 		{
-			// ignore ';' if it is inside a pair of quotes
-			if (*cp == '\"')
+			if (cp[0] == '\\' && cp[1] != 0)
 			{
+				// [AM] Skip extra char if escaped.
 				cp++;
-				while (*cp != '\"' && *cp != '\0')
+			}
+			else if (*cp == '"')
+			{
+				// Ignore ';' if it is inside a pair of quotes.
+				while (1)
+				{
 					cp++;
+					if (*cp == 0)
+					{
+						// End of string.
+						break;
+					}
+					if (cp[0] == '\\' && cp[1] == '"')
+					{
+						// [AM] Skip over escaped quotes.
+						cp++;
+					}
+					else if (*cp == '"')
+					{
+						// End of quote.
+						break;
+					}
+				}
 			}
 			cp++;
 		}
@@ -460,53 +482,89 @@ END_COMMAND (if)
 
 // ParseString2 is adapted from COM_Parse
 // found in the Quake2 source distribution
-const char *ParseString2 (const char *data)
+const char *ParseString2(const char *data)
 {
-	int c;
 	int len;
 
 	len = 0;
 	com_token[0] = 0;
 
-	if (!data)
-		return NULL;
-
-// skip whitespace
-	while ( (c = *data) <= ' ')
+	// Skip whitespace.
+	while (*data <= ' ')
 	{
-		if (c == 0)
+		if (*data == 0)
 		{
-			return NULL;			// end of string encountered
+			// End of string encountered.
+			return NULL;
 		}
 		data++;
 	}
 
-// handle quoted strings specially
-	if (c == '\"')
+	if (data[0] == '\\' && data[1] != 0)
 	{
-		data++;
+		// [AM] Handle escaped strings.
+		com_token[len] = data[1];
+		data += 2;
+		len++;
+	}
+	else if (*data == '"')
+	{
+		// Quoted strings count as one large token.
 		while (1) {
-			c = *data++;
-			if (c == '\"' || c == '\0')
+			data++;
+			if (*data == 0)
 			{
-				if (c == '\0')
-					data--;
+				// [AM] Unclosed quote, show no mercy.
+				return NULL;
+			}
+			if (data[0] == '\\' && data[1] != 0)
+			{
+				// [AM] Handle escaped strings.
+				com_token[len] = data[1];
+				data++; // Skip one _additional_ char.
+				len++;
+				continue;
+			}
+			else if (*data == '"')
+			{
+				// Closing quote, that's the entire token.
 				com_token[len] = 0;
+				data++; // Skip the closing quote.
 				return data;
 			}
-			com_token[len] = c;
+			// None of the above, copy the char and continue.
+			com_token[len] = *data;
 			len++;
 		}
 	}
 
-// parse a regular word
-	do {
-		com_token[len] = c;
+	while (1) {
+		// Parse a regular word.
+		if (*data <= 32)
+		{
+			// End of word.
+			break;
+		}
+		if (data[0] == '\\' && data[1] != 0)
+		{
+			// [AM] Handle escaped strings.
+			com_token[len] = data[1];
+			data += 2; // Skip two chars.
+			len++;
+			continue;
+		}
+		else if (*data == '"')
+		{
+			// End of word.
+			break;
+		}
+		// None of the above, copy the char and continue.
+		com_token[len] = *data;
 		data++;
 		len++;
-		c = *data;
-	} while (c>32);
-
+	}
+	// We're done, cap the token with a null and
+	// return the remaining data to parse.
 	com_token[len] = 0;
 	return data;
 }
