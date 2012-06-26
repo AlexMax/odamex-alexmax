@@ -281,12 +281,12 @@ void AddCommandString(const std::string &str, bool onlycvars)
 	{
 		const char *cp = cstart;
 
-		while (*cp != ';' && *cp != '\0')
+		while (*cp != ';' && *cp != 0)
 		{
 			if (cp[0] == '\\' && cp[1] != 0)
 			{
-				// [AM] Skip extra char if escaped.
-				cp++;
+				// [AM] Skip two chars if escaped.
+				cp += 2;
 			}
 			else if (*cp == '"')
 			{
@@ -306,12 +306,17 @@ void AddCommandString(const std::string &str, bool onlycvars)
 					}
 					else if (*cp == '"')
 					{
-						// End of quote.
+						// End of quote.  Skip over ending quote.
+						cp++;
 						break;
 					}
 				}
 			}
-			cp++;
+			else
+			{
+				// Advance to next char.
+				cp++;
+			}
 		}
 
 		safemode |= onlycvars;
@@ -518,9 +523,9 @@ const char *ParseString2(const char *data)
 				// [AM] Unclosed quote, show no mercy.
 				return NULL;
 			}
-			if (data[0] == '\\' && data[1] != 0)
+			if (data[0] == '\\' && data[1] == '"')
 			{
-				// [AM] Handle escaped strings.
+				// [AM] Handle escaped quotes inside of quoted strings.
 				com_token[len] = data[1];
 				data++; // Skip one _additional_ char.
 				len++;
