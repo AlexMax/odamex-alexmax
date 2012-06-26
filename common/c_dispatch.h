@@ -45,6 +45,9 @@ const char *ParseString (const char *data);
 std::string C_ArgCombine(size_t argc, const char **argv);
 std::string BuildString (size_t argc, std::vector<std::string> args);
 
+// quote a string
+std::string C_QuoteString(const std::string &argstr);
+
 class DConsoleCommand : public DObject
 {
 	DECLARE_CLASS (DConsoleCommand, DObject)
