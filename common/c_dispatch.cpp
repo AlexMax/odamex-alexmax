@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <sstream>
 #include <algorithm>
 
 #include "doomtype.h"
@@ -474,7 +475,7 @@ BEGIN_COMMAND (if)
 
 	if(if_command_result && argc > 4)
 	{
-		std::string param = BuildString (argc - 4, (const char **)&argv[4]);
+		std::string param = C_ArgCombine(argc - 4, (const char **)&argv[4]);
 		AddCommandString(param);
 	}
 }
@@ -661,30 +662,19 @@ void DConsoleAlias::Run()
 	}
 }
 
-std::string BuildString (size_t argc, const char **argv)
+// [AM] Combine many arguments into one valid argument.  Since this
+//      function is called after we parse arguments, we don't need to
+//      escape the output.
+std::string C_ArgCombine(size_t argc, const char **argv)
 {
-	std::string out;
-
-	for(size_t i = 0; i < argc; i++)
+	std::ostringstream buffer;
+	for (size_t i = 0;i < argc;i++)
 	{
-		if(strchr(argv[i], ' '))
-		{
-			out += "\"";
-			out += argv[i];
-			out += "\"";
-		}
-		else
-		{
-			out += argv[i];
-		}
-
-		if(i + 1 < argc)
-		{
-			out += " ";
-		}
+		buffer << argv[i];
+		if (i + 1 < argc)
+			buffer << " ";
 	}
-
-	return out;
+	return buffer.str();
 }
 
 std::string BuildString (size_t argc, std::vector<std::string> args)
@@ -784,7 +774,7 @@ BEGIN_COMMAND (alias)
 		if(argc > 2)
 		{
 			// Build the new alias
-			std::string param = BuildString (argc - 2, (const char **)&argv[2]);
+			std::string param = C_ArgCombine(argc - 2, (const char **)&argv[2]);
 			new DConsoleAlias (argv[1], param.c_str());
 		}
 	}
@@ -947,7 +937,7 @@ END_COMMAND (puke)
 
 BEGIN_COMMAND (error)
 {
-	std::string text = BuildString (argc - 1, (const char **)(argv + 1));
+	std::string text = C_ArgCombine(argc - 1, (const char **)(argv + 1));
 	I_Error (text.c_str());
 }
 END_COMMAND (error)
