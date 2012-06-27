@@ -301,7 +301,7 @@ void AddCommandString(const std::string &str, bool onlycvars)
 					}
 					if (cp[0] == '\\' && cp[1] == '"')
 					{
-						// [AM] Skip over escaped quotes.
+						// [AM] Skip over escaped quote.
 						cp++;
 					}
 					else if (*cp == '"')
@@ -508,7 +508,7 @@ const char *ParseString2(const char *data)
 
 	if (data[0] == '\\' && data[1] != 0)
 	{
-		// [AM] Handle escaped strings.
+		// [AM] Handle escaped chars.
 		com_token[len] = data[1];
 		data += 2;
 		len++;
@@ -523,9 +523,9 @@ const char *ParseString2(const char *data)
 				// [AM] Unclosed quote, show no mercy.
 				return NULL;
 			}
-			if (data[0] == '\\' && data[1] == '"')
+			if (data[0] == '\\' && data[1] != 0)
 			{
-				// [AM] Handle escaped quotes inside of quoted strings.
+				// [AM] Handle escaped chars.
 				com_token[len] = data[1];
 				data++; // Skip one _additional_ char.
 				len++;
@@ -553,7 +553,7 @@ const char *ParseString2(const char *data)
 		}
 		if (data[0] == '\\' && data[1] != 0)
 		{
-			// [AM] Handle escaped strings.
+			// [AM] Handle escaped chars.
 			com_token[len] = data[1];
 			data += 2; // Skip two chars.
 			len++;
@@ -716,10 +716,10 @@ std::string C_QuoteString(const std::string &argstr)
 	buffer << "\"";
 	for (std::string::const_iterator it = argstr.begin();it != argstr.end();++it)
 	{
-		if (*it == '"')
+		if (*it == '"' || *it == '\\')
 		{
 			// Escape this quote.
-			buffer << "\\\"";
+			buffer << '\\' << *it;
 		}
 		else
 		{
