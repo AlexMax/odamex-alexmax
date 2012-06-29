@@ -43,6 +43,8 @@
 #include "r_defs.h"
 #include "i_system.h"
 
+#include "jim.h"
+
 IMPLEMENT_CLASS (DConsoleCommand, DObject)
 IMPLEMENT_CLASS (DConsoleAlias, DConsoleCommand)
 
@@ -968,6 +970,32 @@ BEGIN_COMMAND (error)
 	I_Error (text.c_str());
 }
 END_COMMAND (error)
+
+BEGIN_COMMAND (jim) {
+	if (argc < 2) {
+		Printf(PRINT_HIGH, "jim: needs an argument\n");
+		return;
+	}
+
+	Jim_Interp *interp;
+
+	interp = Jim_CreateInterp();
+	Jim_RegisterCoreCommands(interp);
+	Jim_InitStaticExtensions(interp);
+
+	int retcode = Jim_Eval(interp, argv[1]);
+	if (retcode != JIM_ERR)
+	{
+		Printf(PRINT_HIGH, "jim: %s\n", Jim_String(Jim_GetResult(interp)));
+	}
+	else
+	{
+		Printf(PRINT_HIGH, "jim (e): %s\n", Jim_String(Jim_GetResult(interp)));
+	}
+
+	Jim_FreeInterp(interp);
+}
+END_COMMAND (jim)
 
 VERSION_CONTROL (c_dispatch_cpp, "$Id$")
 

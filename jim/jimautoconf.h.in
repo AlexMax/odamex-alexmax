@@ -1,0 +1,11 @@
+/*
+ * CMake configure script for Jim
+ */
+
+#cmakedefine HAVE_BACKTRACE
+#cmakedefine HAVE__NSGETENVIRON
+#cmakedefine HAVE_SYS_TIME_H
+#cmakedefine HAVE_CRT_EXTERNS_H
+
+/* Extension defines */
+#define jim_ext_namespace

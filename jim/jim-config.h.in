@@ -1,0 +1,6 @@
+/*
+ * CMake configure script for Jim
+ *   by Alex Mayfield
+ */
+
+#cmakedefine HAVE_LONG_LONG
