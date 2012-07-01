@@ -65,6 +65,8 @@ int gettimeofday(struct timeval *tv, void *unused)
  * This software was modified by Salvatore Sanfilippo for the Jim Interpreter.
  */
 
+#include <errno.h>
+
 DIR *opendir(const char *name)
 {
     DIR *dir = 0;
