@@ -75,6 +75,7 @@
 #include "m_swap.h"
 #include "gi.h"
 #include "sv_main.h"
+#include "l_core.h"
 
 EXTERN_CVAR (sv_timelimit)
 EXTERN_CVAR (sv_nomonsters)
@@ -1124,6 +1125,10 @@ void D_DoomMain (void)
 	// [RH] Lock any cvars that should be locked now that we're
 	// about to begin the game.
 	cvar_t::EnableNoSet ();
+
+	// [AM] Initialize Lua scripting.
+	Printf(PRINT_HIGH, "L_Init: Initializing Lua scripting subsystem.\n");
+	L_Init();
 
 	// [RH] Now that all game subsystems have been initialized,
 	// do all commands on the command line other than +set
