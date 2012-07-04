@@ -27,11 +27,11 @@
 #include "m_alloc.h"
 #include "c_console.h" // Printf
 
-DLuaState* Lua = NULL;
+LuaState* Lua = NULL;
 
 // Lua Allocator using m_alloc functions.  See
 // <http://www.lua.org/manual/5.1/manual.html/#lua_Alloc> for details.
-void* DLuaState::alloc(void *ud, void *ptr, size_t osize, size_t nsize)
+void* LuaState::alloc(void *ud, void *ptr, size_t osize, size_t nsize)
 {
 	if (nsize == 0)
 	{
@@ -43,53 +43,44 @@ void* DLuaState::alloc(void *ud, void *ptr, size_t osize, size_t nsize)
 }
 
 // Constructor.  Sets up the "doom" namespace.
-DLuaState::DLuaState() : L(lua_newstate(DLuaState::alloc, NULL))
+LuaState::LuaState() : L(lua_newstate(LuaState::alloc, NULL))
 {
 	if (!this->L) {
-		throw CFatalError("Could not initialize DLuaState!\n"); }
-
-	lua_newtable(this->L);
-	lua_pushstring(this->L, "port");
-	lua_pushstring(this->L, "Odamex");
-	lua_rawset(this->L, -3);
-	lua_pushstring(this->L, "version");
-	lua_pushstring(this->L, "0.6.0");
-	lua_rawset(this->L, -3);
-	lua_setglobal(this->L, "doom");
+		throw CFatalError("Could not initialize LuaState!\n"); }
 }
 
 // Destructor.
-DLuaState::~DLuaState()
+LuaState::~LuaState()
 {
 	lua_close(this->L);
 }
 
 // C API wrapper functions
 
-int DLuaState::pcall(int nargs, int nresults, int errfunc)
+int LuaState::pcall(int nargs, int nresults, int errfunc)
 {
 	return lua_pcall(this->L, nargs, nresults, errfunc);
 }
 
-void DLuaState::pop(int n)
+void LuaState::pop(int n)
 {
 	lua_pop(this->L, n);
 }
 
-std::string DLuaState::tostring(int index)
+std::string LuaState::tostring(int index)
 {
 	return lua_tostring(this->L, index);
 }
 
 // Auxiliary library wrapper functions
 
-int DLuaState::Lloadbuffer(const std::string& buff, const std::string& name)
+int LuaState::Lloadbuffer(const std::string& buff, const std::string& name)
 {
 	const char* cbuff = buff.c_str();
 	return luaL_loadbuffer(this->L, cbuff, strlen(cbuff), name.c_str());
 }
 
-void DLuaState::Lopenlibs()
+void LuaState::Lopenlibs()
 {
 	luaL_openlibs(this->L);
 }
@@ -97,7 +88,7 @@ void DLuaState::Lopenlibs()
 // Lua subsystem initializer, called from i_main.cpp
 void L_Init()
 {
-	Lua = new DLuaState();
+	Lua = new LuaState();
 	Lua->Lopenlibs();
 	Printf(PRINT_HIGH, "%s loaded successfully.\n", LUA_RELEASE);
 }

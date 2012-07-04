@@ -33,14 +33,14 @@ extern "C"
 #include "lauxlib.h"
 }
 
-class DLuaState
+class LuaState
 {
 private:
 	lua_State* L;
 	static void* alloc(void *ud, void *ptr, size_t osize, size_t nsize);
 public:
-	DLuaState();
-	~DLuaState();
+	LuaState();
+	~LuaState();
 	int pcall(int nargs, int nresults, int errfunc);
 	void pop(int n);
 	std::string tostring(int index);

@@ -27,7 +27,7 @@
 
 #include "c_dispatch.h" // BEGIN_COMMAND
 
-extern DLuaState* Lua;
+extern LuaState* Lua;
 
 // XXX: HOLY MOLY this is insecure if exposed to rcon.  Implement sanxboxing
 //      and refactor, pronto.  See <http://lua-users.org/wiki/SandBoxes>.
