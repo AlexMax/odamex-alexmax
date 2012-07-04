@@ -41,7 +41,7 @@ void* LuaState::alloc(void *ud, void *ptr, size_t osize, size_t nsize)
 		return M_Realloc(ptr, nsize);
 }
 
-// Constructor.  Sets up the "doom" namespace.
+// Constructor.
 LuaState::LuaState() : L(lua_newstate(LuaState::alloc, NULL))
 {
 	if (!this->L) {
