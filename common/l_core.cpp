@@ -1,3 +1,26 @@
+// Emacs style mode select   -*- C++ -*-
+//-----------------------------------------------------------------------------
+//
+// $Id$
+//
+// Copyright (C) 1998-2006 by Randy Heit (ZDoom).
+// Copyright (C) 2012 by The Odamex Team.
+//
+// This program is free software; you can redistribute it and/or
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
+// of the License, or (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// DESCRIPTION:
+//   A C++ abstraction for the Lua API.
+//
+//-----------------------------------------------------------------------------
+
 #include <cstring>
 
 #include "l_core.h"
@@ -41,18 +64,7 @@ DLuaState::~DLuaState()
 	lua_close(this->L);
 }
 
-// Wrapper functions
-
-int DLuaState::loadbuffer(const std::string& buff, const std::string& name)
-{
-	const char* cbuff = buff.c_str();
-	return luaL_loadbuffer(this->L, cbuff, strlen(cbuff), name.c_str());
-}
-
-void DLuaState::openlibs()
-{
-	luaL_openlibs(this->L);
-}
+// C API wrapper functions
 
 int DLuaState::pcall(int nargs, int nresults, int errfunc)
 {
@@ -69,12 +81,23 @@ std::string DLuaState::tostring(int index)
 	return lua_tostring(this->L, index);
 }
 
+// Auxiliary library wrapper functions
 
+int DLuaState::Lloadbuffer(const std::string& buff, const std::string& name)
+{
+	const char* cbuff = buff.c_str();
+	return luaL_loadbuffer(this->L, cbuff, strlen(cbuff), name.c_str());
+}
+
+void DLuaState::Lopenlibs()
+{
+	luaL_openlibs(this->L);
+}
 
 // Lua subsystem initializer, called from i_main.cpp
 void L_Init()
 {
 	Lua = new DLuaState();
-	Lua->openlibs();
+	Lua->Lopenlibs();
 	Printf(PRINT_HIGH, "%s loaded successfully.\n", LUA_RELEASE);
 }
