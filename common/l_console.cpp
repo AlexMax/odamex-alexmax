@@ -20,8 +20,9 @@
 //
 //-----------------------------------------------------------------------------
 
-#include <string>
 #include <sstream>
+#include <stdexcept>
+#include <string>
 
 #include "l_console.h"
 
@@ -53,10 +54,12 @@ static int LCmd_print(lua_State* L)
 		Printf(PRINT_HIGH, "%s\n", buffer.str().c_str());
 		return 0;
 	}
-	catch (...)
+	// C++ exceptions cannot be reliably caught on the other side of Lua.
+	catch (std::exception& e)
 	{
-		return luaL_error(L, LUA_QL("print"), "threw unhandled exception");
+		lua_pushfstring(L, "%s threw internal exception %s", LUA_QL("print"), e.what());
 	}
+	return lua_error(L);
 }
 
 const luaL_Reg doom_lib[] = {
