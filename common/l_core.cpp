@@ -4,7 +4,7 @@
 #include "m_alloc.h"
 #include "c_console.h" // Printf
 
-DLuaState* Lua = 0;
+DLuaState* Lua = NULL;
 
 // Lua Allocator using m_alloc functions.  See
 // <http://www.lua.org/manual/5.1/manual.html/#lua_Alloc> for details.
@@ -13,14 +13,14 @@ void* DLuaState::alloc(void *ud, void *ptr, size_t osize, size_t nsize)
 	if (nsize == 0)
 	{
 		M_Free(ptr);
-		return 0;
+		return NULL;
 	}
 	else
 		return M_Realloc(ptr, nsize);
 }
 
 // Constructor.  Sets up the "doom" namespace.
-DLuaState::DLuaState() : L(lua_newstate(DLuaState::alloc, 0))
+DLuaState::DLuaState() : L(lua_newstate(DLuaState::alloc, NULL))
 {
 	if (!this->L) {
 		throw CFatalError("Could not initialize DLuaState!\n"); }
@@ -68,6 +68,8 @@ std::string DLuaState::tostring(int index)
 {
 	return lua_tostring(this->L, index);
 }
+
+
 
 // Lua subsystem initializer, called from i_main.cpp
 void L_Init()
