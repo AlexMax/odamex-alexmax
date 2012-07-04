@@ -32,6 +32,10 @@ extern "C"
 #include "lauxlib.h"
 }
 
+// [AM] The Lua C API normally exposes a ton of functions that all take
+//      a lua_State* as a first parameter.  Instead, we defines LuaState as
+//      a RAII class with API methods attached to it.
+
 class LuaState
 {
 private:
@@ -45,6 +49,7 @@ public:
 	std::string tostring(int index);
 	int Lloadbuffer(const std::string& buff, const std::string& name);
 	void Lopenlibs();
+	void Lregister(const std::string& libname, const luaL_Reg* l);
 };
 
 void L_Init();

@@ -23,6 +23,7 @@
 #include <cstring>
 
 #include "l_core.h"
+#include "l_console.h" // doom_lib
 #include "m_alloc.h"
 #include "c_console.h" // Printf
 
@@ -84,10 +85,16 @@ void LuaState::Lopenlibs()
 	luaL_openlibs(this->L);
 }
 
+void LuaState::Lregister(const std::string& libname, const luaL_Reg* l)
+{
+	luaL_register(this->L, libname.c_str(), l);
+}
+
 // Lua subsystem initializer, called from i_main.cpp
 void L_Init()
 {
 	Lua = new LuaState();
 	Lua->Lopenlibs();
+	Lua->Lregister("doom", doom_lib);
 	Printf(PRINT_HIGH, "%s loaded successfully.\n", LUA_RELEASE);
 }
