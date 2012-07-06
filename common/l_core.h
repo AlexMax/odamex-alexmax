@@ -23,6 +23,7 @@
 #ifndef __L_CORE_H__
 #define __L_CORE_H__
 
+#include <stdexcept>
 #include <string>
 
 extern "C"
@@ -30,6 +31,28 @@ extern "C"
 #include "lua.h"
 #include "lualib.h"
 #include "lauxlib.h"
+}
+
+// [AM] Normally, exposing C functions to Lua is done through lua_CFunction.
+//      This wrapper class wraps any thrown C++ exceptions from inside the
+//      function, as we don't want them to cross the Lua/C++ barrier.
+
+template<lua_CFunction lcf>
+int LuaCFunction(lua_State* L)
+{
+	try
+	{
+		return lcf(L);
+	}
+	catch (std::exception& e)
+	{
+		lua_pushfstring(L, "std::exception %s", e.what());
+	}
+	catch (...)
+	{
+		lua_pushstring(L, "unknown exception");
+	}
+	return lua_error(L);
 }
 
 // [AM] The Lua C API normally exposes a ton of functions that all take

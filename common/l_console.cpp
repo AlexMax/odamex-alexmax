@@ -21,7 +21,6 @@
 //-----------------------------------------------------------------------------
 
 #include <sstream>
-#include <stdexcept>
 #include <string>
 
 #include "l_console.h"
@@ -30,40 +29,31 @@
 
 extern LuaState* Lua;
 
-static int LCmd_print(lua_State* L)
+int LCmd_print(lua_State* L)
 {
-	try
+	std::ostringstream buffer;
+	int n = lua_gettop(L);
+	lua_getglobal(L, "tostring");
+	for (int i = 1;i <= n;i++)
 	{
-		std::ostringstream buffer;
-		int n = lua_gettop(L);
-		lua_getglobal(L, "tostring");
-		for (int i = 1;i <= n;i++)
-		{
-			const char* s;
-			lua_pushvalue(L, -1);
-			lua_pushvalue(L, i);
-			lua_call(L, 1, 1);
-			s = lua_tostring(L, -1);
-			if (s == NULL)
-				return luaL_error(L, LUA_QL("tostring") " must return a string to " LUA_QL("print"));
-			if (i > 1)
-				buffer << "\t";
-			buffer << s;
-			lua_pop(L, 1);
-		}
-		Printf(PRINT_HIGH, "%s\n", buffer.str().c_str());
-		return 0;
+		const char* s;
+		lua_pushvalue(L, -1);
+		lua_pushvalue(L, i);
+		lua_call(L, 1, 1);
+		s = lua_tostring(L, -1);
+		if (s == NULL)
+			return luaL_error(L, LUA_QL("tostring") " must return a string to " LUA_QL("print"));
+		if (i > 1)
+			buffer << "\t";
+		buffer << s;
+		lua_pop(L, 1);
 	}
-	// C++ exceptions cannot be reliably caught on the other side of Lua.
-	catch (std::exception& e)
-	{
-		lua_pushfstring(L, "%s threw internal exception %s", LUA_QL("print"), e.what());
-	}
-	return lua_error(L);
+	Printf(PRINT_HIGH, "%s\n", buffer.str().c_str());
+	return 0;
 }
 
 const luaL_Reg doom_lib[] = {
-	{"print", LCmd_print},
+	{"print", LuaCFunction<LCmd_print>},
 	{NULL, NULL}
 };
 
