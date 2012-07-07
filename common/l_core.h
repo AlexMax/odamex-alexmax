@@ -67,12 +67,7 @@ private:
 public:
 	LuaState();
 	~LuaState();
-	int pcall(int nargs, int nresults, int errfunc);
-	void pop(int n);
-	std::string tostring(int index);
-	int Lloadbuffer(const std::string& buff, const std::string& name);
-	void Lopenlibs();
-	void Lregister(const std::string& libname, const luaL_Reg* l);
+	operator lua_State*();
 };
 
 void L_Init();

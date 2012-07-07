@@ -20,8 +20,6 @@
 //
 //-----------------------------------------------------------------------------
 
-#include <cstring>
-
 #include "l_core.h"
 #include "l_console.h" // doom_lib
 #include "m_alloc.h"
@@ -55,46 +53,17 @@ LuaState::~LuaState()
 	lua_close(this->L);
 }
 
-// C API wrapper functions
-
-int LuaState::pcall(int nargs, int nresults, int errfunc)
+// Usable as a lua_State*.
+LuaState::operator lua_State*()
 {
-	return lua_pcall(this->L, nargs, nresults, errfunc);
-}
-
-void LuaState::pop(int n)
-{
-	lua_pop(this->L, n);
-}
-
-std::string LuaState::tostring(int index)
-{
-	return lua_tostring(this->L, index);
-}
-
-// Auxiliary library wrapper functions
-
-int LuaState::Lloadbuffer(const std::string& buff, const std::string& name)
-{
-	const char* cbuff = buff.c_str();
-	return luaL_loadbuffer(this->L, cbuff, strlen(cbuff), name.c_str());
-}
-
-void LuaState::Lopenlibs()
-{
-	luaL_openlibs(this->L);
-}
-
-void LuaState::Lregister(const std::string& libname, const luaL_Reg* l)
-{
-	luaL_register(this->L, libname.c_str(), l);
+	return this->L;
 }
 
 // Lua subsystem initializer, called from i_main.cpp
 void L_Init()
 {
 	Lua = new LuaState();
-	Lua->Lopenlibs();
-	Lua->Lregister("doom", doom_lib);
+	luaL_openlibs(*Lua);
+	luaL_register(*Lua, "doom", doom_lib);
 	Printf(PRINT_HIGH, "%s loaded successfully.\n", LUA_RELEASE);
 }

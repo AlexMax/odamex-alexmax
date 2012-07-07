@@ -62,12 +62,14 @@ const luaL_Reg doom_lib[] = {
 BEGIN_COMMAND (lua)
 {
 	int error;
-	error = Lua->Lloadbuffer(C_ArgCombine(argc - 1, (const char**)(argv + 1)), "console") || Lua->pcall(0, 0, 0);
+	std::string buffer = C_ArgCombine(argc - 1, (const char**)(argv + 1));
+
+	error = luaL_loadbuffer(*Lua, buffer.c_str(), buffer.length(), "console") || lua_pcall(*Lua, 0, 0, 0);
 
 	if (error)
 	{
-		Printf(PRINT_HIGH, "%s", Lua->tostring(-1).c_str());
-		Lua->pop(1);
+		Printf(PRINT_HIGH, "%s", lua_tostring(*Lua, -1));
+		lua_pop(*Lua, 1);
 	}
 }
 END_COMMAND (lua)
