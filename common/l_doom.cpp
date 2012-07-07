@@ -23,9 +23,9 @@
 #include <sstream>
 #include <string>
 
-#include "l_console.h"
+#include "l_doom.h"
 
-#include "c_dispatch.h" // BEGIN_COMMAND
+#include "c_console.h" // Printf
 
 extern LuaState* Lua;
 
@@ -56,20 +56,3 @@ const luaL_Reg doom_lib[] = {
 	{"print", LuaCFunction<LCmd_print>},
 	{NULL, NULL}
 };
-
-// XXX: HOLY MOLY this is insecure if exposed to rcon.  Implement sanxboxing
-//      and refactor, pronto.  See <http://lua-users.org/wiki/SandBoxes>.
-BEGIN_COMMAND (lua)
-{
-	int error;
-	std::string buffer = C_ArgCombine(argc - 1, (const char**)(argv + 1));
-
-	error = luaL_loadbuffer(*Lua, buffer.c_str(), buffer.length(), "console") || lua_pcall(*Lua, 0, 0, 0);
-
-	if (error)
-	{
-		Printf(PRINT_HIGH, "%s", lua_tostring(*Lua, -1));
-		lua_pop(*Lua, 1);
-	}
-}
-END_COMMAND (lua)

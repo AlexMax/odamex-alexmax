@@ -21,9 +21,11 @@
 //-----------------------------------------------------------------------------
 
 #include "l_core.h"
-#include "l_console.h" // doom_lib
+#include "l_doom.h" // doom_lib
+
 #include "m_alloc.h"
 #include "c_console.h" // Printf
+#include "c_dispatch.h" // BEGIN_COMMAND
 
 LuaState* Lua = NULL;
 
@@ -67,3 +69,20 @@ void L_Init()
 	luaL_register(*Lua, "doom", doom_lib);
 	Printf(PRINT_HIGH, "%s loaded successfully.\n", LUA_RELEASE);
 }
+
+// XXX: HOLY MOLY this is insecure if exposed to rcon.  Implement sanxboxing
+//      and refactor, pronto.  See <http://lua-users.org/wiki/SandBoxes>.
+BEGIN_COMMAND (lua)
+{
+	int error;
+	std::string buffer = C_ArgCombine(argc - 1, (const char**)(argv + 1));
+
+	error = luaL_loadbuffer(*Lua, buffer.c_str(), buffer.length(), "console") || lua_pcall(*Lua, 0, 0, 0);
+
+	if (error)
+	{
+		Printf(PRINT_HIGH, "%s", lua_tostring(*Lua, -1));
+		lua_pop(*Lua, 1);
+	}
+}
+END_COMMAND (lua)
