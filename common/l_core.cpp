@@ -66,7 +66,7 @@ void L_Init()
 {
 	Lua = new LuaState();
 	luaL_openlibs(*Lua);
-	luaL_register(*Lua, "doom", doom_lib);
+	luaopen_doom(*Lua);
 	Printf(PRINT_HIGH, "%s loaded successfully.\n", LUA_RELEASE);
 }
 

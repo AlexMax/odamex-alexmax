@@ -26,8 +26,12 @@
 #include "l_doom.h"
 
 #include "c_console.h" // Printf
+#include "version.h" // DOTVERSIONSTR
 
 extern LuaState* Lua;
+
+static std::string LConst_PORT = "Odamex";
+static std::string LConst_VERSION = DOTVERSIONSTR;
 
 int LCmd_print(lua_State* L)
 {
@@ -52,7 +56,12 @@ int LCmd_print(lua_State* L)
 	return 0;
 }
 
-const luaL_Reg doom_lib[] = {
-	{"print", LuaCFunction<LCmd_print>},
-	{NULL, NULL}
-};
+void luaopen_doom(lua_State* L)
+{
+	luabridge::getGlobalNamespace(L)
+		.beginNamespace("doom")
+		.addVariable("PORT", &LConst_PORT, true)
+		.addVariable("VERSION", &LConst_VERSION, true)
+		.addCFunction("print", LuaCFunction<LCmd_print>)
+		.endNamespace();
+}

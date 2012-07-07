@@ -25,6 +25,6 @@
 
 #include "l_core.h"
 
-extern const luaL_Reg doom_lib[];
+void luaopen_doom(lua_State* L);
 
 #endif
