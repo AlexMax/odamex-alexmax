@@ -33,8 +33,6 @@ extern "C"
 #include "lauxlib.h"
 }
 
-#include "LuaBridge.h"
-
 // [AM] Normally, exposing C functions to Lua is done through lua_CFunction.
 //      This wrapper class wraps any thrown C++ exceptions from inside the
 //      function, as we don't want them to cross the Lua/C++ barrier.

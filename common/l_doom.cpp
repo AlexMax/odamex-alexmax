@@ -35,10 +35,7 @@ extern LuaState* Lua;
 static std::string LConst_PORT = "Odamex";
 static std::string LConst_VERSION = DOTVERSIONSTR;
 
-// Returns the list of loaded wad and patch files as a table.  Unfortunately
-// we have to do this as a function call since LuaBridge does not support
-// STL types.
-int LCmd_files(lua_State *L)
+int LCmd_files(lua_State* L)
 {
 	size_t wadfiles_size = wadfiles.size();
 	size_t patchfiles_size = patchfiles.size();
@@ -47,7 +44,7 @@ int LCmd_files(lua_State *L)
 	{
 		std::string wadfile;
 		M_ExtractFileName(wadfiles[i], wadfile);
-		lua_pushnumber(L, i);
+		lua_pushnumber(L, i + 1);
 		lua_pushstring(L, wadfile.c_str());
 		lua_rawset(L, -3);
 	}
@@ -55,7 +52,7 @@ int LCmd_files(lua_State *L)
 	{
 		std::string patchfile;
 		M_ExtractFileName(patchfiles[i], patchfile);
-		lua_pushnumber(L, i);
+		lua_pushnumber(L, i + wadfiles_size + 1);
 		lua_pushstring(L, patchfile.c_str());
 		lua_rawset(L, -3);
 	}
@@ -88,13 +85,18 @@ int LCmd_print(lua_State* L)
 
 void luaopen_doom(lua_State* L)
 {
-	luabridge::getGlobalNamespace(L)
-		.beginNamespace("doom")
-		.addVariable("PORT", &LConst_PORT, false)
-		.addVariable("VERSION", &LConst_VERSION, false)
-		.addVariable("clientside", &clientside, false)
-		.addVariable("serverside", &serverside, false)
-		.addCFunction("files", LuaCFunction<LCmd_files>)
-		.addCFunction("print", LuaCFunction<LCmd_print>)
-		.endNamespace();
+	lua_newtable(L);
+	lua_pushstring(L, "PORT");
+	lua_pushstring(L, LConst_PORT.c_str());
+	lua_rawset(L, -3);
+	lua_pushstring(L, "VERSION");
+	lua_pushstring(L, LConst_VERSION.c_str());
+	lua_rawset(L, -3);
+	lua_pushstring(L, "files");
+	lua_pushcfunction(L, LuaCFunction<LCmd_files>);
+	lua_rawset(L, -3);
+	lua_pushstring(L, "print");
+	lua_pushcfunction(L, LuaCFunction<LCmd_print>);
+	lua_rawset(L, -3);
+	lua_setglobal(L, "doom");
 }
