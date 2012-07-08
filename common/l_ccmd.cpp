@@ -22,6 +22,12 @@
 
 #include "l_ccmd.h"
 
+#include "c_console.h" // Printf
+
+// We use the address of this variable to ensure a unique Lua
+// registry key for this library.
+static const char registry_key = 'k';
+
 // Registers a console command that executes a Lua function.
 //  arg[1] - Name (String)
 //  arg[2] - Callback function (Lua Function)
@@ -30,9 +36,29 @@ int LCmd_register(lua_State* L)
 	int n = lua_gettop(L);
 	if (!(n == 2 && lua_isstring(L, 1) && lua_isfunction(L, 2)))
 	{
+		// Wrong parameters
+		Printf(PRINT_HIGH, "Incorrect parameters.\n");
 		return 0;
 	}
 
+	// Stick the Lua function into the registry.
+	const char* func_name = lua_tostring(L, 1);
+	int func_ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	lua_pushlightuserdata(L, (void *)&registry_key);
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	lua_getfield(L, -1, "commands");
+	lua_getfield(L, -1, func_name);
+	if (!lua_isnil(L, -1))
+	{
+		// Same command already exists
+		luaL_unref(L, LUA_REGISTRYINDEX, func_ref);
+		Printf(PRINT_HIGH, "'%s' is already registered.\n", func_name);
+		return 0;
+	}
+	lua_pop(L, 1);
+	lua_pushnumber(L, func_ref);
+	lua_setfield(L, -2, func_name);
+	Printf(PRINT_HIGH, "'%s' registered successfully.\n", func_name);
 	return 0;
 }
 
@@ -44,6 +70,15 @@ int LCmd_unregister(lua_State* L)
 
 void luaopen_doom_ccmd(lua_State* L)
 {
+	// Set up the registry.
+	lua_pushlightuserdata(L, (void*)&registry_key);
+	lua_newtable(L);
+	lua_pushstring(L, "commands");
+	lua_newtable(L);
+	lua_rawset(L, -3);
+	lua_settable(L, LUA_REGISTRYINDEX);
+
+	// Set up library.
 	lua_pushstring(L, "ccmd");
 	{
 		lua_newtable(L);
