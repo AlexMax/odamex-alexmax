@@ -16,7 +16,7 @@
 // GNU General Public License for more details.
 //
 // DESCRIPTION:
-//   Console command library for Lua.
+//   Base 'doom' library for Lua API.
 //
 //-----------------------------------------------------------------------------
 
@@ -24,6 +24,7 @@
 #include <string>
 
 #include "l_doom.h"
+#include "l_ccmd.h"
 
 #include "c_console.h" // Printf
 #include "m_fileio.h" // M_ExtractFileName()
@@ -35,6 +36,7 @@ extern LuaState* Lua;
 static std::string LConst_PORT = "Odamex";
 static std::string LConst_VERSION = DOTVERSIONSTR;
 
+// Returns a list of currently loaded wad and patch files.
 int LCmd_files(lua_State* L)
 {
 	size_t wadfiles_size = wadfiles.size();
@@ -98,5 +100,9 @@ void luaopen_doom(lua_State* L)
 	lua_pushstring(L, "print");
 	lua_pushcfunction(L, LuaCFunction<LCmd_print>);
 	lua_rawset(L, -3);
+
+	// Console commands
+	luaopen_doom_ccmd(L);
+
 	lua_setglobal(L, "doom");
 }

@@ -16,15 +16,15 @@
 // GNU General Public License for more details.
 //
 // DESCRIPTION:
-//   Base 'doom' library for Lua API.
+//   Console command 'doom.ccmd' library for Lua API.
 //
 //-----------------------------------------------------------------------------
 
-#ifndef __L_CONSOLE_H__
-#define __L_CONSOLE_H__
+#ifndef __L_CCMD_H__
+#define __L_CCMD_H__
 
 #include "l_core.h"
 
-void luaopen_doom(lua_State* L);
+void luaopen_doom_ccmd(lua_State* L);
 
 #endif
