@@ -37,31 +37,32 @@ static const char registry_key = 'k';
 //  arg[2] - Callback function (Lua Function)
 int LCmd_register(lua_State* L)
 {
-	int n = lua_gettop(L);
-	if (!(n == 2 && lua_isstring(L, 1) && lua_isfunction(L, 2)))
-	{
-		// Wrong parameters.
-		Printf(PRINT_HIGH, "Incorrect parameters.\n");
-		return 0;
-	}
+	const char* func_name = luaL_checkstring(L, 1);
+	luaL_checktype(L, 2, LUA_TFUNCTION);
 
 	// Stick the Lua function into the registry.
-	const char* func_name = lua_tostring(L, 1);
 	const int func_ref = luaL_ref(L, LUA_REGISTRYINDEX);
 	std::pair<LuaCcmdsT::iterator, bool> cmd = LuaCommands.insert(std::make_pair(func_name, func_ref));
 	if (!cmd.second)
 	{
 		luaL_unref(L, LUA_REGISTRYINDEX, func_ref);
-		Printf(PRINT_HIGH, "'%s' is already registered.\n", func_name);
-		return 0;
+		return luaL_error(L, "'%s' is already registered.\n", func_name);
 	}
-	Printf(PRINT_HIGH, "'%s' registered successfully.\n", func_name);
 	return 0;
 }
 
 // Unregisters a console command that was registered using LCmd_register().
 int LCmd_unregister(lua_State* L)
 {
+	const char* func_name = luaL_checkstring(L, 1);
+	LuaCcmdsT::iterator it = LuaCommands.find(func_name);
+	if (it == LuaCommands.end())
+	{
+		// No function found.
+		return luaL_error(L, "'%s' is not a registered command.\n", func_name);
+	}
+	luaL_unref(L, LUA_REGISTRYINDEX, it->second);
+	LuaCommands.erase(it);
 	return 0;
 }
 
