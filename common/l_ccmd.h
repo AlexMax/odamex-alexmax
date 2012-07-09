@@ -25,6 +25,7 @@
 
 #include "l_core.h"
 
+bool L_ConsoleExecute(lua_State* L, size_t argc, char** argv);
 void luaopen_doom_ccmd(lua_State* L);
 
 #endif

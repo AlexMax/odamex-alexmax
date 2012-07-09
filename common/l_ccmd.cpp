@@ -68,6 +68,39 @@ int LCmd_unregister(lua_State* L)
 	return 0;
 }
 
+// Attempt to execute a passed argc/argv.
+bool L_ConsoleExecute(lua_State* L, size_t argc, char** argv)
+{
+	if (!argc)
+	{
+		// No arguments passed.
+		return false;
+	}
+
+	// Execute the passed command.
+	const char* func_name = argv[0];
+	lua_pushlightuserdata(L, (void *)&registry_key);
+	lua_gettable(L, LUA_REGISTRYINDEX);
+	lua_getfield(L, -1, "commands");
+	lua_getfield(L, -1, func_name);
+	if (lua_isnil(L, -1))
+	{
+		// No function found.
+		return false;
+	}
+	int func_ref = lua_tointeger(L, -1);
+	lua_rawgeti(L, LUA_REGISTRYINDEX, func_ref);
+	for (size_t i = 1;i < argc;i++)
+	{
+		lua_pushstring(L, argv[i]);
+	}
+	if (lua_pcall(L, argc - 1, 0, 0))
+	{
+		return false;
+	}
+	return true;
+}
+
 void luaopen_doom_ccmd(lua_State* L)
 {
 	// Set up the registry.

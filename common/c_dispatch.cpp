@@ -43,6 +43,9 @@
 #include "r_defs.h"
 #include "i_system.h"
 
+#include "l_core.h" // Lua
+#include "l_ccmd.h" // L_ConsoleExecute()
+
 IMPLEMENT_CLASS (DConsoleCommand, DObject)
 IMPLEMENT_CLASS (DConsoleAlias, DConsoleCommand)
 
@@ -253,8 +256,10 @@ void C_DoCommand (const char *cmd)
 			}
 			else
 			{
-				// We don't know how to handle this command
-				Printf (PRINT_HIGH, "Unknown command \"%s\"\n", argv[0]);
+				// Attempt to execute Lua console commands.
+				if (!L_ConsoleExecute(*Lua, argc, argv))
+					// We don't know how to handle this command
+					Printf (PRINT_HIGH, "Unknown command \"%s\"\n", argv[0]);
 			}
 		}
 		delete[] argv;

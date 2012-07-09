@@ -70,6 +70,8 @@ public:
 	operator lua_State*();
 };
 
+extern LuaState* Lua;
+
 void L_Init();
 
 #endif
