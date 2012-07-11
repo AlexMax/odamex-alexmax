@@ -25,6 +25,7 @@
 
 #include "l_doom.h"
 #include "l_ccmd.h"
+#include "l_event.h"
 
 #include "c_console.h" // Printf
 #include "m_fileio.h" // M_ExtractFileName()
@@ -103,6 +104,9 @@ void luaopen_doom(lua_State* L)
 
 	// Console commands
 	luaopen_doom_ccmd(L);
+
+	// Events
+	luaopen_doom_event(L);
 
 	lua_setglobal(L, "doom");
 }
