@@ -18,6 +18,17 @@ set(JSONCPP_DIR ../jsoncpp)
 file(GLOB JSONCPP_HEADERS ${JSONCPP_DIR}/json/*.h)
 set(JSONCPP_SOURCE ${JSONCPP_DIR}/jsoncpp.cpp)
 
+# Lua
+set(LUA_DIR $ENV{LUA_DIR} CACHE PATH
+  "Path to Lua base directory.  Only necessary if you get errors about Lua not being found, or if you want to use a different installation of Lua.")
+set(ENV{LUA_DIR} ${LUA_DIR})
+find_package(Lua 5.2)
+if(LUA_FOUND)
+  include_directories(${LUA_INCLUDE_DIR})
+else()
+  message(WARNING, "Lua not found, server target not generated.")
+endif()
+
 # Platform definitions
 define_platform()
 
@@ -28,21 +39,19 @@ if(WIN32 AND NOT MSVC)
 endif()
 include_directories(${JSONCPP_DIR} ${COMMON_DIR} ${SERVER_DIR} ${SERVER_WIN32_DIR})
 
-find_package(Lua51)
-if(LUA51_FOUND)
-  include_directories(${LUA_INCLUDE_DIR})
-else()
-  message(WARNING, "Lua not found, server target not generated.")
-endif()
-
 # Server target
-if(LUA51_FOUND)
+if(LUA_FOUND)
   add_executable(odasrv
     ${JSONCPP_SOURCE} ${JSONCPP_HEADERS}
     ${COMMON_SOURCES} ${COMMON_HEADERS}
     ${SERVER_SOURCES} ${SERVER_HEADERS}
     ${SERVER_WIN32_HEADERS} ${SERVER_WIN32_RESOURCES})
   target_link_libraries(odasrv ${LUA_LIBRARIES})
+  include(CheckIncludeFiles)
+  check_include_files(dlfcn.h HAVE_DL_H)
+  if(HAVE_DL_H)
+    target_link_libraries(odasrv dl)
+  endif()
   if(WIN32)
     target_link_libraries(odasrv winmm wsock32)
   elseif(SOLARIS)
