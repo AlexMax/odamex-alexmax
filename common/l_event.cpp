@@ -20,53 +20,30 @@
 //
 //-----------------------------------------------------------------------------
 
-#include <map>
-#include <vector>
+#include "l_event.h"
 
-#include "l_core.h"
-
-struct Hook;
-struct Event;
-
-typedef std::pair<std::string, Hook> HookP;
-typedef std::map<std::string, Hook> HooksT;
-typedef std::vector<HooksT::iterator>::iterator HooksI;
-
-typedef std::pair<std::string, Event> EventP;
-typedef std::map<std::string, Event> EventsT;
-typedef std::vector<EventsT::iterator>::iterator EventsI;
-
-struct Hook
-{
-	Hook(int iref) : ref(iref) { }
-	int ref;
-	std::vector<EventsT::iterator> events;
-};
-
-struct Event
-{
-	Event(bool ilua) : lua(ilua) { }
-	bool lua;
-	std::vector<HooksT::iterator> hooks;
-};
-
-class EventHandler
-{
-	HooksT hooks;
-	EventsT events;
-	lua_State* L;
-public:
-	EventHandler(lua_State* L);
-	bool add(const std::string& ename, bool lua = false);
-	bool fire(const std::string& ename, bool lua = false);
-	bool remove(const std::string& ename, bool lua = false);
-	bool hook(const std::string& hname, const std::string& ename, int ref);
-	bool unhook(const std::string& hname);
-};
+EventHandler* LuaEvent = NULL;
 
 // We use the address of this variable to ensure a unique Lua
 // registry key for this library.
 static const char registry_key = 'k';
+
+// Constructor
+EventHandler::EventHandler(lua_State* L) : L(L), error(OK)
+{
+	// Store a pointer to object in the Lua registry, so we can access it
+	// from the context of lua_CFunctions later.
+	lua_pushlightuserdata(this->L, static_cast<void*>(this));
+	lua_rawseti(this->L, LUA_REGISTRYINDEX, registry_key);
+}
+
+// Destructor
+EventHandler::~EventHandler()
+{
+	// Remove the object reference from the Lua registry.
+	lua_pushnil(this->L);
+	lua_rawseti(this->L, LUA_REGISTRYINDEX, registry_key);
+}
 
 // Add a hookable event, returns true if successful.  Second parameter is
 // true if you want to be able to fire the event from the Lua API, otherwise
@@ -78,6 +55,7 @@ bool EventHandler::add(const std::string& ename, bool lua)
 	if (event.second == false)
 	{
 		// Event already exists.
+		this->error = EVENT_EXIST;
 		return false;
 	}
 	return true;
@@ -96,11 +74,13 @@ bool EventHandler::fire(const std::string& ename, bool lua)
 	if (it == this->events.end())
 	{
 		// No such event exists.
+		this->error = EVENT_NOEXIST;
 		return false;
 	}
 	if (it->second.lua == false && lua == true)
 	{
 		// Attempting to fire a non-Lua event from Lua.
+		this->error = EVENT_NOTLUA;
 		return false;
 	}
 	// Call every hooked function in the list of hooks with the
@@ -109,7 +89,7 @@ bool EventHandler::fire(const std::string& ename, bool lua)
 	for (HooksI itr = it->second.hooks.begin();itr != it->second.hooks.end();++itr)
 	{
 		lua_rawgeti(this->L, LUA_REGISTRYINDEX, (*itr)->second.ref);
-		for (int i = 0;i <= n;i++)
+		for (int i = 1;i <= n;i++)
 			lua_pushvalue(this->L, i);
 		lua_pcall(this->L, n, 0, 0);
 	}
@@ -125,6 +105,7 @@ bool EventHandler::hook(const std::string& hname, const std::string& ename, int 
 	if (it == this->events.end())
 	{
 		// No such event exists.
+		this->error = EVENT_NOEXIST;
 		return false;
 	}
 	// Create the hook.
@@ -132,6 +113,7 @@ bool EventHandler::hook(const std::string& hname, const std::string& ename, int 
 	if (hook.second == false)
 	{
 		// Hook already exists with that name.
+		this->error = HOOK_EXIST;
 		return false;
 	}
 	// Push the newly-created hook onto the vector of hooks for the event.
@@ -139,15 +121,68 @@ bool EventHandler::hook(const std::string& hname, const std::string& ename, int 
 	return true;
 }
 
+// Returns a pointer to an EventHandler object that is attached to the
+// passed Lua state, or NULL if there is no EventHandler in the state.
+EventHandler* EventHandler::get(lua_State* L)
+{
+	lua_rawgeti(L, LUA_REGISTRYINDEX, registry_key);
+	if (!lua_islightuserdata(L, -1))
+	{
+		// The event handler doesn't exist.
+		lua_pop(L, 1);
+		return NULL;
+	}
+	EventHandler* eh = static_cast<EventHandler*>(lua_touserdata(L, -1));
+	lua_pop(L, 1);
+	return eh;
+}
+
 // Add a custom Lua event.
 int LCmd_add(lua_State* L)
 {
+	EventHandler* LocalEvent = EventHandler::get(L);
+	if (LocalEvent == NULL)
+		return luaL_error(L, "EventHandler not found in lua_State.\n");
+	// Parameter checking
+	const char* ename = luaL_checkstring(L, 1);
+	// Run the event handler method
+	if (!LocalEvent->add(ename, true))
+	{
+		const int error = LocalEvent->getError();
+		switch (error)
+		{
+		case EventHandler::EVENT_EXIST:
+			return luaL_error(L, "Event '%s' already exists.\n", ename);
+		default:
+			return luaL_error(L, "Unknown error\n");
+		}
+	}
 	return 0;
 }
 
-// Fire a custom Lua event.  Note that this will not fire a built-in event.
+// Fire a custom Lua event.  Note that this Lua function is incapable of
+// firing a built-in event, use EventHandler::fire() directly for that.
 int LCmd_fire(lua_State* L)
 {
+	EventHandler* LocalEvent = EventHandler::get(L);
+	if (LocalEvent == NULL)
+		return luaL_error(L, "EventHandler not found in lua_State.\n");
+	// Parameter checking
+	const char* ename = luaL_checkstring(L, 1);
+	// Run the event handler method
+	if (!LocalEvent->fire(ename, true))
+	{
+		const int error = LocalEvent->getError();
+		switch (error)
+		{
+		case EventHandler::EVENT_NOEXIST:
+			return luaL_error(L, "Event '%s' does not exist.\n", ename);
+		case EventHandler::EVENT_NOTLUA:
+			return luaL_error(L, "Event '%s' cannot be fired from Luat.\n", ename);
+		default:
+			return luaL_error(L, "Unknown error\n");
+		}
+	}
 	return 0;
 }
 
@@ -160,6 +195,20 @@ int LCmd_remove(lua_State* L)
 // Add a named function callback to either a built-in or custom Lua event.
 int LCmd_hook(lua_State* L)
 {
+	EventHandler* LocalEvent = EventHandler::get(L);
+	if (LocalEvent == NULL)
+		return luaL_error(L, "EventHandler not found in lua_State.\n");
+	// Parameter checking
+	const char* hname = luaL_checkstring(L, 1);
+	const char* ename = luaL_checkstring(L, 2);
+	luaL_checktype(L, 3, LUA_TFUNCTION);
+	const int ref = luaL_ref(L, LUA_REGISTRYINDEX);
+	// Run the event handler method
+	if (!LocalEvent->hook(hname, ename, ref))
+	{
+		luaL_unref(L, LUA_REGISTRYINDEX, ref);
+		luaL_error(L, "Something happened...\n");
+	}
 	return 0;
 }
 
@@ -171,6 +220,7 @@ int LCmd_unhook(lua_State* L)
 
 void luaopen_doom_event(lua_State* L)
 {
+	LuaEvent = new EventHandler(L);
 	lua_pushstring(L, "event");
 	{
 		lua_newtable(L);

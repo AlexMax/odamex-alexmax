@@ -23,7 +23,64 @@
 #ifndef __L_EVENT_H__
 #define __L_EVENT_H__
 
+#include <map>
+#include <vector>
+
 #include "l_core.h"
+
+struct Hook;
+struct Event;
+
+typedef std::pair<std::string, Hook> HookP;
+typedef std::map<std::string, Hook> HooksT;
+typedef std::vector<HooksT::iterator>::iterator HooksI;
+
+typedef std::pair<std::string, Event> EventP;
+typedef std::map<std::string, Event> EventsT;
+typedef std::vector<EventsT::iterator>::iterator EventsI;
+
+struct Hook
+{
+	Hook(int iref) : ref(iref) { }
+	int ref;
+	std::vector<EventsT::iterator> events;
+};
+
+struct Event
+{
+	Event(bool ilua) : lua(ilua) { }
+	bool lua;
+	std::vector<HooksT::iterator> hooks;
+};
+
+class EventHandler
+{
+	HooksT hooks;
+	EventsT events;
+	lua_State* L;
+	int error;
+public:
+	enum
+	{
+		OK, EVENT_EXIST, EVENT_NOEXIST, EVENT_NOTLUA, HOOK_NOEXIST, HOOK_EXIST
+	};
+	EventHandler(lua_State* L);
+	~EventHandler();
+	bool add(const std::string& ename, bool lua = false);
+	bool fire(const std::string& ename, bool lua = false);
+	bool remove(const std::string& ename, bool lua = false);
+	bool hook(const std::string& hname, const std::string& ename, int ref);
+	bool unhook(const std::string& hname);
+	int getError()
+		{
+			int e = this->error;
+			this->error = OK;
+			return e;
+		};
+	static EventHandler* get(lua_State* L);
+};
+
+extern EventHandler* LuaEvent;
 
 void luaopen_doom_event(lua_State* L);
 
