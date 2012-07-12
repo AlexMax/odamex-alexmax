@@ -35,7 +35,7 @@ static const char registry_key = 'k';
 // Registers a console command that executes a Lua function.
 //  arg[1] - Name (String)
 //  arg[2] - Callback function (Lua Function)
-int LCmd_register(lua_State* L)
+int LCmd_ccmd_add(lua_State* L)
 {
 	const char* func_name = luaL_checkstring(L, 1);
 	luaL_checktype(L, 2, LUA_TFUNCTION);
@@ -46,20 +46,20 @@ int LCmd_register(lua_State* L)
 	if (!cmd.second)
 	{
 		luaL_unref(L, LUA_REGISTRYINDEX, func_ref);
-		return luaL_error(L, "'%s' is already registered.\n", func_name);
+		return luaL_error(L, "Console command '%s' already exists.\n", func_name);
 	}
 	return 0;
 }
 
 // Unregisters a console command that was registered using LCmd_register().
-int LCmd_unregister(lua_State* L)
+int LCmd_ccmd_remove(lua_State* L)
 {
 	const char* func_name = luaL_checkstring(L, 1);
 	LuaCcmdsT::iterator it = LuaCommands.find(func_name);
 	if (it == LuaCommands.end())
 	{
 		// No function found.
-		return luaL_error(L, "'%s' is not a registered command.\n", func_name);
+		return luaL_error(L, "Console command '%s' does not exist.\n", func_name);
 	}
 	luaL_unref(L, LUA_REGISTRYINDEX, it->second);
 	LuaCommands.erase(it);
@@ -100,11 +100,11 @@ void luaopen_doom_ccmd(lua_State* L)
 	lua_pushstring(L, "ccmd");
 	{
 		lua_newtable(L);
-		lua_pushstring(L, "register");
-		lua_pushcfunction(L, LuaCFunction<LCmd_register>);
+		lua_pushstring(L, "add");
+		lua_pushcfunction(L, LuaCFunction<LCmd_ccmd_add>);
 		lua_rawset(L, -3);
-		lua_pushstring(L, "unregister");
-		lua_pushcfunction(L, LuaCFunction<LCmd_unregister>);
+		lua_pushstring(L, "remove");
+		lua_pushcfunction(L, LuaCFunction<LCmd_ccmd_remove>);
 		lua_rawset(L, -3);
 	}
 	lua_rawset(L, -3);

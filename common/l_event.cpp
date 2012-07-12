@@ -138,7 +138,7 @@ EventHandler* EventHandler::get(lua_State* L)
 }
 
 // Add a custom Lua event.
-int LCmd_add(lua_State* L)
+int LCmd_event_add(lua_State* L)
 {
 	EventHandler* LocalEvent = EventHandler::get(L);
 	if (LocalEvent == NULL)
@@ -162,7 +162,7 @@ int LCmd_add(lua_State* L)
 
 // Fire a custom Lua event.  Note that this Lua function is incapable of
 // firing a built-in event, use EventHandler::fire() directly for that.
-int LCmd_fire(lua_State* L)
+int LCmd_event_fire(lua_State* L)
 {
 	EventHandler* LocalEvent = EventHandler::get(L);
 	if (LocalEvent == NULL)
@@ -187,13 +187,13 @@ int LCmd_fire(lua_State* L)
 }
 
 // Remove a custom Lua event.
-int LCmd_remove(lua_State* L)
+int LCmd_event_remove(lua_State* L)
 {
 	return 0;
 }
 
 // Add a named function callback to either a built-in or custom Lua event.
-int LCmd_hook(lua_State* L)
+int LCmd_event_hook(lua_State* L)
 {
 	EventHandler* LocalEvent = EventHandler::get(L);
 	if (LocalEvent == NULL)
@@ -213,7 +213,7 @@ int LCmd_hook(lua_State* L)
 }
 
 // Remove a named function callback to either a built-in or custom Lua event.
-int LCmd_unhook(lua_State* L)
+int LCmd_event_unhook(lua_State* L)
 {
 	return 0;
 }
@@ -225,19 +225,19 @@ void luaopen_doom_event(lua_State* L)
 	{
 		lua_newtable(L);
 		lua_pushstring(L, "add");
-		lua_pushcfunction(L, LuaCFunction<LCmd_add>);
+		lua_pushcfunction(L, LuaCFunction<LCmd_event_add>);
 		lua_rawset(L, -3);
 		lua_pushstring(L, "fire");
-		lua_pushcfunction(L, LuaCFunction<LCmd_fire>);
+		lua_pushcfunction(L, LuaCFunction<LCmd_event_fire>);
 		lua_rawset(L, -3);
 		lua_pushstring(L, "remove");
-		lua_pushcfunction(L, LuaCFunction<LCmd_remove>);
+		lua_pushcfunction(L, LuaCFunction<LCmd_event_remove>);
 		lua_rawset(L, -3);
 		lua_pushstring(L, "hook");
-		lua_pushcfunction(L, LuaCFunction<LCmd_hook>);
+		lua_pushcfunction(L, LuaCFunction<LCmd_event_hook>);
 		lua_rawset(L, -3);
 		lua_pushstring(L, "unhook");
-		lua_pushcfunction(L, LuaCFunction<LCmd_hook>);
+		lua_pushcfunction(L, LuaCFunction<LCmd_event_hook>);
 		lua_rawset(L, -3);
 	}
 	lua_rawset(L, -3);
