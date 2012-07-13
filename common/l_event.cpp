@@ -21,6 +21,7 @@
 //-----------------------------------------------------------------------------
 
 #include "l_event.h"
+#include "l_events.h"
 
 EventHandler* LuaEvent = NULL;
 
@@ -45,13 +46,14 @@ EventHandler::~EventHandler()
 	lua_rawseti(this->L, LUA_REGISTRYINDEX, registry_key);
 }
 
-// Add a hookable event, returns true if successful.  Second parameter is
-// true if you want to be able to fire the event from the Lua API, otherwise
-// the event is only firable by calling EventHandler::fire() from C++ without
-// a second parameter.
-bool EventHandler::add(const std::string& ename, bool lua)
+// Add a hookable event, returns true if successful.  Second parameter is set
+// to the number of return values you expect each callback to return.  Third
+// parameter is true if you want to be able to fire the event from the Lua
+// API otherwise the event is only firable by calling EventHandler::fire()
+// from C++ without a second parameter.
+bool EventHandler::add(const std::string& ename, const int results, const bool lua)
 {
-	std::pair<EventsT::iterator, bool> event = this->events.insert(EventP(ename, Event(lua)));
+	std::pair<EventsT::iterator, bool> event = this->events.insert(EventP(ename, Event(results, lua)));
 	if (event.second == false)
 	{
 		// Event already exists.
@@ -64,10 +66,14 @@ bool EventHandler::add(const std::string& ename, bool lua)
 // Fire off all callbacks associated with an event, returns true if the
 // event exists and we're not trying to call a non-Lua event from the Lua
 // API.  This also means that it will return true if there are no hooks to
-// run or if one of the hook's callback functions errors out.  Second
-// parameter should be set to true if you're calling this method from the
-// Lua API.  Lua parameters that you want to pass to the hooks should already
-// be on the Lua stack before calling this method.
+// run or if one of the hook's callback functions errors out.
+// - First parameter is the event to fire.
+// - Second parameter should be set to true if you're calling this method
+//   from the Lua API.
+// - Lua parameters that you want to pass to the callbacks should already
+//   be on the Lua stack before calling this method.
+// - When this method returns, the top of the stack contains a table with
+//   the results of every callback that was run.
 bool EventHandler::fire(const std::string& ename, bool lua)
 {
 	EventsT::iterator it = this->events.find(ename);
@@ -84,14 +90,20 @@ bool EventHandler::fire(const std::string& ename, bool lua)
 		return false;
 	}
 	// Call every hooked function in the list of hooks with the
-	// parameters that are currently on the Lua stack.
+	// parameters that are currently on the Lua stack.  A table is used to
+	// hold return values.
 	int n = lua_gettop(L);
+	lua_createtable(L, it->second.hooks.size(), 0);
 	for (HooksI itr = it->second.hooks.begin();itr != it->second.hooks.end();++itr)
 	{
 		lua_rawgeti(this->L, LUA_REGISTRYINDEX, (*itr)->second.ref);
+		// Copy params for the pcall.
 		for (int i = 1;i <= n;i++)
 			lua_pushvalue(this->L, i);
-		lua_pcall(this->L, n, 0, 0);
+		lua_pcall(this->L, n, it->second.results, 0);
+		// Push results to the table.
+		for (int i = 1;i <= n;i++)
+			lua_rawseti(this->L, n + 1, i);
 	}
 	return true;
 }
@@ -145,8 +157,9 @@ int LCmd_event_add(lua_State* L)
 		return luaL_error(L, "EventHandler not found in lua_State.\n");
 	// Parameter checking
 	const char* ename = luaL_checkstring(L, 1);
+	const int results = luaL_checkinteger(L, 2);
 	// Run the event handler method
-	if (!LocalEvent->add(ename, true))
+	if (!LocalEvent->add(ename, results, true))
 	{
 		const int error = LocalEvent->getError();
 		switch (error)
@@ -218,6 +231,29 @@ int LCmd_event_unhook(lua_State* L)
 	return 0;
 }
 
+// Add an event from C++.  This adds the event as an internal event, which
+// will only be hookable from Lua, not fireable.  Internal events also get
+// explicit numbers of parameters.
+void L_AddEvent(lua_State*L, const char* ename, const int params)
+{
+	EventHandler* LocalEvent = EventHandler::get(L);
+	LocalEvent->add(ename, params);
+}
+
+// Fire an event from C++.  Unlike the Lua 'doom.event.fire' function, we
+// can fire any event we like.  Adds a table with the  return values of the
+// event hooks to the top of the Lua stack.
+void L_FireEvent(lua_State* L, const char* ename)
+{
+	EventHandler* LocalEvent = EventHandler::get(L);
+	if (!LocalEvent->fire(ename))
+	{
+		// Something went wrong with our event firing, but our caller is
+		// expecting a table on the stack.  So give them one.
+		lua_newtable(L);
+	}
+}
+
 void luaopen_doom_event(lua_State* L)
 {
 	LuaEvent = new EventHandler(L);
@@ -241,4 +277,6 @@ void luaopen_doom_event(lua_State* L)
 		lua_rawset(L, -3);
 	}
 	lua_rawset(L, -3);
+	// Add internal events.
+	L_InitInternalEvents(L);
 }

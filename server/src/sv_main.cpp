@@ -62,6 +62,7 @@
 #include "p_unlag.h"
 #include "sv_vote.h"
 #include "sv_maplist.h"
+#include "l_events.h"
 
 #include <algorithm>
 #include <sstream>
@@ -2394,10 +2395,17 @@ void SV_ConnectClient (void)
 
 	// get client userinfo
 	MSG_ReadByte();  // clc_userinfo
-	SV_SetupUserInfo(players[n]); 
+	SV_SetupUserInfo(players[n]);
 
 	// get rate value
 	SV_SetClientRate(*cl, MSG_ReadLong());
+
+	// [AM] Run Lua hooks for connecting clients.
+	if (!L_FireClientConnect(*Lua, players[n]))
+	{
+		SV_DropClient(players[n]);
+		return;
+	}
 
 	if (SV_BanCheck(cl, n))
 	{

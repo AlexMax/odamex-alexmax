@@ -48,7 +48,8 @@ struct Hook
 
 struct Event
 {
-	Event(bool ilua) : lua(ilua) { }
+	Event(const int iresults, const bool ilua) : results(iresults), lua(ilua) { }
+	int results;
 	bool lua;
 	std::vector<HooksT::iterator> hooks;
 };
@@ -66,7 +67,7 @@ public:
 	};
 	EventHandler(lua_State* L);
 	~EventHandler();
-	bool add(const std::string& ename, bool lua = false);
+	bool add(const std::string& ename, const int results, const bool lua = false);
 	bool fire(const std::string& ename, bool lua = false);
 	bool remove(const std::string& ename, bool lua = false);
 	bool hook(const std::string& hname, const std::string& ename, int ref);
@@ -82,6 +83,8 @@ public:
 
 extern EventHandler* LuaEvent;
 
+void L_AddEvent(lua_State* L, const char* ename, const int params);
+void L_FireEvent(lua_State* L, const char* ename);
 void luaopen_doom_event(lua_State* L);
 
 #endif

@@ -29,6 +29,8 @@
 #include "doomstat.h"
 #include "p_unlag.h"
 
+#include "l_events.h"
+
 EXTERN_CVAR (sv_speedhackfix)
 
 //
@@ -81,6 +83,9 @@ void P_Ticker (void)
 
 	if (clientside)
 		P_RunEffects ();	// [RH] Run particle effects
+
+	// [AM] Run Lua per-tick Events
+	L_FireTick(*Lua);
 
 	// for par times
 	level.time++;
