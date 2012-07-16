@@ -42,6 +42,8 @@ void HU_Init (void);
 BOOL HU_Responder (event_t* ev);
 void HU_Drawer (void);
 
+// Mini-menu routines
+bool MM_Responder (event_t* ev);
 
 void OdamexEffect (int xa, int ya, int xb, int yb);
 

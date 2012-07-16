@@ -39,6 +39,7 @@
 #include "gstrings.h"
 #include "gi.h"
 #include "hu_stuff.h"
+#include "hu_minimenu.h"
 #include "i_system.h"
 #include "m_alloc.h"
 #include "m_fileio.h"
@@ -63,7 +64,6 @@
 #include "w_wad.h"
 #include "wi_stuff.h"
 #include "z_zone.h"
-
 
 #define lioffset(x)		myoffsetof(level_pwad_info_t,x)
 #define cioffset(x)		myoffsetof(cluster_info_t,x)
@@ -378,6 +378,7 @@ void G_DoCompleted (void)
 
 	if (automapactive)
 		AM_Stop ();
+	minimenu.disable();
 
 	// [ML] Chex mode: they didn't even show the intermission screen
 	// after the fifth level - I checked.

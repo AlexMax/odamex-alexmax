@@ -64,6 +64,7 @@
 #include "cl_main.h"
 #include "cl_demo.h"
 #include "gi.h"
+#include "hu_minimenu.h"
 
 #ifdef _XBOX
 #include "i_xbox.h"
@@ -388,7 +389,7 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	// GhostlyDeath -- USE takes us out of spectator mode
 	if ((&consoleplayer())->spectator && Actions[ACTION_USE] && connected)
 	{
-		AddCommandString("join");
+		AddCommandString("changeteam");
 	}
 
 	// [RH] only use two stage accelerative turning on the keyboard
@@ -750,7 +751,6 @@ BOOL G_Responder (event_t *ev)
 	{
 		if (C_DoNetDemoKey(ev))	// netdemo playback ate the event
 			return true;
-
 		if (HU_Responder (ev))
 			return true;		// chat ate the event
 		if (ST_Responder (ev))
@@ -758,6 +758,8 @@ BOOL G_Responder (event_t *ev)
 		if (!viewactive)
 			if (AM_Responder (ev))
 				return true;	// automap ate it
+		if (minimenu.responder(ev))
+			return true; // [AM] mini-menu ate it
 	}
 	else if (gamestate == GS_FINALE)
 	{
@@ -1045,6 +1047,7 @@ void G_Ticker (void)
 		P_Ticker ();
 		ST_Ticker ();
 		AM_Ticker ();
+		minimenu.ticker();
 		break;
 
 	case GS_INTERMISSION:

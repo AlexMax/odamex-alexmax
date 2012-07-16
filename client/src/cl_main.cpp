@@ -62,6 +62,7 @@
 #include "p_mobj.h"
 #include "p_pspr.h"
 #include "d_netcmd.h"
+#include "hu_minimenu.h"
 
 #include <string>
 #include <vector>
@@ -435,6 +436,7 @@ void CL_QuitNetGame(void)
 	gameaction = ga_fullconsole;
 	noservermsgs = false;
 	AM_Stop();
+	minimenu.disable();
 
 	serverside = clientside = true;
 	network_game = false;
@@ -900,15 +902,6 @@ BEGIN_COMMAND (playerteam)
 	Printf (PRINT_MEDIUM, "Your Team is %d \n", consoleplayer().userinfo.team);
 }
 END_COMMAND (playerteam)
-
-BEGIN_COMMAND (changeteams)
-{
-	if (consoleplayer().userinfo.team == TEAM_BLUE)
-		cl_team.Set("RED");
-	else if (consoleplayer().userinfo.team == TEAM_RED)
-		cl_team.Set("BLUE");
-}
-END_COMMAND (changeteams)
 
 BEGIN_COMMAND (spectate)
 {

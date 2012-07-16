@@ -111,7 +111,7 @@ char DefBindings[] =
 	"bind pgdn vote_no; "				// <- New for voting
 	"bind home ready; "
 	"bind end spectate; "
-	"bind m changeteams ";
+	"bind m changeteam ";
 
 
 // SoM: ok... I hate randy heit I have no idea how to translate between ascii codes to these

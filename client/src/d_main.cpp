@@ -92,6 +92,7 @@
 #include "stats.h"
 #include "p_ctf.h"
 #include "cl_main.h"
+#include "hu_minimenu.h"
 
 #ifdef GEKKO
 #include "i_wii.h"
@@ -298,6 +299,7 @@ void D_Display (void)
 			C_DrawMid ();
 			CTF_DrawHud ();
 			ST_Drawer ();
+			minimenu.drawer();
 			HU_Drawer ();
 			break;
 
@@ -1303,6 +1305,7 @@ std::vector<size_t> D_DoomWadReboot(
 		G_ExitLevel(0, 0);
 
 	AM_Stop();
+	minimenu.disable();
 	S_Stop();
 
 	DThinker::DestroyAllThinkers();
