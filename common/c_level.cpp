@@ -540,6 +540,11 @@ BEGIN_COMMAND (map)
 }
 END_COMMAND (map)
 
+BEGIN_COMMAND (testreset)
+{
+	gameaction = ga_resetlevel;
+}
+END_COMMAND (testreset)
 
 char *CalcMapName (int episode, int level)
 {

@@ -195,6 +195,7 @@ void G_ExitLevel (int position, int drawscores);
 void G_SecretExitLevel (int position, int drawscores);
 
 void G_DoLoadLevel (int position);
+void G_DoResetLevel ();
 
 void G_InitLevelLocals (void);
 
