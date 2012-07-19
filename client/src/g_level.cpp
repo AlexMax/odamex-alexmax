@@ -631,7 +631,7 @@ void G_DoLoadLevel (int position)
 	C_FlushDisplay ();
 }
 
-extern void G_SerializeLevel(FArchive &arc, bool hubLoad);
+extern void G_SerializeLevel(FArchive &arc, bool hubLoad, bool noStorePlayers);
 
 // [AM] - Save the state of the level that can be reset to
 void G_DoSaveResetState()
@@ -644,7 +644,7 @@ void G_DoSaveResetState()
 	reset_snapshot = new FLZOMemFile;
 	reset_snapshot->Open();
 	FArchive arc(*reset_snapshot);
-	G_SerializeLevel(arc, false);
+	G_SerializeLevel(arc, false, true);
 	Printf(PRINT_HIGH, "Saved level!");
 }
 
@@ -666,7 +666,7 @@ void G_DoResetLevel()
 	}
 	reset_snapshot->Reopen();
 	FArchive arc(*reset_snapshot);
-	G_SerializeLevel(arc, false);
+	G_SerializeLevel(arc, false, true);
 	reset_snapshot->Seek(0, FFile::ESeekSet);
 	Printf(PRINT_HIGH, "Reset level!");
 }
