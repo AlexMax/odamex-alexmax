@@ -766,7 +766,7 @@ void G_SerializeLevel(FArchive &arc, bool hubLoad, bool noStorePlayers)
 	if (!(hubLoad || noStorePlayers))
 		P_SerializePlayers(arc);
 
-	P_SerializeThinkers(arc, hubLoad);
+	P_SerializeThinkers(arc, hubLoad, noStorePlayers);
 	P_SerializeWorld(arc);
 	P_SerializePolyobjs(arc);
 	P_SerializeSounds(arc);
