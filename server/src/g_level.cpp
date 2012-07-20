@@ -816,11 +816,16 @@ void G_DoResetLevel()
 			continue;
 
 		SV_ClientFullUpdate(*it);
-
+	}
+	// Force every ingame player to be reborn.
+	M_ClearRandom();
+	for (it = players.begin();it != players.end();++it)
+	{
 		// Spectators aren't reborn
-		if (it->spectator)
+		if (!it->ingame() || it->spectator)
 			continue;
 
+		it->playerstate = PST_REBORN;
 		G_DoReborn(*it);
 	}
 	Printf(PRINT_HIGH, "Reset level!");
