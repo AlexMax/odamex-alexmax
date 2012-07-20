@@ -631,46 +631,6 @@ void G_DoLoadLevel (int position)
 	C_FlushDisplay ();
 }
 
-extern void G_SerializeLevel(FArchive &arc, bool hubLoad, bool noStorePlayers);
-
-// [AM] - Save the state of the level that can be reset to
-void G_DoSaveResetState()
-{
-	if (reset_snapshot != NULL)
-	{
-		DPrintf("G_DoSaveResetState: Already saved reset state.");
-		return;
-	}
-	reset_snapshot = new FLZOMemFile;
-	reset_snapshot->Open();
-	FArchive arc(*reset_snapshot);
-	G_SerializeLevel(arc, false, true);
-	Printf(PRINT_HIGH, "Saved level!");
-}
-
-BEGIN_COMMAND(testsavereset)
-{
-	G_DoSaveResetState();
-}
-END_COMMAND(testsavereset)
-
-// [AM] - Reset the state of the level
-void G_DoResetLevel()
-{
-	gameaction = ga_nothing;
-	if (reset_snapshot == NULL)
-	{
-		// No saved state to reload to
-		DPrintf("G_DoResetLevel: No saved state to reload.");
-		return;
-	}
-	reset_snapshot->Reopen();
-	FArchive arc(*reset_snapshot);
-	G_SerializeLevel(arc, false, true);
-	reset_snapshot->Seek(0, FFile::ESeekSet);
-	Printf(PRINT_HIGH, "Reset level!");
-}
-
 //
 // G_WorldDone
 //

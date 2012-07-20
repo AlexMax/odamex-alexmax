@@ -614,6 +614,85 @@ void G_DoCompleted (void)
 			G_PlayerFinishLevel(players[i]);
 }
 
+extern void G_SerializeLevel(FArchive &arc, bool hubLoad, bool noStorePlayers);
+
+// [AM] - Save the state of the level that can be reset to
+void G_DoSaveResetState()
+{
+	if (reset_snapshot != NULL)
+	{
+		// An existing reset snapshot exists.  Kill it and replace it with
+		// a new one.
+		delete reset_snapshot;
+	}
+	reset_snapshot = new FLZOMemFile;
+	reset_snapshot->Open();
+	FArchive arc(*reset_snapshot);
+	G_SerializeLevel(arc, false, true);
+}
+
+// [AM] - Reset the state of the level.  Second parameter is true if you want
+//        to zero-out gamestate as well (i.e. resetting scores, RNG, etc.).
+void G_DoResetLevel(bool full_reset)
+{
+	gameaction = ga_nothing;
+	if (reset_snapshot == NULL)
+	{
+		// No saved state to reload to
+		DPrintf("G_DoResetLevel: No saved state to reload.");
+		return;
+	}
+	// Unserialize saved snapshot
+	reset_snapshot->Reopen();
+	FArchive arc(*reset_snapshot);
+	G_SerializeLevel(arc, false, true);
+	reset_snapshot->Seek(0, FFile::ESeekSet);
+	// Clear the item respawn queue, otherwise all those actors we just
+	// destroyed and replaced with the serialized items will start respawning.
+	iquehead = iquetail = 0;
+	// Potentially clear out gamestate as well.
+	std::vector<player_t>::iterator it;
+	if (full_reset)
+	{
+		// Clear global goals.
+		for (size_t i = 0; i < NUMTEAMS; i++)
+			TEAMpoints[i] = 0;
+		// Clear player scores.
+		for (it = players.begin();it != players.end();++it)
+		{
+			it->fragcount = 0;
+			it->itemcount = 0;
+			it->secretcount = 0;
+			it->deathcount = 0;
+			it->killcount = 0;
+			it->points = 0;
+		}
+		// For predictable first spawns.
+		M_ClearRandom();
+	}
+	// Send information about the newly reset map.
+	for (it = players.begin();it != players.end();++it)
+	{
+		// Player needs to actually be ingame
+		if (!it->ingame())
+			continue;
+
+		SV_ClientFullUpdate(*it);
+	}
+	// Force every ingame player to be reborn.
+	for (it = players.begin();it != players.end();++it)
+	{
+		// Spectators aren't reborn
+		if (!it->ingame() || it->spectator)
+			continue;
+
+		// Take their inventory.
+		it->playerstate = PST_REBORN;
+		G_DoReborn(*it);
+	}
+	Printf(PRINT_HIGH, "Reset level!");
+}
+
 //
 // G_DoLoadLevel
 //
@@ -764,71 +843,13 @@ void G_DoLoadLevel (int position)
 	}
 
 	level.starttime = I_GetTime ();
-	G_UnSnapshotLevel (!savegamerestore);	// [RH] Restore the state of the level.
-	P_DoDeferedScripts ();	// [RH] Do script actions that were triggered on another map.
-	//	C_FlushDisplay ();
-}
-
-extern void G_SerializeLevel(FArchive &arc, bool hubLoad, bool noStorePlayers);
-
-// [AM] - Save the state of the level that can be reset to
-void G_DoSaveResetState()
-{
-	if (reset_snapshot != NULL)
-	{
-		DPrintf("G_DoSaveResetState: Already saved reset state.");
-		return;
-	}
-	reset_snapshot = new FLZOMemFile;
-	reset_snapshot->Open();
-	FArchive arc(*reset_snapshot);
-	G_SerializeLevel(arc, false, true);
-	Printf(PRINT_HIGH, "Saved level!");
-}
-
-BEGIN_COMMAND(testsavereset)
-{
+	// [RH] Restore the state of the level.
+	G_UnSnapshotLevel (!savegamerestore);
+	// [RH] Do script actions that were triggered on another map.
+	P_DoDeferedScripts ();
+	// [AM] Save the state of the level on the first tic.
 	G_DoSaveResetState();
-}
-END_COMMAND(testsavereset)
-
-// [AM] - Reset the state of the level
-void G_DoResetLevel()
-{
-	gameaction = ga_nothing;
-	if (reset_snapshot == NULL)
-	{
-		// No saved state to reload to
-		DPrintf("G_DoResetLevel: No saved state to reload.");
-		return;
-	}
-	// Unserialize saved snapshot
-	reset_snapshot->Reopen();
-	FArchive arc(*reset_snapshot);
-	G_SerializeLevel(arc, false, true);
-	reset_snapshot->Seek(0, FFile::ESeekSet);
-	// Send information about the newly reset map and respawn players.
-	std::vector<player_t>::iterator it;
-	for (it = players.begin();it != players.end();++it)
-	{
-		// Player needs to actually be ingame
-		if (!it->ingame())
-			continue;
-
-		SV_ClientFullUpdate(*it);
-	}
-	// Force every ingame player to be reborn.
-	M_ClearRandom();
-	for (it = players.begin();it != players.end();++it)
-	{
-		// Spectators aren't reborn
-		if (!it->ingame() || it->spectator)
-			continue;
-
-		it->playerstate = PST_REBORN;
-		G_DoReborn(*it);
-	}
-	Printf(PRINT_HIGH, "Reset level!");
+	//	C_FlushDisplay ();
 }
 
 //
