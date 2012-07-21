@@ -686,6 +686,12 @@ void G_DoResetLevel(bool full_reset)
 		if (!it->ingame() || it->spectator)
 			continue;
 
+		// Destroy the attached mobj, otherwise we leave a ghost.
+		// NOTE: For some reason, I would expect that this would disable
+		//       the teleport fog, but it still shows up.  Gramted, I _want_
+		//       teleport fog, but why does it still appear? [AM]
+		it->mo->Destroy();
+
 		// Take their inventory.
 		it->playerstate = PST_REBORN;
 		G_DoReborn(*it);

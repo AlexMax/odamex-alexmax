@@ -79,7 +79,7 @@ void DThinker::SerializeAll (FArchive &arc, bool hubLoad, bool noStorePlayers)
 	}
 	else
 	{
-		if (hubLoad)
+		if (hubLoad || noStorePlayers)
 			DestroyMostThinkers ();
 		else
 			DestroyAllThinkers ();
