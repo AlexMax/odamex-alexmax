@@ -188,13 +188,15 @@ static const char *CTF_TimeMSG(unsigned int milliseconds)
 	return msg;
 }
 
+extern void P_GiveTeamPoints(player_t* player, int num);
+
 //
 //	[Toke - CTF] SV_FlagScore
 //	Event of a player capturing the flag
 //
 void SV_FlagScore (player_t &player, flag_t f)
 {
-	TEAMpoints[player.userinfo.team]++;
+	P_GiveTeamPoints(&player, 1);
 
 	SV_CTFEvent (f, SCORE_CAPTURE, player);
 
