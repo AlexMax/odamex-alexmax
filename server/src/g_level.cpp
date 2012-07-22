@@ -650,6 +650,23 @@ void G_DoResetLevel(bool full_reset)
 		DPrintf("G_DoResetLevel: No saved state to reload.");
 		return;
 	}
+
+	// Clear CTF state.  Last time I tried commonizing this, I started
+	// getting garbage on the screen upon connecting to a server.
+	std::vector<player_t>::iterator it;
+	if (sv_gametype == GM_CTF)
+	{
+		for (size_t i = 0;i < NUMFLAGS;i++)
+		{
+			for (it = players.begin();it != players.end();++it)
+			{
+				it->flags[i] = false;
+			}
+			CTFdata[i].flagger = 0;
+			CTFdata[i].state = flag_home;
+		}
+	}
+
 	// Unserialize saved snapshot
 	reset_snapshot->Reopen();
 	FArchive arc(*reset_snapshot);
@@ -659,7 +676,6 @@ void G_DoResetLevel(bool full_reset)
 	// destroyed and replaced with the serialized items will start respawning.
 	iquehead = iquetail = 0;
 	// Potentially clear out gamestate as well.
-	std::vector<player_t>::iterator it;
 	if (full_reset)
 	{
 		// Clear global goals.
