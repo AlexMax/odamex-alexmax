@@ -89,6 +89,8 @@ bool Warmup::checkreadytoggle()
 	return true;
 }
 
+extern size_t P_NumPlayersInGame();
+
 // Start or stop the countdown based on if players are ready or not.
 void Warmup::readytoggle()
 {
@@ -118,6 +120,8 @@ void Warmup::readytoggle()
 		{
 			this->set_status(Warmup::COUNTDOWN);
 			this->time_begin = level.time + (sv_warmup_countdown.asInt() * TICRATE);
+			this->ready_players = P_NumPlayersInGame();
+
 			SV_BroadcastPrintf(PRINT_HIGH, "Prepare to fight...\n");
 		}
 	}
@@ -126,7 +130,7 @@ void Warmup::readytoggle()
 		if (this->status == Warmup::COUNTDOWN)
 		{
 			this->set_status(Warmup::WARMUP);
-			SV_BroadcastPrintf(PRINT_HIGH, "Countdown aborted!\n");
+			SV_BroadcastPrintf(PRINT_HIGH, "Countdown aborted: Player unreadied.\n");
 		}
 	}
 	return;
@@ -138,6 +142,15 @@ void Warmup::tic()
 	// If we're not advancing the countdown, we don't care.
 	if (this->status != Warmup::COUNTDOWN)
 		return;
+
+	size_t npig = P_NumPlayersInGame();
+	if (npig != this->ready_players) {
+		if (npig > this->ready_players)
+			SV_BroadcastPrintf(PRINT_HIGH, "Countdown aborted: Player joined.\n");
+		else
+			SV_BroadcastPrintf(PRINT_HIGH, "Countdown aborted: Player left.\n");
+		this->set_status(Warmup::WARMUP);
+	}
 
 	// If we haven't reached the level tic that we begin the map on,
 	// we don't care.
@@ -151,5 +164,5 @@ void Warmup::tic()
 
 	this->set_status(Warmup::INGAME);
 	G_DeferedFullReset();
-	SV_BroadcastPrintf(PRINT_HIGH, "FIGHT!\n");
+	SV_BroadcastPrintf(PRINT_HIGH, "The match has started.\n");
 }

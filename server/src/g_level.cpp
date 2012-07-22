@@ -720,7 +720,6 @@ void G_DoResetLevel(bool full_reset)
 		it->playerstate = PST_REBORN;
 		G_DoReborn(*it);
 	}
-	Printf(PRINT_HIGH, "Reset level!");
 }
 
 //
@@ -786,6 +785,7 @@ void G_DoLoadLevel (int position)
 		players[i].deathcount = 0; // [Toke - Scores - deaths]
 		players[i].killcount = 0; // [deathz0r] Coop kills
 		players[i].points = 0;
+		players[i].ready = false;
 	}
 
 	// [deathz0r] It's a smart idea to reset the team points

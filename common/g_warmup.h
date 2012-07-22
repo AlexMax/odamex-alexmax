@@ -23,6 +23,8 @@
 #ifndef __G_WARMUP_H__
 #define __G_WARMUP_H__
 
+#include <cstddef>
+
 class Warmup
 {
 public:
@@ -32,7 +34,7 @@ public:
 		INGAME,
 		COUNTDOWN,
 	} status_t;
-	Warmup() : status(Warmup::DISABLED) { }
+	Warmup() : status(Warmup::DISABLED), time_begin(0), ready_players(0) { }
 	void loadmap();
 	bool checkscorechange();
 	bool checkfireweapon();
@@ -42,6 +44,7 @@ public:
 private:
 	status_t status;
 	int time_begin;
+	size_t ready_players;
 	void set_status(status_t new_status);
 };
 
