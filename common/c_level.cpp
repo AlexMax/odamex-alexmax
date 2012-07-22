@@ -540,18 +540,6 @@ BEGIN_COMMAND (map)
 }
 END_COMMAND (map)
 
-BEGIN_COMMAND (testwreset)
-{
-	gameaction = ga_warmupdone;
-}
-END_COMMAND (testwreset)
-
-BEGIN_COMMAND (testreset)
-{
-	gameaction = ga_resetlevel;
-}
-END_COMMAND (testreset)
-
 char *CalcMapName (int episode, int level)
 {
 	static char lumpname[9];

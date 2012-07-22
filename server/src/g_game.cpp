@@ -445,7 +445,7 @@ void G_Ticker (void)
 		case ga_loadlevel:
 			G_DoLoadLevel (-1);
 			break;
-		case ga_warmupdone:
+		case ga_fullresetlevel:
 			G_DoResetLevel(true);
 			break;
 		case ga_resetlevel:

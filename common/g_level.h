@@ -191,6 +191,10 @@ void G_RestartMap (void);
 // but a warp test can start elsewhere
 void G_DeferedInitNew (char *mapname);
 
+// Map reset functions
+void G_DeferedFullReset();
+void G_DeferedReset();
+
 void G_ExitLevel (int position, int drawscores);
 void G_SecretExitLevel (int position, int drawscores);
 

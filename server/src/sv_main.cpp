@@ -62,6 +62,7 @@
 #include "p_unlag.h"
 #include "sv_vote.h"
 #include "sv_maplist.h"
+#include "g_warmup.h"
 
 #include <algorithm>
 #include <sstream>
@@ -3988,6 +3989,8 @@ void SV_SetReady(player_t &player, bool setting, bool silent)
 			MSG_WriteBool(&(players[j].client.reliablebuf), setting);
 		}
 	}
+
+	warmup.readytoggle();
 }
 
 void SV_Ready(player_t &player)
@@ -4000,6 +4003,13 @@ void SV_Ready(player_t &player)
 	if (player.timeout_ready > level.time) {
 		// We must be on a new map.  Reset the timeout.
 		player.timeout_ready = 0;
+	}
+
+	// Check to see if warmup will allow us to toggle our ready state.
+	if (!warmup.checkreadytoggle())
+	{
+		SV_PlayerPrintf(PRINT_HIGH, player.id, "You can't toggle change your ready state in the middle of a match!\n");
+		return;
 	}
 
 	// Check to see if the player's timeout has expired.
@@ -4606,6 +4616,7 @@ void SV_GameTics (void)
 	{
 		case GS_LEVEL:
 			SV_RemoveCorpses();
+			warmup.tic();
 			SV_WinCheck();
 			SV_TimelimitCheck();
 			Vote_Runtic();

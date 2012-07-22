@@ -65,7 +65,7 @@ typedef enum
 	ga_worlddone,
 	ga_screenshot,
 	ga_fullconsole,
-	ga_warmupdone,
+	ga_fullresetlevel,
 	ga_resetlevel
 } gameaction_t;
 

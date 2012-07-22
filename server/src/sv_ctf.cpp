@@ -26,6 +26,7 @@
 #include "m_random.h"
 #include "p_ctf.h"
 #include "i_system.h"
+#include "g_warmup.h"
 
 bool G_CheckSpot (player_t &player, mapthing2_t *mthing);
 
@@ -76,7 +77,7 @@ void SV_CTFEvent (flag_t f, flag_score_t event, player_t &who)
 	if(event == SCORE_NONE)
 		return;
 
-	if(validplayer(who))
+	if(validplayer(who) && warmup.checkscorechange())
 		who.points += ctf_points[event];
 
 	for (size_t i = 0; i < players.size(); ++i)

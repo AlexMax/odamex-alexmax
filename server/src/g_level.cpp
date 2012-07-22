@@ -65,6 +65,7 @@
 #include "v_video.h"
 #include "w_wad.h"
 #include "z_zone.h"
+#include "g_warmup.h"
 
 
 // FIXME: Remove this as soon as the JoinString is gone from G_ChangeMap()
@@ -128,8 +129,15 @@ void G_DeferedInitNew (char *mapname)
 	sv_nextmap.ForceSet(d_mapname);
 }
 
+void G_DeferedFullReset()
+{
+	gameaction = ga_fullresetlevel;
+}
 
-
+void G_DeferedReset()
+{
+	gameaction = ga_resetlevel;
+}
 
 const char* GetBase(const char* in)
 {
@@ -855,6 +863,8 @@ void G_DoLoadLevel (int position)
 	P_DoDeferedScripts ();
 	// [AM] Save the state of the level on the first tic.
 	G_DoSaveResetState();
+	// [AM] Handle warmup init.
+	warmup.loadmap();
 	//	C_FlushDisplay ();
 }
 

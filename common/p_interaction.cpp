@@ -35,6 +35,7 @@
 #include "p_lnspec.h"
 #include "p_ctf.h"
 #include "p_acs.h"
+#include "g_warmup.h"
 
 extern bool predicting;
 extern bool singleplayerjustdied;
@@ -77,6 +78,38 @@ void WeaponPickupMessage(AActor *toucher, weapontype_t &Weapon);
 //
 // GET STUFF
 //
+
+// Give frags to a player
+void P_GiveFrags(player_t* player, int num)
+{
+	if (!warmup.checkscorechange())
+		return;
+	player->fragcount += num;
+}
+
+// Give coop kills to a player
+void P_GiveKills(player_t* player, int num)
+{
+	if (!warmup.checkscorechange())
+		return;
+	player->killcount += num;
+}
+
+// Give coop kills to a player
+void P_GiveDeaths(player_t* player, int num)
+{
+	if (!warmup.checkscorechange())
+		return;
+	player->deathcount += num;
+}
+
+// Give a specific number of points to a player's team
+void P_GiveTeamPoints(player_t* player, int num)
+{
+	if (!warmup.checkscorechange())
+		return;
+	TEAMpoints[player->userinfo.team] += num;
+}
 
 //
 // P_GiveAmmo
@@ -1060,11 +1093,11 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 			{
 				if (target->player == source->player) // [RH] Cumulative frag count
 				{
-					splayer->fragcount--;
+					P_GiveFrags(splayer, -1);
 					// [Toke] Minus a team frag for suicide
 					if (sv_gametype == GM_TEAMDM)
 					{
-						TEAMpoints[splayer->userinfo.team]--;
+						P_GiveTeamPoints(splayer, -1);
 					}
 				}
 				// [Toke] Minus a team frag for killing teammate
@@ -1072,10 +1105,10 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 				         (splayer->userinfo.team == tplayer->userinfo.team))
 				{
 					// [Toke - Teamplay || deathz0r - updated]
-					splayer->fragcount--;
+					P_GiveFrags(splayer, -1);
 					if (sv_gametype == GM_TEAMDM)
 					{
-						TEAMpoints[splayer->userinfo.team]--;
+						P_GiveTeamPoints(splayer, -1);
 					}
 					else if (sv_gametype == GM_CTF)
 					{
@@ -1084,11 +1117,11 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 				}
 				else
 				{
-					splayer->fragcount++;
+					P_GiveFrags(splayer, 1);
 					// [Toke] Add a team frag
 					if (sv_gametype == GM_TEAMDM)
 					{
-						TEAMpoints[splayer->userinfo.team]++;
+						P_GiveTeamPoints(splayer, 1);
 					}
 					else if (sv_gametype == GM_CTF)
 					{
@@ -1109,7 +1142,7 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 		if (sv_gametype == GM_COOP &&
             ((target->flags & MF_COUNTKILL) || (target->type == MT_SKULL)))
 		{
-			splayer->killcount++;
+			P_GiveKills(splayer, 1);
 			SV_UpdateFrags(*splayer);
 		}
 	}
@@ -1124,7 +1157,7 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 	{
 		if (!joinkill && !shotclock)
 		{
-			tplayer->deathcount++;
+			P_GiveDeaths(tplayer, 1);
 		}
 
 		// Death script execution, care of Skull Tag
@@ -1136,7 +1169,8 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 		// count environment kills against you
 		if (!source && !joinkill && !shotclock)
 		{
-			tplayer->fragcount--; // [RH] Cumulative frag count
+			// [RH] Cumulative frag count
+			P_GiveFrags(tplayer, -1);
 		}
 
 		CTF_CheckFlags(*target->player);
