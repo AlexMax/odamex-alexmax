@@ -637,6 +637,7 @@ void G_DoSaveResetState()
 	reset_snapshot->Open();
 	FArchive arc(*reset_snapshot);
 	G_SerializeLevel(arc, false, true);
+	arc << level.time;
 }
 
 // [AM] - Reset the state of the level.  Second parameter is true if you want
@@ -671,6 +672,8 @@ void G_DoResetLevel(bool full_reset)
 	reset_snapshot->Reopen();
 	FArchive arc(*reset_snapshot);
 	G_SerializeLevel(arc, false, true);
+	int level_time;
+	arc >> level_time;
 	reset_snapshot->Seek(0, FFile::ESeekSet);
 	// Clear the item respawn queue, otherwise all those actors we just
 	// destroyed and replaced with the serialized items will start respawning.
@@ -678,6 +681,8 @@ void G_DoResetLevel(bool full_reset)
 	// Potentially clear out gamestate as well.
 	if (full_reset)
 	{
+		// Set time to the initial tic
+		level.time = level_time;
 		// Clear global goals.
 		for (size_t i = 0; i < NUMTEAMS; i++)
 			TEAMpoints[i] = 0;
@@ -690,6 +695,7 @@ void G_DoResetLevel(bool full_reset)
 			it->deathcount = 0;
 			it->killcount = 0;
 			it->points = 0;
+			it->ready = false;
 		}
 		// For predictable first spawns.
 		M_ClearRandom();
@@ -786,6 +792,7 @@ void G_DoLoadLevel (int position)
 		players[i].killcount = 0; // [deathz0r] Coop kills
 		players[i].points = 0;
 		players[i].ready = false;
+		players[i].timeout_ready = 0;
 	}
 
 	// [deathz0r] It's a smart idea to reset the team points

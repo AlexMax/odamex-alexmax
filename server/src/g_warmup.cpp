@@ -22,6 +22,8 @@
 
 #include "g_warmup.h"
 
+#include <cmath>
+
 #include "c_cvars.h"
 #include "d_player.h"
 #include "g_level.h"
@@ -65,6 +67,14 @@ void Warmup::loadmap()
 
 // Don't allow a players score to change if the server is in the middle of warmup.
 bool Warmup::checkscorechange()
+{
+	if (this->status == Warmup::WARMUP || this->status == Warmup::COUNTDOWN)
+		return false;
+	return true;
+}
+
+// Don't allow the timeleft to advance if the server is in the middle of warmup.
+bool Warmup::checktimeleftadvance()
 {
 	if (this->status == Warmup::WARMUP || this->status == Warmup::COUNTDOWN)
 		return false;
@@ -121,8 +131,6 @@ void Warmup::readytoggle()
 			this->set_status(Warmup::COUNTDOWN);
 			this->time_begin = level.time + (sv_warmup_countdown.asInt() * TICRATE);
 			this->ready_players = P_NumPlayersInGame();
-
-			SV_BroadcastPrintf(PRINT_HIGH, "Prepare to fight...\n");
 		}
 	}
 	else
@@ -158,7 +166,13 @@ void Warmup::tic()
 	{
 		// Broadcast a countdown (this should be handled clientside)
 		if ((this->time_begin - level.time) % TICRATE == 0)
-			SV_BroadcastPrintf(PRINT_HIGH, "%d...\n", (this->time_begin - level.time) / TICRATE);
+		{
+			int count = ceil((this->time_begin - level.time) / (float)TICRATE);
+			if (count == sv_warmup_countdown.asInt())
+				SV_BroadcastPrintf(PRINT_HIGH, "Match begins in %d...\n", count);
+			else
+				SV_BroadcastPrintf(PRINT_HIGH, "%d...\n", count);
+		}
 		return;
 	}
 

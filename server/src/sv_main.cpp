@@ -3886,6 +3886,8 @@ void SV_SetPlayerSpec(player_t &player, bool setting, bool silent) {
 		}
 
 		player.spectator = true;
+		SV_SetReady(player, false, true);
+		player.timeout_ready = 0;
 		player.playerstate = PST_LIVE;
 		player.joinafterspectatortime = level.time;
 
@@ -4005,10 +4007,16 @@ void SV_Ready(player_t &player)
 		player.timeout_ready = 0;
 	}
 
+	if (player.spectator == true)
+	{
+		SV_PlayerPrintf(PRINT_HIGH, player.id, "You can't ready as a spectator.\n");
+		return;
+	}
+
 	// Check to see if warmup will allow us to toggle our ready state.
 	if (!warmup.checkreadytoggle())
 	{
-		SV_PlayerPrintf(PRINT_HIGH, player.id, "You can't toggle change your ready state in the middle of a match!\n");
+		SV_PlayerPrintf(PRINT_HIGH, player.id, "You can't ready in the middle of a match!\n");
 		return;
 	}
 
@@ -4538,7 +4546,11 @@ void SV_TimelimitCheck()
 	if(!sv_timelimit)
 		return;
 
-	level.timeleft = (int)(sv_timelimit * TICRATE * 60) - level.time;	// in tics
+	level.timeleft = (int)(sv_timelimit * TICRATE * 60);
+
+	// Don't substract the proper amount of time unless we're actually ingame.
+	if (warmup.checktimeleftadvance())
+		level.timeleft -= level.time;	// in tics
 
 	// [SL] 2011-10-25 - Send the clients the remaining time (measured in seconds)
 	if (P_AtInterval(1 * TICRATE))		// every second

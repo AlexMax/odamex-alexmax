@@ -37,6 +37,7 @@ public:
 	Warmup() : status(Warmup::DISABLED), time_begin(0), ready_players(0) { }
 	void loadmap();
 	bool checkscorechange();
+	bool checktimeleftadvance();
 	bool checkfireweapon();
 	bool checkreadytoggle();
 	void readytoggle();
