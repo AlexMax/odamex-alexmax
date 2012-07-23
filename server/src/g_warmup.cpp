@@ -27,6 +27,7 @@
 #include "c_cvars.h"
 #include "d_player.h"
 #include "g_level.h"
+#include "i_net.h"
 #include "sv_main.h"
 
 EXTERN_CVAR(sv_warmup)
@@ -35,25 +36,37 @@ EXTERN_CVAR(sv_warmup_countdown)
 // Store Warmup state.
 Warmup warmup;
 
+// Broadcast warmup state to client.
+void SV_SendWarmupState(player_t &player, Warmup::status_t status)
+{
+	client_t *cl = &player.client;
+	MSG_WriteMarker(&cl->reliablebuf, svc_warmupstate);
+	MSG_WriteByte(&cl->reliablebuf, static_cast<byte>(status));
+}
+
+// Broadcast warmup state to all clients.
+void SV_BroadcastWarmupState(Warmup::status_t status)
+{
+	std::vector<player_t>::iterator it;
+	for (it = players.begin();it != players.end();++it)
+	{
+		if (!it->ingame())
+			continue;
+		SV_SendWarmupState(*it, status);
+	}
+}
+
 // Set warmup status and send clients warmup information.
 void Warmup::set_status(Warmup::status_t new_status)
 {
 	this->status = new_status;
-	switch (this->status)
-	{
-	case Warmup::DISABLED:
-		SV_BroadcastPrintf(PRINT_HIGH, "DEBUG: Warmup Disabled\n");
-		break;
-	case Warmup::WARMUP:
-		SV_BroadcastPrintf(PRINT_HIGH, "DEBUG: Warmup\n");
-		break;
-	case Warmup::COUNTDOWN:
-		SV_BroadcastPrintf(PRINT_HIGH, "DEBUG: Countdown\n");
-		break;
-	case Warmup::INGAME:
-		SV_BroadcastPrintf(PRINT_HIGH, "DEBUG: Ingame\n");
-		break;
-	}
+	SV_BroadcastWarmupState(new_status);
+}
+
+// Status getter
+Warmup::status_t Warmup::get_status()
+{
+	return this->status;
 }
 
 // Handle warmup bits on the loading of a map.
@@ -81,8 +94,8 @@ bool Warmup::checktimeleftadvance()
 	return true;
 }
 
-// Don't allow players to fire their weapon if the server is in the middle of
-// a countdown.
+// Don't allow players to fire their weapon if the server is in the middle
+// of a countdown.
 bool Warmup::checkfireweapon()
 {
 	if (this->status == Warmup::COUNTDOWN)

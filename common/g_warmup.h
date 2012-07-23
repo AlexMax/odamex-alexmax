@@ -25,6 +25,9 @@
 
 #include <cstddef>
 
+#include "d_player.h"
+#include "doomstat.h"
+
 class Warmup
 {
 public:
@@ -35,6 +38,7 @@ public:
 		COUNTDOWN,
 	} status_t;
 	Warmup() : status(Warmup::DISABLED), time_begin(0), ready_players(0) { }
+	Warmup::status_t get_status();
 	void loadmap();
 	bool checkscorechange();
 	bool checktimeleftadvance();
@@ -42,12 +46,15 @@ public:
 	bool checkreadytoggle();
 	void readytoggle();
 	void tic();
+	void set_client_status(status_t new_status); // Clientside only.
 private:
 	status_t status;
 	int time_begin;
 	size_t ready_players;
 	void set_status(status_t new_status);
 };
+
+void SV_SendWarmupState(player_t &player, Warmup::status_t status); // Serverside only.
 
 extern Warmup warmup;
 

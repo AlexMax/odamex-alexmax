@@ -1936,6 +1936,9 @@ void SV_ClientFullUpdate (player_t &pl)
 				return;
 	}
 
+	// update warmup state
+	SV_SendWarmupState(pl, warmup.get_status());
+
 	// update frags/points/spectate/ready
 	for (i = 0; i < players.size(); i++)
 	{
