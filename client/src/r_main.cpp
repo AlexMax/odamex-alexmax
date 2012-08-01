@@ -54,6 +54,7 @@ extern dyncolormap_t NormalLight;
 extern bool r_fakingunderwater;
 
 EXTERN_CVAR (r_viewsize)
+EXTERN_CVAR (r_widescreen)
 
 static float	LastFOV = 90.0f;
 fixed_t			FocalLengthX;
@@ -716,6 +717,16 @@ CVAR_FUNC_IMPL (r_detail)
 	setsizeneeded = true;
 }
 
+CVAR_FUNC_IMPL (r_widescreen)
+{
+	if (var.asInt() < 0 || var.asInt() > 3)
+	{
+		Printf(PRINT_HIGH, "Invalid widescreen setting.\n");
+		var.RestoreDefault();
+	}
+	setmodeneeded = true;
+}
+
 //
 //
 // R_ExecuteSetViewSize
@@ -786,7 +797,10 @@ void R_ExecuteSetViewSize (void)
 	virtwidth = screen->width >> detailxshift;
 	virtheight = screen->height >> detailyshift;
 
-	yaspectmul = (fixed_t)(65536.0f*(320.0f*(float)virtheight/(200.0f*(float)virtwidth)));
+	if (r_widescreen.asInt() >= 2)
+		yaspectmul = 78643; // [AM] Force correct aspect ratio
+	else
+		yaspectmul = (fixed_t)(65536.0f*(320.0f*(float)virtheight/(200.0f*(float)virtwidth)));
 
 	colfunc = basecolfunc = R_DrawColumn;
 	lucentcolfunc = R_DrawTranslucentColumn;
