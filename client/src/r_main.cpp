@@ -56,7 +56,7 @@ extern bool r_fakingunderwater;
 EXTERN_CVAR (r_viewsize)
 EXTERN_CVAR (r_widescreen)
 
-static float	LastFOV = 90.0f;
+static float	LastFOV = 0.0f;
 fixed_t			FocalLengthX;
 fixed_t			FocalLengthY;
 int 			viewangleoffset = 0;
@@ -146,7 +146,8 @@ void (*hcolfunc_post2) (int hx, int sx, int yl, int yh);
 void (*hcolfunc_post4) (int sx, int yl, int yh);
 
 static int lastcenteryfrac;
-int FieldOfView = 2048;	// Fineangles in the SCREENWIDTH wide window
+// [AM] Number of fineangles in a default 90 degree FOV at a 4:3 resolution.
+int FieldOfView = 2048;
 
 //
 //
@@ -591,15 +592,8 @@ void R_InitTextureMapping (void)
 	clipangle = xtoviewangle[0];
 }
 
-//
-//
-// R_SetFOV
-//
-// Changes the field of view
-//
-//
-
-void R_SetFOV (float fov)
+// Changes the field of view.
+void R_SetFOV(float fov)
 {
 	if (fov == LastFOV)
 		return;
@@ -610,7 +604,19 @@ void R_SetFOV (float fov)
 		fov = 179;
 
 	LastFOV = fov;
-	FieldOfView = (int)(fov * (float)FINEANGLES / 360.0f);
+	if (r_widescreen.asInt() == 3)
+	{
+		// [AM] The FOV is corrected to fit the wider screen.
+		float radfov = fov * PI / 180.0f;
+		float widefov = (2 * atan((1.2) * tan(radfov / 2))) * 180.0f / PI;
+		FieldOfView = static_cast<int>(widefov * static_cast<float>(FINEANGLES) / 360.0f);
+	}
+	else
+	{
+		// [AM] The FOV is left as-is for the wider screen.
+		FieldOfView = static_cast<int>(fov * static_cast<float>(FINEANGLES) / 360.0f);
+	}
+	DPrintf("FieldOfView: %d\n", FieldOfView);
 	setsizeneeded = true;
 }
 
