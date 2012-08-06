@@ -224,8 +224,12 @@ void D_Display (void)
 	BEGIN_STAT(D_Display);
 
 	if (gamestate == GS_LEVEL && viewactive && consoleplayer().camera)
-		R_SetFOV (consoleplayer().camera->player ?
-			consoleplayer().camera->player->fov : 90.0f);
+	{
+		if (consoleplayer().camera->player)
+			R_SetFOV(consoleplayer().camera->player->fov, setmodeneeded || setsizeneeded);
+		else
+			R_SetFOV(90.0f, setmodeneeded || setsizeneeded);
+	}
 
 	// [RH] change the screen mode if needed
 	if (setmodeneeded)

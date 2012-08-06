@@ -593,9 +593,9 @@ void R_InitTextureMapping (void)
 }
 
 // Changes the field of view.
-void R_SetFOV(float fov)
+void R_SetFOV(float fov, bool force = false)
 {
-	if (fov == LastFOV)
+	if (fov == LastFOV && !force)
 		return;
 
 	if (fov < 1)
@@ -604,11 +604,15 @@ void R_SetFOV(float fov)
 		fov = 179;
 
 	LastFOV = fov;
-	if (r_widescreen.asInt() == 3)
+	// [AM] FIXME: Screen width and height are not correct on resize.
+	float am = (static_cast<float>(screen->width) / screen->height) / (4.0f / 3.0f);
+	if (r_widescreen.asInt() == 3 && am > 1.0f)
 	{
 		// [AM] The FOV is corrected to fit the wider screen.
+		DPrintf("am: %f\n", am);
 		float radfov = fov * PI / 180.0f;
-		float widefov = (2 * atan((1.2) * tan(radfov / 2))) * 180.0f / PI;
+		float widefov = (2 * atan(am * tan(radfov / 2))) * 180.0f / PI;
+		DPrintf("widefov: %f\n", widefov);
 		FieldOfView = static_cast<int>(widefov * static_cast<float>(FINEANGLES) / 360.0f);
 	}
 	else
