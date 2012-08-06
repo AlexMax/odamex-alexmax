@@ -604,7 +604,6 @@ void R_SetFOV(float fov, bool force = false)
 		fov = 179;
 
 	LastFOV = fov;
-	// [AM] FIXME: Screen width and height are not correct on resize.
 	float am = (static_cast<float>(screen->width) / screen->height) / (4.0f / 3.0f);
 	if (r_widescreen.asInt() == 3 && am > 1.0f)
 	{
