@@ -608,10 +608,8 @@ void R_SetFOV(float fov, bool force = false)
 	if (r_widescreen.asInt() == 3 && am > 1.0f)
 	{
 		// [AM] The FOV is corrected to fit the wider screen.
-		DPrintf("am: %f\n", am);
 		float radfov = fov * PI / 180.0f;
 		float widefov = (2 * atan(am * tan(radfov / 2))) * 180.0f / PI;
-		DPrintf("widefov: %f\n", widefov);
 		FieldOfView = static_cast<int>(widefov * static_cast<float>(FINEANGLES) / 360.0f);
 	}
 	else
@@ -619,7 +617,6 @@ void R_SetFOV(float fov, bool force = false)
 		// [AM] The FOV is left as-is for the wider screen.
 		FieldOfView = static_cast<int>(fov * static_cast<float>(FINEANGLES) / 360.0f);
 	}
-	DPrintf("FieldOfView: %d\n", FieldOfView);
 	setsizeneeded = true;
 }
 
@@ -830,8 +827,14 @@ void R_ExecuteSetViewSize (void)
 
 	// psprite scales
 	pspritexscale = centerxfrac / 160;
-	pspriteyscale = FixedMul (pspritexscale, yaspectmul);
-	pspritexiscale = FixedDiv (FRACUNIT, pspritexscale);
+	if (r_widescreen.asInt() >= 2) {
+		// [AM] Use original psprite y-scaling for widescreen modes.
+		fixed_t fixedyam = (fixed_t)(65536.0f*(320.0f*(float)virtheight/(200.0f*(float)virtwidth)));
+		pspriteyscale = FixedMul(pspritexscale, fixedyam);
+	} else {
+		pspriteyscale = FixedMul(pspritexscale, yaspectmul);
+	}
+	pspritexiscale = FixedDiv(FRACUNIT, pspritexscale);
 
 	// [RH] Sky height fix for screens not 200 (or 240) pixels tall
 	R_InitSkyMap ();
