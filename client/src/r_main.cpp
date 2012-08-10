@@ -148,6 +148,7 @@ void (*hcolfunc_post4) (int sx, int yl, int yh);
 static int lastcenteryfrac;
 // [AM] Number of fineangles in a default 90 degree FOV at a 4:3 resolution.
 int FieldOfView = 2048;
+int CorrectFieldOfView = 2048;
 
 //
 //
@@ -538,8 +539,8 @@ void R_InitTextureMapping (void)
 	// Use tangent table to generate viewangletox: viewangletox will give
 	// the next greatest x after the view angle.
 
-	const fixed_t hitan = finetangent[FINEANGLES/4+FieldOfView/2];
-	const fixed_t lotan = finetangent[FINEANGLES/4-FieldOfView/2];
+	const fixed_t hitan = finetangent[FINEANGLES/4+CorrectFieldOfView/2];
+	const fixed_t lotan = finetangent[FINEANGLES/4-CorrectFieldOfView/2];
 	const int highend = viewwidth + 1;
 
 	// Calc focallength so FieldOfView angles covers viewwidth.
@@ -604,18 +605,19 @@ void R_SetFOV(float fov, bool force = false)
 		fov = 179;
 
 	LastFOV = fov;
+	FieldOfView = static_cast<int>(fov * static_cast<float>(FINEANGLES) / 360.0f);
 	float am = (static_cast<float>(screen->width) / screen->height) / (4.0f / 3.0f);
 	if (r_widescreen.asInt() == 3 && am > 1.0f)
 	{
 		// [AM] The FOV is corrected to fit the wider screen.
 		float radfov = fov * PI / 180.0f;
 		float widefov = (2 * atan(am * tan(radfov / 2))) * 180.0f / PI;
-		FieldOfView = static_cast<int>(widefov * static_cast<float>(FINEANGLES) / 360.0f);
+		CorrectFieldOfView = static_cast<int>(widefov * static_cast<float>(FINEANGLES) / 360.0f);
 	}
 	else
 	{
 		// [AM] The FOV is left as-is for the wider screen.
-		FieldOfView = static_cast<int>(fov * static_cast<float>(FINEANGLES) / 360.0f);
+		CorrectFieldOfView = FieldOfView;
 	}
 	setsizeneeded = true;
 }
