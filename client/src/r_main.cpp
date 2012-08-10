@@ -828,14 +828,21 @@ void R_ExecuteSetViewSize (void)
 	R_InitTextureMapping ();
 
 	// psprite scales
-	pspritexscale = centerxfrac / 160;
 	if (r_widescreen.asInt() >= 2) {
-		// [AM] Use original psprite y-scaling for widescreen modes.
-		fixed_t fixedyam = (fixed_t)(65536.0f*(320.0f*(float)virtheight/(200.0f*(float)virtwidth)));
-		pspriteyscale = FixedMul(pspritexscale, fixedyam);
+		// [AM] Using centerxfrac will make our sprite too fat, so we
+		//      generate a corrected 4:3 screen width based on our
+		//      height, then generate the x-scale based on that.
+		int cswidth, crvwidth;
+		cswidth = (4 * screen->height) / 3;
+		if (setblocks < 10)
+			crvwidth = ((setblocks * cswidth) / 10) & (~(15 >> (screen->is8bit() ? 0 : 2)));
+		else
+			crvwidth = cswidth;
+		pspritexscale = (((crvwidth >> detailxshift) / 2) << FRACBITS) / 160;
 	} else {
-		pspriteyscale = FixedMul(pspritexscale, yaspectmul);
+		pspritexscale = centerxfrac / 160;
 	}
+	pspriteyscale = FixedMul(pspritexscale, yaspectmul);
 	pspritexiscale = FixedDiv(FRACUNIT, pspritexscale);
 
 	// [RH] Sky height fix for screens not 200 (or 240) pixels tall
