@@ -53,7 +53,7 @@ public:
 	size_t count_yes(void);
 	size_t count_no(void);
 	size_t count_abs(void);
-	size_t calc_yes(void);
+	size_t calc_yes(const bool noabs = false);
 	size_t calc_no(void);
 	void ev_disconnect(player_t &player);
 	bool ev_tic(void);
@@ -83,7 +83,6 @@ public:
 void SV_Callvote(player_t &player);
 void SV_Vote(player_t &player);
 
-void Vote_InitLevel(void);
 void Vote_Disconnect(player_t &player);
 void Vote_Runtic(void);
 

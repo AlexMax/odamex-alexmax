@@ -41,6 +41,7 @@ EXTERN_CVAR(sv_scorelimit)
 EXTERN_CVAR(sv_timelimit)
 
 EXTERN_CVAR(sv_vote_majority)
+EXTERN_CVAR(sv_vote_countabs)
 EXTERN_CVAR(sv_vote_timelimit)
 EXTERN_CVAR(sv_vote_timeout)
 
@@ -567,10 +568,21 @@ vote_result_t Vote::check(void) {
 		return VOTE_NO;
 	}
 
-	// If we've run out of time with an undecided vote, the result is no.
+	// If we've run out of time with an undecided vote, we need a result now.
 	if (this->get_countdown() <= 0) {
-		return VOTE_NO;
+		if (sv_vote_countabs) {
+			// Since the vote didn't already pass and all vote calculations
+			// up to now take absent voters into account, we know it failed.
+			return VOTE_NO;
+		} else {
+			// This last calculation does not take absent voters into account.
+			if (yes >= this->calc_yes(true)) {
+				return VOTE_YES;
+			}
+			return VOTE_NO;
+		}
 	}
+
 	return VOTE_UNDEC;
 }
 
@@ -594,9 +606,18 @@ size_t Vote::count_yes(void) {
 	return count;
 }
 
-// Calculate the number of players needed for the vote to pass.
-size_t Vote::calc_yes(void) {
-	float f_calc = this->tally.size() * sv_vote_majority;
+// Calculate the number of players needed for the vote to pass.  Pass true
+// for the first param if you don't want to count absent voters.
+size_t Vote::calc_yes(const bool noabs) {
+	size_t size;
+
+	if (noabs) {
+		size = this->count_yes() + this->count_no();
+	} else {
+		size = this->tally.size();
+	}
+
+	float f_calc = size * sv_vote_majority;
 	size_t i_calc = (int)floor(f_calc + 0.5f);
 	if (f_calc > i_calc - vote_epsilon && f_calc < i_calc + vote_epsilon) {
 		return i_calc + 1;
@@ -754,8 +775,9 @@ bool Vote::ev_tic(void) {
 	// Check to see if the vote has passed.
 	this->result = this->check();
 
-	// Run tic-specific vote functions.
-	if (!this->tic()) {
+	// Run tic-specific vote functions.  Also interrupt if we're in
+	// intermission or on a new map.
+	if (gamestate == GS_INTERMISSION || level.time == 1 || !this->tic()) {
 		this->result = VOTE_INTERRUPT;
 	}
 
@@ -872,6 +894,12 @@ void SV_Callvote(player_t &player) {
 		return;
 	}
 
+	// Is the server in intermission?
+	if (gamestate == GS_INTERMISSION) {
+		SV_PlayerPrintf(PRINT_HIGH, player.id, "You can't callvote while the server is in intermission.\n");
+		return;
+	}
+
 	// Is another vote already in progress?
 	if (vote != 0) {
 		SV_PlayerPrintf(PRINT_HIGH, player.id, "Another vote is already in progress.\n");
@@ -955,25 +983,6 @@ void SV_Vote(player_t &player) {
 
 //////// EVENTS ////////
 
-// Prepare a fresh level for voting.
-void Vote_InitLevel(void) {
-	// If there is a vote in progress, delete it.
-	if (vote != 0) {
-		delete vote;
-		vote = 0;
-	}
-
-	// Everyone starts off with a clean slate.
-	for (size_t i = 0;i < players.size();i++) {
-		if (!validplayer(players[i])) {
-			continue;
-		}
-
-		players[i].timeout_callvote = 0;
-		players[i].timeout_vote = 0;
-	}
-}
-
 // Remove a disconnected player from the tally.
 void Vote_Disconnect(player_t &player) {
 	// Is there even a vote happening?  If not, we don't really care.
@@ -986,6 +995,19 @@ void Vote_Disconnect(player_t &player) {
 
 // Handles tic-by-tic maintenance of voting.
 void Vote_Runtic(void) {
+	// Special housekeeping for intermission or a new map.
+	if (level.time == 1) {
+		// Every player has a clean slate in terms of timeouts.
+		for (size_t i = 0;i < players.size();i++) {
+			if (!validplayer(players[i])) {
+				continue;
+			}
+
+			players[i].timeout_callvote = 0;
+			players[i].timeout_vote = 0;
+		}
+	}
+
 	// Is there even a vote happening?
 	if (vote == 0) {
 		return;

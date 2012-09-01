@@ -16,6 +16,7 @@
 				<Option projectLinkerOptionsRelation="2" />
 				<Compiler>
 					<Add option="-O2" />
+					<Add option="-fno-inline" />
 					<Add option="-DWIN32" />
 					<Add option="-D_WINDOWS" />
 					<Add option="-DNDEBUG" />
@@ -27,6 +28,7 @@
 					<Add library="libtextscreen" />
 					<Add library="libportmidi" />
 					<Add library="winmm" />
+					<Add library="shlwapi" />
 					<Add directory="..\..\lib" />
 				</Linker>
 			</Target>
@@ -38,11 +40,11 @@
 				<Option deps_output="..\..\deps" />
 				<Option type="0" />
 				<Option compiler="gcc" />
-				<Option parameters="-file idl2011.wad +map map26" />
 				<Option projectLinkerOptionsRelation="2" />
 				<Compiler>
 					<Add option="-Wall" />
 					<Add option="-gdwarf-2" />
+					<Add option="-fno-inline" />
 					<Add option="-DWIN32" />
 					<Add option="-D_WINDOWS" />
 					<Add option="-D_DEBUG" />
@@ -53,6 +55,7 @@
 					<Add library="libtextscreen-dbg" />
 					<Add library="libportmidi-dbg" />
 					<Add library="winmm" />
+					<Add library="shlwapi" />
 					<Add directory="..\..\lib" />
 				</Linker>
 			</Target>
@@ -86,7 +89,6 @@
 				<Option deps_output="..\..\deps" />
 				<Option type="0" />
 				<Option compiler="gcc" />
-				<Option parameters="-waddir ~/Games/doomwads -connect 66.170.3.2:10703" />
 				<Option projectResourceIncludeDirsRelation="0" />
 				<Compiler>
 					<Add option="-Wall" />
@@ -207,6 +209,7 @@
 					<Add library="odbccp32.lib" />
 					<Add library="libtextscreen" />
 					<Add library="libportmidi" />
+					<Add library="shlwapi" />
 					<Add directory="." />
 					<Add directory="..\src" />
 					<Add directory="..\..\common" />
@@ -283,6 +286,7 @@
 					<Add library="odbccp32.lib" />
 					<Add library="libtextscreen-dbg" />
 					<Add library="libportmidi-dbg" />
+					<Add library="shlwapi" />
 					<Add directory="." />
 					<Add directory="..\src" />
 					<Add directory="..\..\common" />
@@ -345,6 +349,8 @@
 		<Unit filename="..\..\common\d_items.h" />
 		<Unit filename="..\..\common\d_main.h" />
 		<Unit filename="..\..\common\d_net.h" />
+		<Unit filename="..\..\common\d_netcmd.cpp" />
+		<Unit filename="..\..\common\d_netcmd.h" />
 		<Unit filename="..\..\common\d_netinf.h" />
 		<Unit filename="..\..\common\d_player.h" />
 		<Unit filename="..\..\common\d_protocol.cpp" />
@@ -360,7 +366,6 @@
 		<Unit filename="..\..\common\doomtype.h" />
 		<Unit filename="..\..\common\dsectoreffect.cpp" />
 		<Unit filename="..\..\common\dsectoreffect.h" />
-		<Unit filename="..\..\common\dstrings.h" />
 		<Unit filename="..\..\common\dthinker.cpp" />
 		<Unit filename="..\..\common\dthinker.h" />
 		<Unit filename="..\..\common\errors.h" />
@@ -495,12 +500,12 @@
 		<Unit filename="..\src\cl_maplist.cpp" />
 		<Unit filename="..\src\cl_maplist.h" />
 		<Unit filename="..\src\cl_mobj.cpp" />
+		<Unit filename="..\src\cl_netgraph.cpp" />
+		<Unit filename="..\src\cl_netgraph.h" />
 		<Unit filename="..\src\cl_pch.h">
 			<Option compile="1" />
 			<Option weight="0" />
 		</Unit>
-		<Unit filename="..\src\cl_netgraph.h" />
-		<Unit filename="..\src\cl_netgraph.cpp" />
 		<Unit filename="..\src\cl_pred.cpp" />
 		<Unit filename="..\src\cl_stubs.cpp" />
 		<Unit filename="..\src\cl_vote.cpp" />

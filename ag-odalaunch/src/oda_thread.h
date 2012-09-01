@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -127,8 +127,8 @@ public:
 	}
 
 	void Cancel() { AG_ThreadCancel(m_Thread); }
-	int Join(void **exitVal) { return AG_ThreadJoin(m_Thread, exitVal); }
-	int Kill(int signal) { return AG_ThreadKill(m_Thread, signal); }
+	void Join(void **exitVal) { AG_ThreadJoin(m_Thread, exitVal); }
+	void Kill(int signal) { AG_ThreadKill(m_Thread, signal); }
 
 private:
 	AG_Thread  m_Thread;

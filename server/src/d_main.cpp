@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -281,7 +281,7 @@ static bool CheckIWAD (std::string suggestion, std::string &titlestring)
 			{
 				wadinfo_t header;
 				fread (&header, sizeof(header), 1, f);
-				header.identification = LONG(header.identification);
+				header.identification = LELONG(header.identification);
 				if (header.identification != IWAD_ID)
 				{
 					if(header.identification == PWAD_ID)
@@ -333,13 +333,13 @@ static bool CheckIWAD (std::string suggestion, std::string &titlestring)
 		memset (lumpsfound, 0, sizeof(lumpsfound));
 		if ( (f = fopen (iwad.c_str(), "rb")) )
 		{
-			fread (&header, sizeof(header), 1, f);
-			header.identification = LONG(header.identification);
+			size_t res = fread (&header, sizeof(header), 1, f);
+			header.identification = LELONG(header.identification);
 			if (header.identification == IWAD_ID ||
 				header.identification == PWAD_ID)
 			{
-				header.numlumps = LONG(header.numlumps);
-				if (0 == fseek (f, LONG(header.infotableofs), SEEK_SET))
+				header.numlumps = LELONG(header.numlumps);
+				if (0 == fseek (f, LELONG(header.infotableofs), SEEK_SET))
 				{
 					for (i = 0; i < header.numlumps; i++)
 					{
@@ -969,10 +969,9 @@ std::vector<size_t> D_DoomWadReboot(
     patchfiles.clear();
 
 	// [RH] Initialize localizable strings.
-	GStrings.LoadStrings (W_GetNumForName ("LANGUAGE"), STRING_TABLE_SIZE, false);
+	GStrings.ResetStrings ();
 	GStrings.Compact ();
 
-	//D_InitStrings ();
 	D_DoDefDehackedPatch(patch_files);
 
 	if (DefaultsLoaded)	{		// [ML] This is being called while loading defaults,

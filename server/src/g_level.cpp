@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -529,8 +529,6 @@ void G_InitNew (const char *mapname)
 
 			players[i].joinafterspectatortime = -(TICRATE*5);
 		}
-
-		Vote_InitLevel();
 	}
 
 	// [SL] 2012-12-08 - Multiplayer is always true for servers

@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -904,7 +904,8 @@ void InitNetMessageFormats()
       MSG(clc_maplist,            "x"),
       MSG(clc_getplayerinfo,      "x"),
       MSG(clc_launcher_challenge, "x"),
-      MSG(clc_challenge,          "x")
+      MSG(clc_challenge,          "x"),
+      MSG(clc_spy,                "x")
    };
 
    msg_info_t svc_messages[] = {
@@ -978,7 +979,8 @@ void InitNetMessageFormats()
 	MSG(svc_inttimeleft,		"x"),
 	MSG(svc_mobjtranslation,	"x"),
 	MSG(svc_fullupdatedone,		"x"),
-	MSG(svc_railtrail,			"x")
+	MSG(svc_railtrail,			"x"),
+	MSG(svc_playerstate,		"x")
    };
 
    size_t i;

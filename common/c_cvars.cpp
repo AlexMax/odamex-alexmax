@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -208,6 +208,32 @@ void cvar_t::RestoreDefault ()
 {
 	Set(m_Default.c_str());	
 	m_Flags |= CVAR_ISDEFAULT;
+}
+
+//
+// cvar_t::Transfer
+//
+// Copies the value from one cvar to another and then removes the source cvar
+//
+void cvar_t::Transfer(const char *fromname, const char *toname)
+{
+	cvar_t *from, *to, *dummy;
+
+	from = FindCVar(fromname, &dummy);
+	to = FindCVar(toname, &dummy);
+
+	if (from && to)
+	{
+		to->ForceSet(from->m_Value);
+		to->ForceSet(from->m_String.c_str());
+
+		// remove the old cvar
+		cvar_t *cur = ad.GetCVars();
+		while (cur->m_Next != from)
+			cur = cur->m_Next;
+
+		cur->m_Next = from->m_Next;
+	}
 }
 
 cvar_t *cvar_t::cvar_set (const char *var_name, const char *val)
@@ -473,7 +499,7 @@ void cvar_t::C_ArchiveCVars (void *f)
 			|| (baseapp == server && cvar->m_Flags & CVAR_SERVERARCHIVE))
 		{
 			fprintf ((FILE *)f, "// %s\n", cvar->helptext());
-			fprintf ((FILE *)f, "set %s \"%s\"\n\n", cvar->name(), cvar->cstring());
+			fprintf ((FILE *)f, "set %s %s\n\n", C_QuoteString(cvar->name()).c_str(), C_QuoteString(cvar->cstring()).c_str());
 		}
 		cvar = cvar->m_Next;
 	}

@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -44,17 +44,30 @@ typedef enum
 class LstOdaServerList : public wxAdvancedListCtrl
 {
     public:
-        LstOdaServerList() { };
+        LstOdaServerList();
         virtual ~LstOdaServerList();
 
-        void SetupServerListColumns();
         void AddServerToList(const odalpapi::Server &s, wxInt32 index, bool insert = true);
 
     protected:
         
         void ClearItemCells(long item);
         
+        void OnOpenContextMenu(wxContextMenuEvent& event);
+
+        void OnCopyAddress(wxCommandEvent& event);
+
+        void SetupServerListColumns();
+
+        void OnCreateControl(wxWindowCreateEvent &event);
+
         DECLARE_DYNAMIC_CLASS(LstOdaServerList)
+
+    private:
+
+        wxMenu *m_mnuPopup;
+
+        DECLARE_EVENT_TABLE()
 };
 
 #endif // __LST_SERVERS_H__

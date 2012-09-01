@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -1057,7 +1057,7 @@ static BOOL CheckMobjBlocking (seg_t *seg, polyobj_t *po)
 	{
 		for (i = left; i <= right; i++)
 		{
-			for (mobj = blocklinks[j+i]; mobj; mobj = mobj->bnext)
+			for (mobj = blocklinks[j+i]; mobj; mobj = mobj->bmapnode.Next(i, j/bmapwidth))
 			{
 				if (mobj->flags&MF_SOLID || mobj->player)
 				{

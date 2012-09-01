@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -87,7 +87,7 @@ struct CvarField_t
 #define TAG_ID 0xAD0
 
 // When a change to the protocol is made, this value must be incremented
-#define PROTOCOL_VERSION 1
+#define PROTOCOL_VERSION 2
 
 /* 
     Inclusion/Removal macros of certain fields, it is MANDATORY to remove these
@@ -206,6 +206,10 @@ static void IntQryBuildInformation(const DWORD &EqProtocolVersion,
     for (size_t i = 0; i < players.size(); ++i)
     {
         MSG_WriteString(&ml_message, players[i].userinfo.netname);
+        QRYNEWINFO(2)
+        {
+            MSG_WriteLong(&ml_message, players[i].userinfo.color);
+        }
         MSG_WriteByte(&ml_message, players[i].userinfo.team);
         MSG_WriteShort(&ml_message, players[i].ping);
 

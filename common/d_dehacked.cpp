@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -1716,7 +1716,7 @@ bool DoDehPatch (const char *patchfile, BOOL autoloading)
 		if (deh) {
 			filelen = M_FileLength (deh);
 			if ( (PatchFile = new char[filelen + 1]) ) {
-				fread (PatchFile, 1, filelen, deh);
+				size_t res = fread (PatchFile, 1, filelen, deh);
 				fclose (deh);
 			}
 		}

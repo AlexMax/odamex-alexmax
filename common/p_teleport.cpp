@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -108,6 +108,7 @@ BOOL EV_Teleport (int tid, int side, AActor *thing)
 
 	thing->momx = thing->momy = thing->momz = 0;
 	thing->angle = m->angle;
+	thing->pitch = 0;
 
 	return true;
 }
@@ -191,6 +192,7 @@ BOOL EV_LineTeleport (line_t *line, int side, AActor *thing)
 
 				thing->momx = thing->momy = thing->momz = 0;
 				thing->angle = m->angle;
+				thing->pitch = 0;
 
 				return true;
 			}

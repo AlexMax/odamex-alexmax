@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -43,7 +43,6 @@ extern buf_t     net_buffer;
 extern NetDemo	netdemo;
 
 #define MAXSAVETICS 70
-extern ticcmd_t localcmds[MAXSAVETICS];
 
 extern bool predicting;
 

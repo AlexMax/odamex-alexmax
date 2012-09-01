@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -545,7 +545,7 @@ void F_DrawPatchCol (int x, const patch_t *patch, int col, const DCanvas *scrn)
 	step = (200<<16) / scrn->height;
 	invstep = (scrn->height<<16) / 200;
 
-	column = (column_t *)((byte *)patch + LONG(patch->columnofs[col]));
+	column = (column_t *)((byte *)patch + LELONG(patch->columnofs[col]));
 	desttop = scrn->buffer + x;
 	pitch = scrn->pitch;
 

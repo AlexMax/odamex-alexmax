@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -37,7 +37,7 @@
 #include "r_things.h"
 #include "v_video.h"
 
-byte dc_temp[1536*4]; // denis - todo - security, overflow
+byte dc_temp[MAXHEIGHT * 4]; // denis - todo - security, overflow
 unsigned int dc_tspans[4][256];
 unsigned int *dc_ctspan[4];
 unsigned int *horizspan[4];
@@ -915,55 +915,81 @@ void R_DrawColumnHorizP_C (void)
 	frac = dc_texturefrac;
 
 	{
-		int mask = dc_mask;
+		int texheight = dc_textureheight;
+		int mask = (texheight >> FRACBITS) - 1;
+		
 		byte *source = dc_source;
 
-		if (count & 1) {
-			*dest = source[(frac>>FRACBITS) & mask];
-			dest += 4;
-			frac += fracstep;
-		}
-		if (count & 2) {
-			dest[0] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[4] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest += 8;
-		}
-		if (count & 4) {
-			dest[0] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[4] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[8] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[12] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest += 16;
-		}
-		count >>= 3;
-		if (!count) return;
-
-		do
+		// [SL] Properly tile textures whose heights are not a power-of-2,
+		// avoiding a tutti-frutti effect.  From Eternity Engine.
+		if (texheight & (texheight - 1))
 		{
-			dest[0] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[4] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[8] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[12] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[16] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[20] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[24] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest[28] = source[(frac>>FRACBITS) & mask];
-			frac += fracstep;
-			dest += 32;
-		} while (--count);
+			// texture height is not a power-of-2
+			if (frac < 0)
+				while((frac += texheight) < 0);
+			else
+				while(frac >= texheight)
+					frac -= texheight;
+
+			do
+			{
+				*dest = source[frac>>FRACBITS];
+				dest += 4;
+				if ((frac += fracstep) >= texheight)
+					frac -= texheight;
+			} while (--count);	
+		}
+		else
+		{
+			// texture height is a power-of-2
+			if (count & 1) {
+				*dest = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest += 4;				
+			}
+			if (count & 2) {
+				dest[0] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[4] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest += 8;
+			}
+			if (count & 4) {
+				dest[0] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[4] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[8] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[12] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest += 16;
+			}
+			count >>= 3;
+			if (!count)
+				return;
+
+			do
+			{
+				dest[0] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[4] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[8] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[12] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[16] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[20] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[24] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest[28] = source[(frac>>FRACBITS) & mask];
+				frac += fracstep;
+				dest += 32;
+			} while (--count);
+		}
 	}
 }
 

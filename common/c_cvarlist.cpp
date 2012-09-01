@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -147,6 +147,10 @@ CVAR (co_boomlinecheck, "0", "additional checks are made on two-sided lines, all
 CVAR (co_level8soundfeature, "0", "Enable/disable the \"level 8 full sound at far distances\" feature", 
       CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
 
+// Fix the blockmap collision bug
+CVAR (co_blockmapfix, "0", "Fix the blockmap collision bug",
+      CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
+
 // Enable/disable zdoom-based gravity and physics interactions
 CVAR (co_zdoomphys, "0", "Enable/disable zdoom-based gravity and physics interactions", 
       CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
@@ -168,6 +172,9 @@ CVAR (co_nosilentspawns, "0", "Turns off the west-facing silent spawns vanilla b
 CVAR (cl_deathcam, "1", "Dead player's view follows the actor who killed them", 
       CVARTYPE_BOOL, CVAR_ARCHIVE)
 
+CVAR (cl_predictsectors, "1", "Move floors and ceilings immediately instead of waiting for confirmation",
+	  CVARTYPE_BOOL, CVAR_ARCHIVE)
+
 CVAR (cl_predictpickup, "1", "Predict weapon pickups", CVARTYPE_BOOL, CVAR_ARCHIVE)
 
 // Movebob
@@ -182,6 +189,8 @@ CVAR (sv_forcerespawn, "0", "Force a player to respawn.",
 // [AM] Force a player to respawn after a set amount of time
 CVAR (sv_forcerespawntime, "30", "Force a player to respawn after a set amount of time", 
       CVARTYPE_WORD, CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
+CVAR (sv_zdoomspawndelay, "0", "Force a player to wait a second before respawning",
+      CVARTYPE_BOOL, CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 
 CVAR_FUNC_DECL (sv_gravity, "800", "Gravity of the environment", 
       CVARTYPE_INT, CVAR_ARCHIVE | CVAR_SERVERARCHIVE | CVAR_SERVERINFO)

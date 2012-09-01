@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -117,7 +117,8 @@ void FLZOFile::PostOpen ()
 	if (m_File && m_Mode == EReading)
 	{
 		char sig[4];
-		fread (sig, 4, 1, m_File);
+		size_t res;
+		res = fread (sig, 4, 1, m_File);
 		if (sig[0] != LZOSig[0] || sig[1] != LZOSig[1] || sig[2] != LZOSig[2] || sig[3] != LZOSig[3])
 		{
 			fclose (m_File);
@@ -126,12 +127,12 @@ void FLZOFile::PostOpen ()
 		else
 		{
 			DWORD sizes[2];
-			fread (sizes, sizeof(DWORD), 2, m_File);
+			res = fread (sizes, sizeof(DWORD), 2, m_File);
 			SWAP_DWORD (sizes[0]);
 			SWAP_DWORD (sizes[1]);
 			unsigned int len = sizes[0] == 0 ? sizes[1] : sizes[0];
 			m_Buffer = (byte *)Malloc (len+8);
-			fread (m_Buffer+8, len, 1, m_File);
+			res = fread (m_Buffer+8, len, 1, m_File);
 			SWAP_DWORD (sizes[0]);
 			SWAP_DWORD (sizes[1]);
 			((DWORD *)m_Buffer)[0] = sizes[0];
@@ -147,9 +148,11 @@ void FLZOFile::Close ()
 	{
 		if (m_Mode == EWriting)
 		{
+			size_t res;
+
 			Implode ();
-			fwrite (LZOSig, 4, 1, m_File);
-			fwrite (m_Buffer, m_BufferSize + 8, 1, m_File);
+			res = fwrite (LZOSig, 4, 1, m_File);
+			res = fwrite (m_Buffer, m_BufferSize + 8, 1, m_File);
 		}
 		fclose (m_File);
 		m_File = NULL;

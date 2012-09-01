@@ -4,7 +4,7 @@
 // $Id: d_player.h 1870 2010-09-06 21:00:47Z mike $
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -51,6 +51,7 @@
 #include "huffman.h"
 
 #include "p_snapshot.h"
+#include "d_netcmd.h"
 
 //
 // Player states.
@@ -137,7 +138,7 @@ public:
 	AActor::AActorPtr	mo;
 
 	struct ticcmd_t cmd;	// the ticcmd currently being processed
-	std::queue<struct ticcmd_t> cmds;	// all received ticcmds
+	std::queue<NetCommand> cmdqueue;	// all received ticcmds
 
 	// [RH] who is this?
 	userinfo_t	userinfo;
@@ -211,7 +212,7 @@ public:
 
 	int			jumpTics;				// delay the next jump for a moment
 
-	int			respawn_time;			// [RH] delay respawning until this tic
+	int			death_time;				// [SL] Record time of death to enforce respawn delay if needed 
 	fixed_t		oldvelocity[3];			// [RH] Used for falling damage
 
 	AActor::AActorPtr camera;			// [RH] Whose eyes this player sees through
@@ -227,6 +228,7 @@ public:
 	
 	PlayerSnapshotManager snapshots;	// Previous player positions
 
+	byte spying;				// [SL] id of player being spynext'd by this player
 	bool spectator;             // [GhostlyDeath] spectating?
 	int joinafterspectatortime; // Nes - Join after spectator time.
 	int timeout_callvote;       // [AM] Tic when a vote last finished.

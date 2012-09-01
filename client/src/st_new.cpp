@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom 1.22).
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -555,7 +555,7 @@ void drawNetdemo() {
 
 // [ML] 9/29/2011: New fullscreen HUD, based on Ralphis's work
 void OdamexHUD() {
-	player_t *plyr = &consoleplayer();
+	player_t *plyr = &displayplayer();
 
 	// TODO: I can probably get rid of these invocations once I put a
 	//       copy of ST_DrawNumRight into the hud namespace. -AM
@@ -720,7 +720,7 @@ void SpectatorHUD() {
 
 // [AM] Original ZDoom HUD
 void ZDoomHUD() {
-	player_t *plyr = &consoleplayer();
+	player_t *plyr = &displayplayer();
 	int y, i;
 	ammotype_t ammo = weaponinfo[plyr->readyweapon].ammo;
 	int xscale = hud_scale ? CleanXfac : 1;

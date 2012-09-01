@@ -3,10 +3,11 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License // as published by the Free Software Foundation; either version 2
+// modify it under the terms of the GNU General Public License
+// as published by the Free Software Foundation; either version 2
 // of the License, or (at your option) any later version.
 //
 // This program is distributed in the hope that it will be useful,
@@ -30,6 +31,7 @@
 #include	"p_ctf.h"
 #include	"p_mobj.h"
 #include    "st_stuff.h"
+#include	"s_sound.h"
 
 flagdata CTFdata[NUMFLAGS];
 int TEAMpoints[NUMFLAGS];
@@ -160,6 +162,9 @@ void CL_CTFEvent (void)
 				CTFdata[flag].actor->Destroy();
 			break;
 	}
+
+	// [AM] Play CTF sound, moved from server.
+	CTF_Sound(flag, event);
 }
 
 //	CTF_CheckFlags
@@ -433,13 +438,100 @@ FArchive &operator>> (FArchive &arc, flagdata &flag)
 	arc >> dummy;
 	
 	flag.state = static_cast<flag_state_t>(state);
-	AActor *mo = P_FindThingById(netid);
-	if (mo)
-		flag.actor = mo->ptr();
-	else
-		flag.actor = AActor::AActorPtr();
-	
+	flag.actor = AActor::AActorPtr();
+
 	return arc;
+}
+
+// [AM] Clientside CTF sounds.
+// 0: Team-agnostic SFX
+// 1: Own team announcer
+// 2: Enemy team announcer
+// 3: Blue team announcer
+// 4: Red team announcer
+static const char *flag_sound[NUM_CTF_SCORE][6] = {
+	{"", "", "", "", "", ""}, // NONE
+	{"", "", "", "", "", ""}, // REFRESH
+	{"", "", "", "", "", ""}, // KILL
+	{"", "", "", "", "", ""}, // BETRAYAL
+	{"ctf/your/flag/take", "ctf/enemy/flag/take", "vox/your/flag/take", "vox/enemy/flag/take", "vox/blue/flag/take", "vox/red/flag/take"}, // GRAB
+	{"ctf/your/flag/take", "ctf/enemy/flag/take", "vox/your/flag/take", "vox/enemy/flag/take", "vox/blue/flag/take", "vox/red/flag/take"}, // FIRSTGRAB
+	{"", "", "", "", "", ""}, // CARRIERKILL
+	{"ctf/your/flag/return", "ctf/enemy/flag/return", "vox/your/flag/return", "vox/enemy/flag/return", "vox/blue/flag/return", "vox/red/flag/return"}, // RETURN
+	{"ctf/enemy/score", "ctf/your/score", "vox/enemy/score", "vox/your/score", "vox/red/score", "vox/blue/score"}, // CAPTURE
+	{"ctf/your/flag/drop", "ctf/enemy/flag/drop", "vox/your/flag/drop", "vox/enemy/flag/drop", "vox/blue/flag/drop", "vox/red/flag/drop"}, // DROP
+	{"ctf/your/flag/manualreturn", "ctf/enemy/flag/manualreturn", "vox/your/flag/manualreturn", "vox/enemy/flag/manualreturn", "vox/blue/flag/manualreturn", "vox/red/flag/manualreturn"}, // MANUALRETURN
+};
+
+EXTERN_CVAR(snd_voxtype)
+EXTERN_CVAR(snd_gamesfx)
+
+// [AM] Play appropriate sounds for CTF events.
+void CTF_Sound(flag_t flag, flag_score_t event) {
+	if (flag >= NUMFLAGS) {
+		// Invalid team
+		return;
+	}
+
+	if (event >= NUM_CTF_SCORE) {
+		// Invalid CTF event
+		return;
+	}
+
+	if (strcmp(flag_sound[event][0], "") == 0) {
+		// No logical sound for this event
+		return;
+	}
+
+	// Play sound effect
+	if (snd_gamesfx) {
+		if (consoleplayer().spectator || consoleplayer().userinfo.team != (team_t)flag) {
+			// Enemy flag is being evented
+			if (S_FindSound(flag_sound[event][1]) != -1) {
+				S_Sound(CHAN_GAMEINFO, flag_sound[event][1], 1, ATTN_NONE);
+			}
+		} else {
+			// Your flag is being evented
+			if (S_FindSound(flag_sound[event][0]) != -1) {
+				S_Sound(CHAN_GAMEINFO, flag_sound[event][0], 1, ATTN_NONE);
+			}
+		}
+	}
+
+	// Play announcer sound
+	switch (snd_voxtype.asInt()) {
+	case 2:
+		// Possessive (yours/theirs)
+		if (!consoleplayer().spectator) {
+			if (consoleplayer().userinfo.team != (team_t)flag) {
+				// Enemy flag is being evented
+				if (S_FindSound(flag_sound[event][3]) != -1) {
+					S_Sound(CHAN_ANNOUNCER, flag_sound[event][3], 1, ATTN_NONE);
+					break;
+				}
+			} else {
+				// Your flag is being evented
+				if (S_FindSound(flag_sound[event][2]) != -1) {
+					S_Sound(CHAN_ANNOUNCER, flag_sound[event][2], 1, ATTN_NONE);
+					break;
+				}
+			}
+		}
+		// fallthrough
+	case 1:
+		// Team colors (red/blue)
+		if (S_FindSound(flag_sound[event][4 + flag]) != -1) {
+			if (consoleplayer().userinfo.team != (team_t)flag && !consoleplayer().spectator) {
+				S_Sound(CHAN_ANNOUNCER, flag_sound[event][4 + flag], 1, ATTN_NONE);
+			} else {
+				S_Sound(CHAN_ANNOUNCER, flag_sound[event][4 + flag], 1, ATTN_NONE);
+			}
+			break;
+		}
+		// fallthrough
+	default:
+		break;
+	}
 }
 
 VERSION_CONTROL (cl_ctf_cpp, "$Id$")

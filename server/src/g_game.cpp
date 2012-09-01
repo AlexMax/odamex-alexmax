@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -266,7 +266,7 @@ void G_WriteDemoTiccmd ()
 
         *demo_p++ = cmd->buttons;
 
-        fwrite(demo_tmp, demostep, 1, recorddemo_fp);
+        size_t res = fwrite(demo_tmp, demostep, 1, recorddemo_fp);
     }
 }
 
@@ -346,7 +346,7 @@ void G_BeginRecording (void)
     *demo_p++ = 0;
     *demo_p++ = 0;
 
-    fwrite(demo_tmp, 13, 1, recorddemo_fp);
+    size_t res = fwrite(demo_tmp, 13, 1, recorddemo_fp);
 }
 
 EXTERN_CVAR(sv_maxplayers)
@@ -567,7 +567,7 @@ void G_PlayerReborn (player_t &p) // [Toke - todo] clean this function
 	p.weaponowned[wp_pistol] = true;
 	p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
 
-	p.respawn_time = level.time;
+	p.death_time = 0; 
 	p.tic = 0;
 }
 

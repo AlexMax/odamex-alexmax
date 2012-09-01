@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -28,72 +28,12 @@
 
 using namespace odalpapi;
 
-/* XPM */
-static const char *find_xpm[] = {
-/* columns rows colors chars-per-pixel */
-"16 16 41 1",
-"y c #A06959",
-"9 c #A7DAF2",
-"$ c #B5CAD7",
-"> c #35B4E1",
-"t c #6B98B8",
-"w c #B6E0F4",
-"q c #AEC9D7",
-"1 c #5A89A6",
-"+ c #98B3C6",
-"4 c #EAF6FC",
-"3 c #DEF1FA",
-"= c #4CBCE3",
-"d c #DB916B",
-"X c #85A7BC",
-"s c #D8BCA4",
-"o c #749BB4",
-"e c #BCD9EF",
-"* c #62B4DD",
-"< c #91D2EF",
-"a c #E6DED2",
-"0 c #E9F4FB",
-"  c None",
-"@ c #A0BACB",
-"O c #AABFCD",
-"i c #6591AE",
-": c #B9CBD5",
-"- c #71C5E7",
-"5 c #D3ECF8",
-"% c #81A3B9",
-"6 c #8AD0EE",
-"8 c #FDFDFE",
-"p c #8EA9BC",
-"r c #B6D5EE",
-", c #81CCEB",
-". c #ACC4D3",
-"; c #AFD1DE",
-"7 c #EFF8FC",
-"u c #C2CBDB",
-"# c #C0D1DC",
-"2 c #CAD6E1",
-"& c #8FB0C3",
-/* pixels */
-"                ",
-"       .XooXO   ",
-"      +@###$+%  ",
-"     .&#*==-;@@ ",
-"     o:*>,<--:X ",
-"     12>-345-#% ",
-"     12>678392% ",
-"     %$*,3059q& ",
-"     @Oq,wwer@@ ",
-"      t@q22q&+  ",
-"    yyui+%o%p   ",
-"   yasy         ",
-"  yasdy         ",
-"  asdy          ",
-"  sdy           ",
-"                "
-};
-
-
 IMPLEMENT_DYNAMIC_CLASS(LstOdaPlayerList, wxAdvancedListCtrl)
+
+BEGIN_EVENT_TABLE(LstOdaPlayerList, wxAdvancedListCtrl)
+    
+    EVT_WINDOW_CREATE(LstOdaPlayerList::OnCreateControl)
+END_EVENT_TABLE()
 
 typedef enum
 {
@@ -116,6 +56,14 @@ static int ImageList_BlueBullet = -1;
 
 // Special case
 static wxInt32 WidthTeam, WidthTeamScore;
+
+void LstOdaPlayerList::OnCreateControl(wxWindowCreateEvent &event)
+{
+    SetupPlayerListColumns();
+    
+    // Propagate the event to the base class as well
+    event.Skip();
+}
 
 void LstOdaPlayerList::SetupPlayerListColumns()
 {
@@ -185,7 +133,7 @@ void LstOdaPlayerList::SetupPlayerListColumns()
 
     SetSortColumnAndOrder(PlayerListSortColumn, PlayerListSortOrder);
     
-    ImageList_Spectator = AddImageSmall(find_xpm);
+    ImageList_Spectator = AddImageSmall(wxXmlResource::Get()->LoadBitmap(wxT("spectator")).ConvertToImage());
     ImageList_BlueBullet = AddImageSmall(wxXmlResource::Get()->LoadBitmap(wxT("bullet_blue")).ConvertToImage());
     ImageList_RedBullet = AddImageSmall(wxXmlResource::Get()->LoadBitmap(wxT("bullet_red")).ConvertToImage());
 }
@@ -303,6 +251,17 @@ void LstOdaPlayerList::AddPlayersToList(const Server &s)
         
         SetItem(li);
         
+        wxUint32 PlayerColour = s.Info.Players[i].Colour;
+        wxUint8 PC_Red = 0, PC_Green = 0, PC_Blue = 0;
+
+        PC_Red = ((PlayerColour >> 16) & 0x00FFFFFF);
+        PC_Green = ((PlayerColour >> 8) & 0x0000FFFF);
+        PC_Blue = (PlayerColour & 0x000000FF);
+
+        li.SetTextColour(wxColour(PC_Red, PC_Green, PC_Blue));
+
+        SetItem(li);
+
         if (s.Info.GameType == GT_TeamDeathmatch || 
             s.Info.GameType == GT_CaptureTheFlag)
 		{

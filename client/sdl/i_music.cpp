@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -184,12 +184,6 @@ void I_SetMusicVolume (float volume)
 
 void I_InitMusic(MusicSystemType musicsystem_type)
 {
-	#if defined(UNIX) && !defined(OSX)
-	struct stat buf;
-	if(stat("/etc/timidity.cfg", &buf) && stat("/etc/timidity/timidity.cfg", &buf))
-		Args.AppendArg("-nomusic");
-	#endif
-
 	I_ShutdownMusic();
 	I_ResetMidiVolume();
 

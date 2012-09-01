@@ -4,7 +4,7 @@
 // $Id: p_unlag.cpp $
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -48,6 +48,34 @@ void SV_SendDestroyActor(AActor *mo);
 #endif	// _UNLAG_DEBUG_
 
 EXTERN_CVAR(sv_unlag)
+
+Unlag::SectorHistoryRecord::SectorHistoryRecord()
+	:	sector(NULL), history_size(0),
+		history_ceilingheight(), history_floorheight(),
+		backup_ceilingheight(0), backup_floorheight(0)
+{
+}
+
+Unlag::SectorHistoryRecord::SectorHistoryRecord(sector_t *sec)
+	: 	sector(sec), history_size(Unlag::MAX_HISTORY_TICS),
+		history_ceilingheight(), history_floorheight(),
+		backup_ceilingheight(0), backup_floorheight(0)
+{
+	if (!sector)
+		return;
+
+	fixed_t ceilingheight = P_CeilingHeight(sector);
+	fixed_t floorheight = P_FloorHeight(sector);
+
+	for (size_t i = 0; i < history_size; i++)
+	{
+		history_ceilingheight[i] = ceilingheight;
+		history_floorheight[i] = floorheight;
+	}
+
+	backup_ceilingheight = ceilingheight;
+	backup_floorheight = floorheight;
+}
 
 //
 // Unlag::getInstance
@@ -399,21 +427,7 @@ void Unlag::registerSector(sector_t *sector)
 			return;
 	}
 
-	sector_history.push_back(SectorHistoryRecord());
-	size_t new_index = sector_history.size() - 1;
-	sector_history[new_index].sector = sector;
-
-	// sector.moveable is not set until the sector is triggered to move
-	// so fill the history buffers with the sector's initial heights
-	sector_history[new_index].history_size = Unlag::MAX_HISTORY_TICS;
-
-	for (size_t i = 0; i < Unlag::MAX_HISTORY_TICS; i++)
-	{
-		sector_history[new_index].history_ceilingheight[i]
-			= P_CeilingHeight(sector);
-		sector_history[new_index].history_floorheight[i]
-			= P_FloorHeight(sector);
-	}
+	sector_history.push_back(SectorHistoryRecord(sector));
 }
 
 

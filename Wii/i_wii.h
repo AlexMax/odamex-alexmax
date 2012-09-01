@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -25,6 +25,10 @@
 #define _I_WII_H
 
 #include <network.h>
+
+#ifdef DEBUG
+#include "net_print.h"
+#endif
 
 #define socket net_socket
 #define bind net_bind

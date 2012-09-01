@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -49,6 +49,8 @@ EXTERN_CVAR (sv_freelook)
 EXTERN_CVAR (co_zdoomphys)
 EXTERN_CVAR (cl_deathcam)
 EXTERN_CVAR (sv_forcerespawn)
+EXTERN_CVAR (sv_forcerespawntime)
+EXTERN_CVAR (sv_zdoomspawndelay)
 
 extern bool predicting, step_mode;
 
@@ -109,22 +111,20 @@ size_t P_NumPlayersInGame()
 	return num_players;
 }
 
+// P_NumPlayersOnTeam()
 //
-// P_ClearTiccmdMovement
-//
-// Removes any movement or turning from a ticcmd
-// 
-void P_ClearTiccmdMovement(ticcmd_t *cmd)
+// Returns the number of active players on a team.  No specs or downloaders.
+size_t P_NumPlayersOnTeam(team_t team)
 {
-	if (!cmd)
-		return;
+	size_t num_players = 0;
 
-	cmd->ucmd.pitch = 0;
-	cmd->ucmd.yaw = 0;
-	cmd->ucmd.roll = 0;
-	cmd->ucmd.forwardmove = 0;
-	cmd->ucmd.sidemove = 0;
-	cmd->ucmd.upmove = 0;
+	for (size_t i = 0;i < players.size();++i)
+	{
+		if (!players[i].spectator && players[i].ingame() &&
+		    players[i].userinfo.team == team)
+			++num_players;
+	}
+	return num_players;
 }
 
 //
@@ -294,6 +294,9 @@ CVAR_FUNC_IMPL (sv_aircontrol)
 //
 void P_MovePlayer (player_t *player)
 {
+	if (!player || !player->mo || player->playerstate == PST_DEAD)
+		return;
+
 	ticcmd_t *cmd = &player->cmd;
 	AActor *mo = player->mo;
 
@@ -421,6 +424,9 @@ void P_MovePlayer (player_t *player)
 	}
 	
 	// [RH] check for jump
+	if (player->jumpTics)
+		player->jumpTics--;
+		
 	if ((cmd->ucmd.buttons & BT_JUMP) == BT_JUMP)
 	{
 		if (player->mo->waterlevel >= 2)
@@ -551,13 +557,39 @@ void P_DeathThink (player_t *player)
 
 	if(serverside)
 	{
+		bool force_respawn =	(!clientside && sv_forcerespawn && 
+								level.time >= player->death_time + sv_forcerespawntime * TICRATE);
+
+		// [SL] Can we respawn yet?
+		// Delay respawn by 1 second like ZDoom if sv_zdoomspawndelay is enabled
+		bool delay_respawn =	(!clientside && sv_zdoomspawndelay &&
+								(level.time < player->death_time + TICRATE));
+
 		// [Toke - dmflags] Old location of DF_FORCE_RESPAWN
-		if (player->ingame() && (player->cmd.ucmd.buttons & BT_USE
-			|| (!clientside && sv_forcerespawn && level.time >= player->respawn_time)))
+		if (player->ingame() && ((player->cmd.ucmd.buttons & BT_USE && !delay_respawn) || force_respawn))
 		{
 			player->playerstate = PST_REBORN;
 		}
 	}
+}
+
+bool P_AreTeammates(player_t &a, player_t &b)
+{
+	// not your own teammate (at least for friendly fire, etc)
+	if (a.id == b.id)
+		return false;
+
+	return (sv_gametype == GM_COOP) ||
+		  ((a.userinfo.team == b.userinfo.team) &&
+		   (sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF));
+}
+
+bool P_CanSpy(player_t &viewer, player_t &other)
+{
+	if (other.spectator || !other.mo)
+		return false;
+
+	return (viewer.spectator || P_AreTeammates(viewer, other) || demoplayback);
 }
 
 void SV_SendPlayerInfo(player_t &);
@@ -605,21 +637,14 @@ void P_PlayerThink (player_t *player)
 		player->mo->flags &= ~MF_JUSTATTACKED;
 	}
 
-	if (player->jumpTics)
-		player->jumpTics--;
-		
 	if (player->playerstate == PST_DEAD)
 	{
 		P_DeathThink(player);
 		return;
 	}
 
-	if(serverside)
-	{
-		P_MovePlayer (player);
-
-		P_CalcHeight (player);
-	}
+	P_MovePlayer (player);
+	P_CalcHeight (player);
 
 	if (player->mo->subsector && (player->mo->subsector->sector->special || player->mo->subsector->sector->damage))
 		P_PlayerInSpecialSector (player);
@@ -782,7 +807,7 @@ void player_s::Serialize (FArchive &arc)
 			<< fixedcolormap
 			<< xviewshift
 			<< jumpTics
-			<< respawn_time
+			<< death_time
 			<< air_finished;
 		for (i = 0; i < NUMPOWERS; i++)
 			arc << powers[i];
@@ -832,7 +857,7 @@ void player_s::Serialize (FArchive &arc)
 			>> fixedcolormap
 			>> xviewshift
 			>> jumpTics
-			>> respawn_time
+			>> death_time 
 			>> air_finished;
 		for (i = 0; i < NUMPOWERS; i++)
 			arc >> powers[i];
@@ -903,7 +928,7 @@ player_s::player_s()
 	xviewshift = 0;
 	memset(psprites, 0, sizeof(pspdef_t) * NUMPSPRITES);
 	jumpTics = 0;
-	respawn_time = 0;
+	death_time = 0;
 	memset(oldvelocity, 0, sizeof(oldvelocity));
 	camera = AActor::AActorPtr();
 	air_finished = 0;
@@ -911,6 +936,7 @@ player_s::player_s()
 	ping = 0;
 	last_received = 0;
 	tic = 0;
+	spying = id;
 	spectator = false;
 
 	joinafterspectatortime = level.time - TICRATE*5;
@@ -941,7 +967,7 @@ player_s &player_s::operator =(const player_s &other)
 	playerstate = other.playerstate;
 	mo = other.mo;
 	cmd = other.cmd;
-	cmds = other.cmds;
+	cmdqueue = other.cmdqueue;
 	userinfo = other.userinfo;
 	fov = other.fov;
 	viewz = other.viewz;
@@ -1001,7 +1027,7 @@ player_s &player_s::operator =(const player_s &other)
 
     jumpTics = other.jumpTics;
 
-	respawn_time = other.respawn_time;
+	death_time = other.death_time;
 
 	memcpy(oldvelocity, other.oldvelocity, sizeof(oldvelocity));
 
@@ -1015,6 +1041,7 @@ player_s &player_s::operator =(const player_s &other)
 	last_received = other.last_received;
 
 	tic = other.tic;
+	spying = other.spying;
 	spectator = other.spectator;
 	joinafterspectatortime = other.joinafterspectatortime;
 	timeout_callvote = other.timeout_callvote;

@@ -3,7 +3,7 @@
 //
 // $Id: i_muidi.h 1788 2010-08-24 04:42:57Z russellrice $
 //
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -102,10 +102,10 @@ static int I_ReadVariableSizeInt(MEMFILE *mf)
 	if (!mf)
 		return -1;
 		
-	// In midi files the variable can use between 1 and 4 bytes
+	// In midi files the variable can use between 1 and 5 bytes
 	// if the high bit is set, the next byte is used
 	int var = 0;
-	for (size_t i = 0; i < 4; i++)
+	for (size_t i = 0; i < 5; i++)
 	{
 		byte curbyte = 0;
 		size_t res = mem_fread(&curbyte, sizeof(curbyte), 1, mf);

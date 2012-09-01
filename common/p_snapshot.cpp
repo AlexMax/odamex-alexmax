@@ -4,7 +4,7 @@
 // $Id: p_snapshot.cpp 2785 2012-02-18 23:22:07Z dr_sean $
 //
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -723,7 +723,7 @@ SectorSnapshot::SectorSnapshot(int time, sector_t *sector) :
 			mCeilingStatus		= ceiling->m_Status;
 			mCeilingTag			= ceiling->m_Tag;
 			mCeilingCrush		= ceiling->m_Crush;
-			mSilent				= ceiling->m_Silent;
+			mSilent				= (ceiling->m_Silent != 0);
 			mCeilingLow			= ceiling->m_BottomHeight;
 			mCeilingHigh		= ceiling->m_TopHeight;
 			mCeilingSpeed		= ceiling->m_Speed;

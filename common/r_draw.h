@@ -4,7 +4,7 @@
 // $Id: r_draw.h 1837 2010-09-02 04:21:09Z spleen $
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -25,7 +25,7 @@
 #ifndef __R_DRAW__
 #define __R_DRAW__
 
-
+#include "r_defs.h"
 
 extern "C" byte**		ylookup;
 extern "C" int*			columnofs;
@@ -40,13 +40,14 @@ extern "C" int			dc_yh;
 extern "C" fixed_t		dc_iscale;
 extern "C" fixed_t		dc_texturemid;
 extern "C" fixed_t		dc_texturefrac;
+extern "C" fixed_t		dc_textureheight;
 extern "C" int			dc_color;		// [RH] For flat colors (no texturing)
 
 // first pixel in a column
 extern "C" byte*			dc_source;
 
 // [RH] Temporary buffer for column drawing
-extern "C" byte			dc_temp[1536*4];
+extern "C" byte			dc_temp[MAXHEIGHT * 4];
 extern "C" unsigned int	dc_tspans[4][256];
 extern "C" unsigned int	*dc_ctspan[4];
 extern "C" unsigned int	horizspans[4];

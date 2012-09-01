@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -36,14 +36,17 @@ void C_ExecCmdLineParams (bool onlyset, bool onlylogfile);
 
 // add commands to the console as if they were typed in
 // for map changing, etc
-void AddCommandString (std::string cmd, bool onlycvar = false);
+void AddCommandString (const std::string &cmd, bool onlycvar = false);
 
 // parse a command string
 const char *ParseString (const char *data);
 
-// build a single string out of multiple strings
-std::string BuildString (size_t argc, const char **argv);
+// combine many arguments into one valid argument.
+std::string C_ArgCombine(size_t argc, const char **argv);
 std::string BuildString (size_t argc, std::vector<std::string> args);
+
+// quote a string
+std::string C_QuoteString(const std::string &argstr);
 
 class DConsoleCommand : public DObject
 {

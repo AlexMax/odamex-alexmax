@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -1476,8 +1476,8 @@ BEGIN_COMMAND (echo)
 {
 	if (argc > 1)
 	{
-		std::string str = BuildString (argc - 1, (const char **)(argv + 1));
-		Printf (PRINT_HIGH, "%s\n", str.c_str());
+		std::string str = C_ArgCombine(argc - 1, (const char **)(argv + 1));
+		Printf(PRINT_HIGH, "%s\n", str.c_str());
 	}
 }
 END_COMMAND (echo)

@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -406,13 +406,13 @@ static const xlat_t SpecialTranslation[] = {
 
 void P_TranslateLineDef (line_t *ld, maplinedef_t *mld)
 {
-	short special = SHORT(mld->special);
-	short tag = SHORT(mld->tag);
-	short flags = SHORT(mld->flags);
+	short special = LESHORT(mld->special);
+	short tag = LESHORT(mld->tag);
+	short flags = LESHORT(mld->flags);
 	bool passthrough;
 	int i;
 	
-	passthrough = (flags & ML_PASSUSE_BOOM);
+	passthrough = ((flags & ML_PASSUSE_BOOM) != 0);
 	
 	flags = flags & 0x01ff;	// Ignore flags unknown to DOOM
 

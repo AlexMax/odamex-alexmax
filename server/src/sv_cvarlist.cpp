@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -76,6 +76,9 @@ CVAR_FUNC_DECL (sv_maxclients, "4", "Maximum clients that can connect to a serve
       CVARTYPE_BYTE, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_NOENABLEDISABLE)
 // Maximum number of players that can join the game, the rest are spectators
 CVAR_FUNC_DECL (sv_maxplayers,	"4", "Maximum players that can join the game, the rest are spectators",
+      CVARTYPE_BYTE, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_NOENABLEDISABLE)
+// Maximum number of players that can be on a team
+CVAR_FUNC_DECL (sv_maxplayersperteam, "0", "Maximum number of players that can be on a team",
       CVARTYPE_BYTE, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_NOENABLEDISABLE)
 // Clients can only join if they specify a password
 CVAR_FUNC_DECL (join_password, "", "Clients can connect if they have this password",
@@ -168,6 +171,9 @@ CVAR (sv_ticbuffer, "1", "Buffer controller input from players experiencing sudd
 // Vote settings
 // =============
 
+// Enable or disable counting absnet voters as "no" if a vote is undecided.
+CVAR (sv_vote_countabs, "1", "Count absent voters as 'no' if the vote timer runs out.",
+	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
 // A percentage of players needed to pass a vote.
 CVAR (sv_vote_majority, "0.5", "Ratio of yes votes needed for vote to pass.",
 	  CVARTYPE_FLOAT, CVAR_SERVERARCHIVE | CVAR_NOENABLEDISABLE)

@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -1446,8 +1446,22 @@ typedef enum {
 	MT_BRIDGE16,
 	MT_BRIDGE8,
 	MT_ZDOOMBRIDGE,
+
+	// Sector Actions
+	MT_SECACTENTER,
+	MT_SECACTEXIT,
+	MT_SECACTHITFLOOR,
+	MT_SECACTHITCEIL,
+	MT_SECACTUSE,
+	MT_SECACTUSEWALL,
+	MT_SECACTEYESDIVE,
+	MT_SECACTEYESSURFACE,
+	MT_SECACTEYESBELOWC,
+	MT_SECACTEYESABOVEC,
+
+	// FIXME: Has no info.cpp entry.
 	MT_MUSICCHANGE,
-	
+
 	NUMMOBJTYPES
 
 } mobjtype_t;

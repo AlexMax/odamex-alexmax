@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -33,11 +33,16 @@ class LstOdaPlayerList : public wxAdvancedListCtrl
         virtual ~LstOdaPlayerList();
 
         void AddPlayersToList(const odalpapi::Server &s);
-        void SetupPlayerListColumns();
 
     protected:
+
+        void SetupPlayerListColumns();        
+        void OnCreateControl(wxWindowCreateEvent &event);
         
         DECLARE_DYNAMIC_CLASS(LstOdaPlayerList)
+
+    private:
+        DECLARE_EVENT_TABLE()
 };
 
 #endif // __LST_PLAYERS_H__

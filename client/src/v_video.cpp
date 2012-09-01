@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -403,7 +403,7 @@ BEGIN_COMMAND (setcolor)
 		return;
 	}
 
-	std::string name = BuildString (argc - 2, (const char **)(argv + 2));
+	std::string name = C_ArgCombine(argc - 2, (const char **)(argv + 2));
 	if (name.length())
 	{
 		std::string desc = V_GetColorStringByName (name.c_str());
@@ -582,7 +582,21 @@ BOOL V_SetResolution (int width, int height, int bits)
 	}
 
 	if ((int)(autoadjust_video_settings)) {
-		I_ClosestResolution (&width, &height, bits);
+		if (vid_fullscreen) {
+			// Fullscreen needs to check for a valid resolution.
+			I_ClosestResolution(&width, &height, bits);
+		} else {
+			// Windowed mode needs to have a check to make sure we don't
+			// make a window tinier than Doom's default, otherwise bad
+			// things might happen.
+			if (width < 320) {
+				width = 320;
+			}
+			if (height < 200) {
+				height = 200;
+			}
+		}
+
 		if (!I_CheckResolution (width, height, bits)) {				// Try specified resolution
 			if (!I_CheckResolution (oldwidth, oldheight, oldbits)) {// Try previous resolution (if any)
 		   		return false;
@@ -602,25 +616,42 @@ BEGIN_COMMAND (vid_setmode)
 	int		width = 0, height = 0;
 	int		bits = DisplayBits;
 
+	// No arguments
+	if (argc == 1) {
+		Printf(PRINT_HIGH, "Usage: vid_setmode <width> <height>\n");
+		return;
+	}
+	// Width
 	if (argc > 1) {
-		width = atoi (argv[1]);
-		if (argc > 2) {
-			height = atoi (argv[2]);
-			if (!height)
-                height = screen->height;
-			if (argc > 3) {
-				bits = 8;
-				//bits = atoi (argv[3]);
-			}
-		}
+		width = atoi(argv[1]);
+	}
+	// Height (optional)
+	if (argc > 2) {
+		height = atoi(argv[2]);
+	}
+	if (!height) {
+		height = screen->height;
+	}
+	// Bits (always 8-bit for now)
+	bits = 8;
+
+	if (width < 320 || height < 200) {
+		Printf(PRINT_HIGH, "%dx%d is too small.  Minimum resolution is 320x200.\n", width, height);
+		if (width < 320)
+			width = 320;
+		if (height < 200)
+			height = 200;
 	}
 
-	if (width) {
-		if (I_CheckResolution (width, height, bits))
-			goodmode = true;
+	if (width > MAXWIDTH || height > MAXHEIGHT) {
+		Printf(PRINT_HIGH, "%dx%d is too large.  Maximum resolution is %dx%d.\n", width, height, MAXWIDTH, MAXHEIGHT);
+		if (width > MAXWIDTH)
+			width = MAXWIDTH;
+		if (height > MAXHEIGHT)
+			height = MAXHEIGHT;
 	}
 
-	if (goodmode) {
+	if (I_CheckResolution(width, height, bits)) {
 		// The actual change of resolution will take place
 		// near the beginning of D_Display().
 		if (gamestate != GS_STARTUP) {
@@ -629,11 +660,8 @@ BEGIN_COMMAND (vid_setmode)
 			NewHeight = height;
 			NewBits = bits;
 		}
-	} else if (width) {
-		Printf (PRINT_HIGH, "Unknown resolution %d x %d x %d\n", width, height, bits);
 	} else {
-      // SoM: enforce 8-bit modes for now
-		Printf (PRINT_HIGH, "Usage: vid_setmode <width> <height>\n");
+		Printf(PRINT_HIGH, "Unknown resolution %dx%d\n", width, height);
 	}
 }
 END_COMMAND (vid_setmode)

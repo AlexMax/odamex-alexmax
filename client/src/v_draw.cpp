@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2010 by The Odamex Team.
+// Copyright (C) 2006-2012 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -101,6 +101,9 @@ unsigned int *V_Palette;
 // Normal patch drawers
 void DCanvas::DrawPatchP (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	do
 	{
 		*dest = *source++;
@@ -110,6 +113,9 @@ void DCanvas::DrawPatchP (const byte *source, byte *dest, int count, int pitch)
 
 void DCanvas::DrawPatchSP (const byte *source, byte *dest, int count, int pitch, int yinc)
 {
+	if (count <= 0)
+		return;
+
 	int c = 0;
 
 	do
@@ -124,6 +130,9 @@ void DCanvas::DrawPatchSP (const byte *source, byte *dest, int count, int pitch,
 // Translucent patch drawers (always 50%) [ML] 3/2/10: Not anymore!
 void DCanvas::DrawLucentPatchP (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	unsigned int *fg2rgb, *bg2rgb;
 
 	{
@@ -151,6 +160,9 @@ void DCanvas::DrawLucentPatchP (const byte *source, byte *dest, int count, int p
 
 void DCanvas::DrawLucentPatchSP (const byte *source, byte *dest, int count, int pitch, int yinc)
 {
+	if (count <= 0)
+		return;
+
 	unsigned int *fg2rgb, *bg2rgb;
 	int c = 0;
 
@@ -182,6 +194,9 @@ void DCanvas::DrawLucentPatchSP (const byte *source, byte *dest, int count, int 
 // Translated patch drawers
 void DCanvas::DrawTranslatedPatchP (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	do
 	{
 		*dest = V_ColorMap[*source++];
@@ -191,6 +206,9 @@ void DCanvas::DrawTranslatedPatchP (const byte *source, byte *dest, int count, i
 
 void DCanvas::DrawTranslatedPatchSP (const byte *source, byte *dest, int count, int pitch, int yinc)
 {
+	if (count <= 0)
+		return;
+
 	int c = 0;
 
 	do
@@ -205,6 +223,9 @@ void DCanvas::DrawTranslatedPatchSP (const byte *source, byte *dest, int count, 
 // Translated, translucent patch drawers
 void DCanvas::DrawTlatedLucentPatchP (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	unsigned int *fg2rgb, *bg2rgb;
 	byte *colormap = V_ColorMap;
 
@@ -233,6 +254,9 @@ void DCanvas::DrawTlatedLucentPatchP (const byte *source, byte *dest, int count,
 
 void DCanvas::DrawTlatedLucentPatchSP (const byte *source, byte *dest, int count, int pitch, int yinc)
 {
+	if (count <= 0)
+		return;
+
 	int c = 0;
 	unsigned int *fg2rgb, *bg2rgb;
 	byte *colormap = V_ColorMap;
@@ -268,6 +292,9 @@ void DCanvas::DrawTlatedLucentPatchSP (const byte *source, byte *dest, int count
 // care about the patch's actual contents, just it's outline.
 void DCanvas::DrawColoredPatchP (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	byte fill = (byte)V_ColorFill;
 
 	do
@@ -284,6 +311,9 @@ void DCanvas::DrawColoredPatchP (const byte *source, byte *dest, int count, int 
 // care about the patch's actual contents, just it's outline.
 void DCanvas::DrawColorLucentPatchP (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	unsigned int *bg2rgb;
 	unsigned int fg;
 
@@ -319,6 +349,9 @@ void DCanvas::DrawColorLucentPatchP (const byte *source, byte *dest, int count, 
 // Normal patch drawers
 void DCanvas::DrawPatchD (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	do
 	{
 		*((unsigned int *)dest) = V_Palette[*source++];
@@ -328,6 +361,9 @@ void DCanvas::DrawPatchD (const byte *source, byte *dest, int count, int pitch)
 
 void DCanvas::DrawPatchSD (const byte *source, byte *dest, int count, int pitch, int yinc)
 {
+	if (count <= 0)
+		return;
+
 	int c = 0;
 
 	do
@@ -342,6 +378,9 @@ void DCanvas::DrawPatchSD (const byte *source, byte *dest, int count, int pitch,
 // Translucent patch drawers (always 50%)
 void DCanvas::DrawLucentPatchD (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	do
 	{
 		*((unsigned int *)dest) = ((V_Palette[*source++] & 0xfefefe) >> 1) +
@@ -352,6 +391,9 @@ void DCanvas::DrawLucentPatchD (const byte *source, byte *dest, int count, int p
 
 void DCanvas::DrawLucentPatchSD (const byte *source, byte *dest, int count, int pitch, int yinc)
 {
+	if (count <= 0)
+		return;
+
 	int c = 0;
 
 	do
@@ -367,6 +409,9 @@ void DCanvas::DrawLucentPatchSD (const byte *source, byte *dest, int count, int 
 // Translated patch drawers
 void DCanvas::DrawTranslatedPatchD (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	do
 	{
 		*((unsigned int *)dest) = V_Palette[V_ColorMap[*source++]];
@@ -376,6 +421,9 @@ void DCanvas::DrawTranslatedPatchD (const byte *source, byte *dest, int count, i
 
 void DCanvas::DrawTranslatedPatchSD (const byte *source, byte *dest, int count, int pitch, int yinc)
 {
+	if (count <= 0)
+		return;
+
 	int c = 0;
 
 	do
@@ -390,6 +438,9 @@ void DCanvas::DrawTranslatedPatchSD (const byte *source, byte *dest, int count, 
 // Translated, translucent patch drawers
 void DCanvas::DrawTlatedLucentPatchD (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	do
 	{
 		*((unsigned int *)dest) = ((V_Palette[V_ColorMap[*source++]] & 0xfefefe) >> 1) +
@@ -400,6 +451,9 @@ void DCanvas::DrawTlatedLucentPatchD (const byte *source, byte *dest, int count,
 
 void DCanvas::DrawTlatedLucentPatchSD (const byte *source, byte *dest, int count, int pitch, int yinc)
 {
+	if (count <= 0)
+		return;
+
 	int c = 0;
 
 	do
@@ -418,6 +472,9 @@ void DCanvas::DrawTlatedLucentPatchSD (const byte *source, byte *dest, int count
 // care about the patch's actual contents, just it's outline.
 void DCanvas::DrawColoredPatchD (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	do
 	{
 		*((int *)dest) = V_ColorFill;
@@ -432,6 +489,9 @@ void DCanvas::DrawColoredPatchD (const byte *source, byte *dest, int count, int 
 // care about the patch's actual contents, just it's outline.
 void DCanvas::DrawColorLucentPatchD (const byte *source, byte *dest, int count, int pitch)
 {
+	if (count <= 0)
+		return;
+
 	int fill = (V_ColorFill & 0xfefefe) >> 1;
 
 	do
@@ -498,7 +558,7 @@ void DCanvas::DrawWrapper (EWrapperCode drawer, const patch_t *patch, int x, int
 
 	for ( ; col<w ; x++, col++, desttop += colstep)
 	{
-		column = (column_t *)((byte *)patch + LONG(patch->columnofs[col]));
+		column = (column_t *)((byte *)patch + LELONG(patch->columnofs[col]));
 
 		// step through the posts in a column
 		while (column->topdelta != 0xff )
@@ -529,6 +589,10 @@ void DCanvas::DrawSWrapper (EWrapperCode drawer, const patch_t *patch, int x0, i
 	int			colstep;
 
 	int			xinc, yinc, col, w, ymul, xmul;
+
+	if (!patch || patch->width() <= 0 || patch->height() <= 0 ||
+		destwidth <= 0 || destheight <= 0)
+		return;
 
 	if (destwidth == patch->width() && destheight == patch->height())
 	{
@@ -574,7 +638,7 @@ void DCanvas::DrawSWrapper (EWrapperCode drawer, const patch_t *patch, int x0, i
 
 	for ( ; col<w ; col += xinc, desttop += colstep)
 	{
-		column = (column_t *)((byte *)patch + LONG(patch->columnofs[col >> 16]));
+		column = (column_t *)((byte *)patch + LELONG(patch->columnofs[col >> 16]));
 
 		// step through the posts in a column
 		while (column->topdelta != 0xff )
@@ -646,20 +710,66 @@ void DCanvas::DrawCNMWrapper (EWrapperCode drawer, const patch_t *patch, int x0,
 void DCanvas::CopyRect (int srcx, int srcy, int _width, int _height,
 						int destx, int desty, DCanvas *destscrn)
 {
-#ifdef RANGECHECK
-	if (srcx<0
-		||srcx+_width > width
-		|| srcy<0
-		|| srcy+_height> height
-		||destx<0||destx+_width > destscrn->width
-		|| desty<0
-		|| desty+_height > destscrn->height)
-	{
-		I_Error ("Bad DCanvas::CopyRect");
-	}
-#endif
-	V_MarkRect (destx, desty, _width, _height);
+	#ifdef RANGECHECK 
+	// [AM] Properly crop the copy.  All of these comparison checks (except
+	//      the very last two) used to be done every tic anyway, now we attempt
+	//      to do something intelligent about it.
 
+	// Source coordinates OOB means we offset our destination coordinates by
+	// the same ammount, effectively giving it a whitespace border.
+	if (srcx < 0)
+	{
+		destx -= srcx;
+		srcx = 0;
+	}
+	if (srcy < 0)
+	{
+		desty -= srcy;
+		srcy = 0;
+	}
+	// Rectangle going outside of the source buffer's width and height
+	// means we reduce the size of the rectangle until it fits into the source
+	// buffer.
+	if (srcx + _width > this->width)
+	{
+		_width = this->width - srcx;
+	}
+	if (srcy + _height > this->height)
+	{
+		_height = this->height - srcy;
+	}
+	// Destination coordinates OOB means we offset our source coordinates by
+	// the same amount, effectively cutting off the top or left hand corner.
+	if (destx < 0)
+	{
+		srcx -= destx;
+		destx = 0;
+	}
+	if (desty < 0)
+	{
+		srcy -= desty;
+		desty = 0;
+	}
+	// Rectangle going outside of the destination buffer's width and height
+	// means we reduce the size of the rectangle (again?) so it fits into the
+	// destination buffer.
+	if (destx + _width > destscrn->width)
+	{
+		_width = destscrn->width - destx;
+	}
+	if (desty + _height > destscrn->height)
+	{
+		_height = destscrn->height - desty;
+	}
+	// If rectangle width or height is 0 or less, our blit is useless.
+	if (_width <= 0 || _height <= 0)
+	{
+		DPrintf("DCanvas::CopyRect: Bad copy (ignored)\n");
+		return;
+	}
+	#endif
+
+	V_MarkRect (destx, desty, _width, _height);
 	Blit (srcx, srcy, _width, _height, destscrn, destx, desty, _width, _height);
 }
 
@@ -685,6 +795,10 @@ void DCanvas::DrawPatchFlipped (const patch_t *patch, int x0, int y0) const
 	y0 = (height * y0) / 200;
 	destwidth = (width * patch->width()) / 320;
 	destheight = (height * patch->height()) / 200;
+
+	if (!patch || patch->width() <= 0 || patch->height() <= 0 ||
+		destwidth <= 0 || destheight <= 0)
+		return;
 
 	xinc = (patch->width() << 16) / destwidth;
 	yinc = (patch->height() << 16) / destheight;
@@ -723,7 +837,7 @@ void DCanvas::DrawPatchFlipped (const patch_t *patch, int x0, int y0) const
 
 	for ( ; col >= 0 ; col -= xinc, desttop += colstep)
 	{
-		column = (column_t *)((byte *)patch + LONG(patch->columnofs[col >> 16]));
+		column = (column_t *)((byte *)patch + LELONG(patch->columnofs[col >> 16]));
 
 		// step through the posts in a column
 		while (column->topdelta != 0xff )
