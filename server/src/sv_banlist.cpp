@@ -24,7 +24,7 @@
 #include <sstream>
 #include <string>
 
-#include <curl/curl.h>
+//#include <curl/curl.h>
 
 #include "c_dispatch.h"
 #include "cmdlib.h"
