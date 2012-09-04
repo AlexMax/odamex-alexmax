@@ -416,12 +416,18 @@ bool StrToTime(std::string str, time_t &tim) {
 	for (tokens_t::iterator it = tokens.begin();it != tokens.end();++it) {
 		if (it->second.compare(std::string("seconds").substr(0, it->second.size())) == 0) {
 			tim += it->first;
+		} else if (it->second.compare("secs") == 0) {
+			tim += it->first;
 		} else if (it->second.compare(std::string("minutes").substr(0, it->second.size())) == 0) {
+			tim += it->first * 60;
+		} else if (it->second.compare("mins") == 0) {
 			tim += it->first * 60;
 		} else if (it->second.compare(std::string("hours").substr(0, it->second.size())) == 0) {
 			tim += it->first * 3600;
 		} else if (it->second.compare(std::string("days").substr(0, it->second.size())) == 0) {
 			tim += it->first * 86400;
+		} else if (it->second.compare(std::string("weeks").substr(0, it->second.size())) == 0) {
+			tim += it->first * 604800;
 		} else if (it->second.compare(std::string("months").substr(0, it->second.size())) == 0) {
 			tim += it->first * 2592000;
 		} else if (it->second.compare(std::string("years").substr(0, it->second.size())) == 0) {
