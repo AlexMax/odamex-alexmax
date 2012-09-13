@@ -28,6 +28,8 @@
 #include <string>
 #include <vector>
 
+#include "json/json.h"
+
 #include "d_player.h"
 #include "i_net.h"
 
@@ -80,6 +82,10 @@ public:
 	                     exceptionlist_results_t &result);
 	bool remove(size_t index);
 	bool remove_exception(size_t index);
+	void clear();
+	bool json(Json::Value& json_bans);
+	bool json_replace(const Json::Value& json_bans);
+	void json_exceptions();
 private:
 	std::vector<Ban> banlist;
 	std::vector<Exception> exceptionlist;

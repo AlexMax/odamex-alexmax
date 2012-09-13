@@ -24,6 +24,7 @@
 #include <sstream>
 #include <string>
 
+#include "json/json.h"
 //#include <curl/curl.h>
 
 #include "c_dispatch.h"
@@ -361,6 +362,78 @@ bool Banlist::remove_exception(size_t index) {
 	return true;
 }
 
+// Clear the banlist.
+void Banlist::clear() {
+	this->banlist.clear();
+}
+
+// Fills a JSON array with bans.
+bool Banlist::json(Json::Value& json_bans) {
+	// If there are no bans, we don't want to bother any potential
+	// writeout functions.
+	if (banlist.empty()) {
+		return false;
+	}
+
+	char expire[32];
+	tm *tmp;
+
+	for (size_t i = 0;i < banlist.size();i++) {
+		Json::Value json_ban(Json::objectValue);
+		json_ban["range"] = this->banlist[i].range.string();
+		// Expire time is optional.
+		if (this->banlist[i].expire != 0) {
+			// Save as ISO 8601.  Easier on the eyes, less timezone ambiguity.
+			// FIXME: Windows does not have %z so all of these times are
+			//        actually technically UTC.  We can special-case it later.
+			tmp = localtime(&this->banlist[i].expire);
+			if (strftime(expire, 32, "%Y-%m-%dT%H:%M:%S", tmp)) {
+				json_ban["expire"] = expire;
+			}
+		}
+		// Name is optional.
+		if (!this->banlist[i].name.empty())
+			json_ban["name"] = this->banlist[i].name;
+		// Reason is optional.
+		if (!this->banlist[i].reason.empty())
+			json_ban["reason"] = this->banlist[i].reason;
+		json_bans.append(json_ban);
+	}
+
+	return true;
+}
+
+// Replace the current banlist with the contents of a JSON array.
+bool Banlist::json_replace(const Json::Value& json_bans) {
+	this->clear();
+
+	for (size_t i = 0;i < json_bans.size();i++) {
+		Ban ban;
+		if (json_bans[i]["range"] != 0) {
+			ban.range.set(json_bans[i]["range"].asString());
+		}
+		if (json_bans[i]["expire"] != 0) {
+			// TODO
+		}
+		if (json_bans[i]["name"] != 0) {
+			ban.name = json_bans[i]["name"].asString();
+		}
+		if (json_bans[i]["reason"] != 0) {
+			ban.reason = json_bans[i]["reason"].asString();
+		}
+		this->banlist.push_back(ban);
+	}
+
+	return true;
+}
+
+/*void Banlist::json_exceptions()
+{
+	for (size_t i = 0;i < banlist.size();i++) {
+		result.push_back(banlist_result_t(i, &(this->banlist[i])));
+	}
+}*/
+
 //// Console commands ////
 
 // Ban bans a player by player id.
@@ -598,6 +671,25 @@ BEGIN_COMMAND (banlist) {
 		Printf(PRINT_HIGH, "%s", buffer.str().c_str());
 	}
 } END_COMMAND (banlist)
+
+BEGIN_COMMAND (savebanlist) {
+	Json::Value json_bans(Json::arrayValue);
+	if (!banlist.json(json_bans)) {
+		Printf(PRINT_HIGH, "savebanlist: banlist is empty.\n");
+		return;
+	}
+	Printf(PRINT_HIGH, "%s", json_bans.toStyledString().c_str());
+	banlist.json_replace(json_bans);
+} END_COMMAND (savebanlist)
+
+BEGIN_COMMAND (loadbanlist) {
+	/*Json::Value json_bans(Json::arrayValue);
+	if (!banlist.json(json_bans)) {
+		Printf(PRINT_HIGH, "savebanlist: banlist is empty.\n");
+		return;
+	}
+	Printf(PRINT_HIGH, "%s", json_bans.toStyledString().c_str());*/
+} END_COMMAND (loadbanlist)
 
 BEGIN_COMMAND (exceptionlist) {
 	std::vector<std::string> arguments = VectorArgs(argc, argv);
