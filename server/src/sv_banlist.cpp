@@ -413,7 +413,11 @@ bool Banlist::json_replace(const Json::Value& json_bans) {
 		}
 		if (json_bans[i]["expire"] != 0) {
 			if (StrParseISOTime(json_bans[i]["expire"].asString(), &tmp)) {
-				ban.expire = mktime(&tmp);
+				// [AM] Unset the dst bit, since we're using TZOffset() to
+				//      create local time_t's and we don't want mktime() to
+				//      do anything cute with it.
+				tmp.tm_isdst = -1;
+				ban.expire = mktime(&tmp) + TZOffset();
 			}
 		}
 		if (json_bans[i]["name"] != 0) {

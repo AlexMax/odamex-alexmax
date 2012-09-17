@@ -462,6 +462,19 @@ bool StrToTime(std::string str, time_t &tim) {
 	return true;
 }
 
+// [AM] Return the difference in seconds between UTC and the current
+//      timezone.
+time_t TZOffset() {
+	tm* mytm;
+	time_t starting_time, local_time, utc_time;
+	starting_time = time(0);
+	mytm = localtime(&starting_time);
+	local_time = mktime(mytm);
+	mytm = gmtime(&starting_time);
+	utc_time = mktime(mytm);
+	return local_time - utc_time;
+}
+
 // [SL] Reimplement std::isspace 
 static int _isspace(int c)
 {
