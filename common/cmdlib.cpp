@@ -31,6 +31,7 @@
 #define WIN32_LEAN_AND_MEAN
 #ifndef _XBOX
 #include <windows.h>
+#include "strptime.h"
 #endif // _XBOX
 #endif // WIN32
 
@@ -328,6 +329,26 @@ StringTokens TokenizeString(const std::string& str, const std::string& delim) {
 	}
 
 	return tokens;
+}
+
+// [AM] Format a tm struct as an ISO8601-compliant extended format string.
+//      Assume that the input time is in UTC.
+bool StrFormatISOTime(std::string& s, const tm* utc_tm) {
+	char buffer[21];
+	if (!strftime(buffer, 21, "%Y-%m-%dT%H:%M:%SZ", utc_tm)) {
+		return false;
+	}
+	s = buffer;
+	return true;
+}
+
+// [AM] Parse an ISO8601-formatted string time into a tm* struct.
+bool StrParseISOTime(const std::string& s, tm* utc_tm) {
+	Printf(PRINT_HIGH, "%s", s.c_str());
+	if (!strptime(s.c_str(), "%Y-%m-%dT%H:%M:%SZ", utc_tm)) {
+		return false;
+	}
+	return true;
 }
 
 // [AM] Turn a string representation of a length of time into a time_t

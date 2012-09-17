@@ -375,7 +375,7 @@ bool Banlist::json(Json::Value& json_bans) {
 		return false;
 	}
 
-	char expire[32];
+	std::string expire;
 	tm *tmp;
 
 	for (size_t i = 0;i < banlist.size();i++) {
@@ -383,11 +383,8 @@ bool Banlist::json(Json::Value& json_bans) {
 		json_ban["range"] = this->banlist[i].range.string();
 		// Expire time is optional.
 		if (this->banlist[i].expire != 0) {
-			// Save as ISO 8601.  Easier on the eyes, less timezone ambiguity.
-			// FIXME: Windows does not have %z so all of these times are
-			//        actually technically UTC.  We can special-case it later.
-			tmp = localtime(&this->banlist[i].expire);
-			if (strftime(expire, 32, "%Y-%m-%dT%H:%M:%S", tmp)) {
+			tmp = gmtime(&this->banlist[i].expire);
+			if (StrFormatISOTime(expire, tmp)) {
 				json_ban["expire"] = expire;
 			}
 		}
@@ -407,13 +404,17 @@ bool Banlist::json(Json::Value& json_bans) {
 bool Banlist::json_replace(const Json::Value& json_bans) {
 	this->clear();
 
+	tm tmp = {0};
+
 	for (size_t i = 0;i < json_bans.size();i++) {
 		Ban ban;
 		if (json_bans[i]["range"] != 0) {
 			ban.range.set(json_bans[i]["range"].asString());
 		}
 		if (json_bans[i]["expire"] != 0) {
-			// TODO
+			if (StrParseISOTime(json_bans[i]["expire"].asString(), &tmp)) {
+				ban.expire = mktime(&tmp);
+			}
 		}
 		if (json_bans[i]["name"] != 0) {
 			ban.name = json_bans[i]["name"].asString();
