@@ -344,7 +344,6 @@ bool StrFormatISOTime(std::string& s, const tm* utc_tm) {
 
 // [AM] Parse an ISO8601-formatted string time into a tm* struct.
 bool StrParseISOTime(const std::string& s, tm* utc_tm) {
-	Printf(PRINT_HIGH, "%s", s.c_str());
 	if (!strptime(s.c_str(), "%Y-%m-%dT%H:%M:%SZ", utc_tm)) {
 		return false;
 	}
