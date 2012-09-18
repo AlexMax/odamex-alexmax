@@ -463,7 +463,7 @@ bool StrToTime(std::string str, time_t &tim) {
 
 // [AM] Return the difference in seconds between UTC and the current
 //      timezone.
-time_t TZOffset() {
+time_t UTCOffset() {
 	tm* mytm;
 	time_t starting_time, local_time, utc_time;
 	starting_time = time(0);

@@ -34,6 +34,8 @@
 #include "sv_main.h"
 
 EXTERN_CVAR(sv_email)
+EXTERN_CVAR(sv_banfile)
+EXTERN_CVAR(sv_exceptionfile)
 
 Banlist banlist;
 
@@ -413,11 +415,11 @@ bool Banlist::json_replace(const Json::Value& json_bans) {
 		}
 		if (json_bans[i]["expire"] != 0) {
 			if (StrParseISOTime(json_bans[i]["expire"].asString(), &tmp)) {
-				// [AM] Unset the dst bit, since we're using TZOffset() to
+				// [AM] Unset the dst bit, since we're using UTCOffset() to
 				//      create local time_t's and we don't want mktime() to
 				//      do anything cute with it.
 				tmp.tm_isdst = -1;
-				ban.expire = mktime(&tmp) + TZOffset();
+				ban.expire = mktime(&tmp) + UTCOffset();
 			}
 		}
 		if (json_bans[i]["name"] != 0) {
@@ -678,22 +680,38 @@ BEGIN_COMMAND (banlist) {
 } END_COMMAND (banlist)
 
 BEGIN_COMMAND (savebanlist) {
+	std::string banfile;
+	if (argc > 1)
+		banfile = argv[1];
+	else
+		banfile = sv_banfile.cstring();
+
 	Json::Value json_bans(Json::arrayValue);
 	if (!banlist.json(json_bans)) {
 		Printf(PRINT_HIGH, "savebanlist: banlist is empty.\n");
 		return;
 	}
-	Printf(PRINT_HIGH, "%s", json_bans.toStyledString().c_str());
-	banlist.json_replace(json_bans);
+	if (M_WriteJSON(banfile.c_str(), json_bans, true)) {
+		Printf(PRINT_HIGH, "savebanlist: banlist saved to %s.\n", banfile.c_str());
+	} else {
+		Printf(PRINT_HIGH, "savebanlist: could not save banlist.\n");
+	}
 } END_COMMAND (savebanlist)
 
 BEGIN_COMMAND (loadbanlist) {
-	/*Json::Value json_bans(Json::arrayValue);
-	if (!banlist.json(json_bans)) {
-		Printf(PRINT_HIGH, "savebanlist: banlist is empty.\n");
+	std::string banfile;
+	if (argc > 1)
+		banfile = argv[1];
+	else
+		banfile = sv_banfile.cstring();
+
+	Json::Value json_bans;
+	if (!M_ReadJSON(json_bans, banfile.c_str())) {
+		Printf(PRINT_HIGH, "loadbanlist: could not load banlist.\n");
 		return;
 	}
-	Printf(PRINT_HIGH, "%s", json_bans.toStyledString().c_str());*/
+	banlist.json_replace(json_bans);
+	Printf(PRINT_HIGH, "loadbanlist: loaded %d bans from %s.\n", json_bans.size(), banfile.c_str());
 } END_COMMAND (loadbanlist)
 
 BEGIN_COMMAND (exceptionlist) {
