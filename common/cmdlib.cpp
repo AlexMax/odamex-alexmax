@@ -31,7 +31,7 @@
 #define WIN32_LEAN_AND_MEAN
 #ifndef _XBOX
 #include <windows.h>
-#include "strptime.h"
+#include "win32time.h"
 #endif // _XBOX
 #endif // WIN32
 
@@ -459,19 +459,6 @@ bool StrToTime(std::string str, time_t &tim) {
 	}
 
 	return true;
-}
-
-// [AM] Return the difference in seconds between UTC and the current
-//      timezone.
-time_t UTCOffset() {
-	tm* mytm;
-	time_t starting_time, local_time, utc_time;
-	starting_time = time(0);
-	mytm = localtime(&starting_time);
-	local_time = mktime(mytm);
-	mytm = gmtime(&starting_time);
-	utc_time = mktime(mytm);
-	return local_time - utc_time;
 }
 
 // [SL] Reimplement std::isspace 

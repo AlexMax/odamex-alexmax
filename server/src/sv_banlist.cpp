@@ -24,6 +24,10 @@
 #include <sstream>
 #include <string>
 
+#if WIN32
+#include "win32time.h"
+#endif
+
 #include "json/json.h"
 //#include <curl/curl.h>
 
@@ -369,6 +373,11 @@ void Banlist::clear() {
 	this->banlist.clear();
 }
 
+// Clear the exceptionlist.
+void Banlist::clear_exceptions() {
+	this->exceptionlist.clear();
+}
+
 // Fills a JSON array with bans.
 bool Banlist::json(Json::Value& json_bans) {
 	// If there are no bans, we don't want to bother any potential
@@ -415,11 +424,7 @@ bool Banlist::json_replace(const Json::Value& json_bans) {
 		}
 		if (json_bans[i]["expire"] != 0) {
 			if (StrParseISOTime(json_bans[i]["expire"].asString(), &tmp)) {
-				// [AM] Unset the dst bit, since we're using UTCOffset() to
-				//      create local time_t's and we don't want mktime() to
-				//      do anything cute with it.
-				tmp.tm_isdst = -1;
-				ban.expire = mktime(&tmp) + UTCOffset();
+				ban.expire = timegm(&tmp);
 			}
 		}
 		if (json_bans[i]["name"] != 0) {
@@ -433,13 +438,6 @@ bool Banlist::json_replace(const Json::Value& json_bans) {
 
 	return true;
 }
-
-/*void Banlist::json_exceptions()
-{
-	for (size_t i = 0;i < banlist.size();i++) {
-		result.push_back(banlist_result_t(i, &(this->banlist[i])));
-	}
-}*/
 
 //// Console commands ////
 
@@ -679,6 +677,11 @@ BEGIN_COMMAND (banlist) {
 	}
 } END_COMMAND (banlist)
 
+BEGIN_COMMAND (clearbanlist) {
+	banlist.clear();
+	Printf(PRINT_HIGH, "clearbanlist: banlist cleared.\n");
+} END_COMMAND (clearbanlist)
+
 BEGIN_COMMAND (savebanlist) {
 	std::string banfile;
 	if (argc > 1)
@@ -740,6 +743,11 @@ BEGIN_COMMAND (exceptionlist) {
 		Printf(PRINT_HIGH, "%s", buffer.str().c_str());
 	}
 } END_COMMAND (exceptionlist)
+
+BEGIN_COMMAND (clearexceptionlist) {
+	banlist.clear_exceptions();
+	Printf(PRINT_HIGH, "clearexceptionlist: exceptionlist cleared.\n");
+} END_COMMAND (clearexceptionlist)
 
 // Check to see if a client is on the banlist, and kick them out of the server
 // if they are.  Returns true if the player was banned.

@@ -83,6 +83,7 @@ public:
 	bool remove(size_t index);
 	bool remove_exception(size_t index);
 	void clear();
+	void clear_exceptions();
 	bool json(Json::Value& json_bans);
 	bool json_replace(const Json::Value& json_bans);
 	void json_exceptions();
