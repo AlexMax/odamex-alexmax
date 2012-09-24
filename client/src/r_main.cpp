@@ -732,6 +732,11 @@ CVAR_FUNC_IMPL (r_widescreen)
 		Printf(PRINT_HIGH, "Invalid widescreen setting.\n");
 		var.RestoreDefault();
 	}
+	else if (var.asInt() == 1)
+	{
+		Printf(PRINT_HIGH, "Not implemented.\n");
+		var.RestoreDefault();
+	}
 	setmodeneeded = true;
 }
 
