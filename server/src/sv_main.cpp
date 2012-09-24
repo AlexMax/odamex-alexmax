@@ -315,7 +315,7 @@ void SV_UpdateConsolePlayer(player_t &player);
 void SV_CheckTeam (player_t & playernum);
 team_t SV_GoodTeam (void);
 
-void SV_SendServerSettings (client_t *cl);
+void SV_SendServerSettings (player_t &pl);
 void SV_ServerSettingChange (void);
 
 // some doom functions
@@ -1784,7 +1784,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (ceiling_mover == SEC_ELEVATOR)
 	{
-		DElevator *Elevator = (DElevator *)sector->ceilingdata;
+		DElevator *Elevator = static_cast<DElevator *>(sector->ceilingdata);
 
         MSG_WriteByte(netbuf, Elevator->m_Type);
         MSG_WriteByte(netbuf, Elevator->m_Status);
@@ -1796,7 +1796,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 	
 	if (ceiling_mover == SEC_PILLAR)
 	{
-		DPillar *Pillar = (DPillar *)sector->ceilingdata;
+		DPillar *Pillar = static_cast<DPillar *>(sector->ceilingdata);
 
         MSG_WriteByte(netbuf, Pillar->m_Type);
         MSG_WriteByte(netbuf, Pillar->m_Status);
@@ -1809,7 +1809,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (ceiling_mover == SEC_CEILING)
 	{
-		DCeiling *Ceiling = (DCeiling *)sector->ceilingdata;
+		DCeiling *Ceiling = static_cast<DCeiling *>(sector->ceilingdata);
 		
         MSG_WriteByte(netbuf, Ceiling->m_Type);
         MSG_WriteShort(netbuf, Ceiling->m_BottomHeight >> FRACBITS);
@@ -1828,7 +1828,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (ceiling_mover == SEC_DOOR)
 	{
-		DDoor *Door = (DDoor *)sector->ceilingdata;
+		DDoor *Door = static_cast<DDoor *>(sector->ceilingdata);
 
         MSG_WriteByte(netbuf, Door->m_Type);
         MSG_WriteShort(netbuf, Door->m_TopHeight >> FRACBITS);
@@ -1842,7 +1842,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (floor_mover == SEC_FLOOR)
 	{
-		DFloor *Floor = (DFloor *)sector->floordata;
+		DFloor *Floor = static_cast<DFloor *>(sector->floordata);
 
         MSG_WriteByte(netbuf, Floor->m_Type);
         MSG_WriteByte(netbuf, Floor->m_Status);
@@ -1865,7 +1865,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (floor_mover == SEC_PLAT)
 	{
-		DPlat *Plat = (DPlat *)sector->floordata;
+		DPlat *Plat = static_cast<DPlat *>(sector->floordata);
 
         MSG_WriteShort(netbuf, Plat->m_Speed >> FRACBITS);
         MSG_WriteShort(netbuf, Plat->m_Low >> FRACBITS);
@@ -2002,26 +2002,34 @@ void SV_ClientFullUpdate (player_t &pl)
 //	Sends server setting info
 //
 
-void SV_SendServerSettings (client_t *cl)
+void SV_SendPackets(void);
+
+void SV_SendServerSettings (player_t &pl)
 {
 	// GhostlyDeath <June 19, 2008> -- Loop through all CVARs and send the CVAR_SERVERINFO stuff only
 	cvar_t *var = GetFirstCvar();
 
-	MSG_WriteMarker(&cl->reliablebuf, svc_serversettings);
+    client_t *cl = &pl.client;
 
 	while (var)
 	{
 		if (var->flags() & CVAR_SERVERINFO)
 		{
-			MSG_WriteByte(&cl->reliablebuf, 1);
+            if ((cl->reliablebuf.cursize + 1 + 1 + (strlen(var->name()) + 1) + (strlen(var->cstring()) + 1) + 1) >= 512)
+                SV_SendPacket(pl);
+                
+            MSG_WriteMarker(&cl->reliablebuf, svc_serversettings);
+                       
+            MSG_WriteByte(&cl->reliablebuf, 1); // TODO: REMOVE IN 0.7
+			
 			MSG_WriteString(&cl->reliablebuf, var->name());
 			MSG_WriteString(&cl->reliablebuf, var->cstring());
+            
+            MSG_WriteByte(&cl->reliablebuf, 2); // TODO: REMOVE IN 0.7
 		}
 
 		var = var->GetNext();
 	}
-
-	MSG_WriteByte(&cl->reliablebuf, 2);
 }
 
 //
@@ -2035,7 +2043,7 @@ void SV_ServerSettingChange (void)
 		return;
 
 	for (size_t i = 0; i < players.size(); i++)
-		SV_SendServerSettings (&clients[i]);
+		SV_SendServerSettings (players[i]);
 }
 
 //
@@ -2428,7 +2436,7 @@ void SV_ConnectClient (void)
     SV_SendPacket(players[n]);
 
 	// [Toke] send server settings
-	SV_SendServerSettings (cl);
+	SV_SendServerSettings (players[n]);
 
 	cl->download.name = "";
 	if(connection_type == 1)
@@ -2985,7 +2993,7 @@ void STACK_ARGS SV_TeamPrintf (int level, int who, const char *fmt, ...)
 		if(!(sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF) || players[i].userinfo.team != idplayer(who).userinfo.team)
 			continue;
 
-		if (players[i].spectator)
+		if (players[i].spectator || players[i].playerstate == PST_DOWNLOAD)
 			continue;
 
 		cl = &clients[i];
@@ -3898,7 +3906,7 @@ void SV_SetPlayerSpec(player_t &player, bool setting, bool silent) {
 	}
 }
 
-bool CMD_ForcespecCheck(const std::vector<std::string> arguments,
+bool CMD_ForcespecCheck(const std::vector<std::string> &arguments,
 						std::string &error, size_t &pid) {
 	if (arguments.empty()) {
 		error = "need a player id (try 'players').";
@@ -4336,7 +4344,7 @@ void SV_ParseCommands(player_t &player)
 
 		case clc_kill:
 			if(player.mo &&
-               level.time > player.respawn_time + TICRATE*10 &&
+               level.time > player.death_time + TICRATE*10 &&
                sv_allowcheats)
             {
 				SV_Suicide (player);
@@ -4544,7 +4552,7 @@ void SV_TimelimitCheck()
 		return;
 
 	// LEVEL TIMER
-	if (players.size()) {
+	if (!players.empty()) {
 		if (sv_gametype == GM_DM) {
 			player_t *winplayer = &players[0];
 			bool drawgame = false;
@@ -4699,7 +4707,7 @@ void SV_RunTics (void)
 	std::string cmd = I_ConsoleInput();
 	if (cmd.length())
 	{
-		AddCommandString (cmd.c_str());
+		AddCommandString (cmd);
 	}
 
 	if(CON.is_open())
@@ -4708,7 +4716,7 @@ void SV_RunTics (void)
 		if(!CON.eof())
 		{
 			std::getline(CON, cmd);
-			AddCommandString (cmd.c_str());
+			AddCommandString (cmd);
 		}
 	}
 

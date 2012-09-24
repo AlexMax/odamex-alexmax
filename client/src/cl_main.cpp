@@ -538,6 +538,9 @@ void CL_CheckDisplayPlayer()
 	static byte previd = consoleplayer_id;
 	byte newid = 0;
 
+	if (displayplayer_id != previd)
+		newid = displayplayer_id;
+
 	if (!validplayer(displayplayer()) || !displayplayer().mo)
 		newid = consoleplayer_id;
 
@@ -545,8 +548,8 @@ void CL_CheckDisplayPlayer()
 		  netdemo.isPlaying() || netdemo.isPaused()))
 		newid = consoleplayer_id;
 
-	if (displayplayer_id != previd)
-		newid = displayplayer_id;
+	if (displayplayer().spectator)
+		newid = consoleplayer_id;
 
 	if (newid)
 	{
@@ -2851,6 +2854,7 @@ void CL_GetServerSettings(void)
 {
 	cvar_t *var = NULL, *prev = NULL;
 		
+    // TODO: REMOVE IN 0.7 - We don't need this loop anymore
 	while (MSG_ReadByte() != 2)
 	{
 		std::string CvarName = MSG_ReadString();
