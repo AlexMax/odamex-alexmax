@@ -2071,6 +2071,21 @@ void P_ThrustMobj (AActor *mo, angle_t angle, fixed_t move)
 }
 
 //
+// P_GetMapThingPlayerNumber
+//
+// Returns the player number for a coop player start mapthing
+//
+size_t P_GetMapThingPlayerNumber(mapthing2_t *mthing)
+{
+	if (!mthing)
+		return 0;
+
+	return mthing->type <= 4 ?
+			mthing->type - 1 :
+			(mthing->type - 4001 + 4) % MAXPLAYERSTARTS;
+}
+
+//
 // P_SpawnMapThing
 // The fields of the mapthing should
 // already be in host byte order.
@@ -2184,8 +2199,23 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		if (mthing->args[0] != position)
 			return;
 
+		size_t playernum = P_GetMapThingPlayerNumber(mthing);
+
+		// search for spots that already are for this player number
+		for (size_t i = 0; i < playerstarts.size(); i++)
+		{
+			size_t otherplayernum = P_GetMapThingPlayerNumber(&playerstarts[i]);
+
+			if (otherplayernum == playernum)
+			{
+				// consider playerstarts[i] to be a voodoo doll start
+				voodoostarts.push_back(playerstarts[i]);
+				playerstarts.erase(playerstarts.begin() + i);
+				break;
+			}
+		}
+
 		// save spots for respawning in network games
-		size_t playernum = mthing->type <= 4 ? mthing->type-1 : (mthing->type - 4001 + 4)%MAXPLAYERSTARTS;
 		playerstarts.push_back(*mthing);
 		player_t &p = idplayer(playernum+1);
 
