@@ -93,6 +93,7 @@ void	G_DoSaveGame (void);
 void	CL_RunTics (void);
 
 bool	C_DoNetDemoKey(event_t *ev);
+bool	C_DoSpectatorKey(event_t *ev);
 
 EXTERN_CVAR (sv_skill)
 EXTERN_CVAR (novert)
@@ -750,6 +751,8 @@ BOOL G_Responder (event_t *ev)
 	{
 		if (C_DoNetDemoKey(ev))	// netdemo playback ate the event
 			return true;
+		if (C_DoSpectatorKey(ev))
+			return true;
 
 		if (HU_Responder (ev))
 			return true;		// chat ate the event
@@ -1133,7 +1136,7 @@ void G_PlayerReborn (player_t &p) // [Toke - todo] clean this function
 	p.weaponowned[wp_pistol] = true;
 	p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
 
-	p.respawn_time = level.time;
+	p.death_time = 0;
 	p.tic = 0;
 }
 
@@ -2329,10 +2332,10 @@ BOOL G_CheckDemoStatus (void)
 		if (demotest) {
 			AActor *mo = idplayer(1).mo;
 
-			if(mo)
-				Printf(PRINT_HIGH, "%x %x %x %x\n", mo->angle, mo->x, mo->y, mo->z);
+			if (mo)
+				Printf(PRINT_HIGH, "demotest:%x %x %x %x\n", mo->angle, mo->x, mo->y, mo->z);
 			else
-				Printf(PRINT_HIGH, "demotest: no player\n");
+				Printf(PRINT_HIGH, "demotest:no player\n");
 		}
 
 

@@ -63,6 +63,7 @@
 #include "sv_vote.h"
 #include "sv_maplist.h"
 #include "g_warmup.h"
+#include "sv_banlist.h"
 
 #include <algorithm>
 #include <sstream>
@@ -89,20 +90,7 @@ extern int mapchange;
 
 bool step_mode = false;
 
-#define IPADDRSIZE 4	// GhostlyDeath -- Someone might want to do IPv6 junk
-
 std::queue<byte> free_player_ids;
-
-typedef struct
-{
-	short ip[IPADDRSIZE];
-	std::string Reason;
-} BanEntry_t;
-
-const short RANGEBAN = -1;	// ban everyone! =)
-
-std::vector<BanEntry_t> BanList;		// People who are banned
-std::vector<BanEntry_t> WhiteList;		// people who are [accidently] banned but can get inside
 
 // General server settings
 EXTERN_CVAR(sv_motd)
@@ -316,7 +304,7 @@ void SV_UpdateConsolePlayer(player_t &player);
 void SV_CheckTeam (player_t & playernum);
 team_t SV_GoodTeam (void);
 
-void SV_SendServerSettings (client_t *cl);
+void SV_SendServerSettings (player_t &pl);
 void SV_ServerSettingChange (void);
 
 // some doom functions
@@ -408,180 +396,6 @@ void SV_KickPlayer(player_t &player, const std::string &reason) {
 	SV_DropClient(player);
 }
 
-//
-// Nes - IP Lists: bans(BanList), exceptions(WhiteList)
-//
-void SV_BanStringify(std::string *ToStr = NULL, short *ip = NULL)
-{
-	if (!ToStr || !ip)
-		return;
-
-	for (int i = 0; i < IPADDRSIZE; i++)
-	{
-		if (ip[i] == RANGEBAN)
-			*ToStr += '*';
-		else
-		{
-			char bleh[5];
-			sprintf(bleh, "%i", ip[i]);
-			*ToStr += bleh;
-		}
-
-		if (i < (IPADDRSIZE - 1))
-			*ToStr += '.';
-	}
-}
-
-// Nes - Make IP for the temporary BanEntry.
-void SV_IPListMakeIP (BanEntry_t *tBan, std::string IPtoBan)
-{
-	std::string Oct;//, Oct2, Oct3, Oct4;
-
-	// There is garbage in IPtoBan
-	IPtoBan = IPtoBan.substr(0, IPtoBan.find(' '));
-
-	for (int i = 0; i < IPADDRSIZE; i++)
-	{
-		int loc = 0;
-		char *seek;
-
-		Oct = IPtoBan.substr(0, Oct.find("."));
-		IPtoBan = IPtoBan.substr(IPtoBan.find(".") + 1);
-
-		seek = const_cast<char*>(Oct.c_str());
-
-		while (*seek)
-		{
-			if (*seek == '.')
-				break;
-			loc++;
-			seek++;
-		}
-
-		Oct = Oct.substr(0, loc);
-
-		if ((*(Oct.c_str()) == '*') || (*(Oct.c_str()) == 0))
-			(*tBan).ip[i] = RANGEBAN;
-		else
-			(*tBan).ip[i] = atoi(Oct.c_str());
-	}
-}
-
-// Nes - Add IP to a certain IP list.
-void SV_IPListAdd (std::vector<BanEntry_t> *list, std::string listname, std::string IPtoBan, std::string reason)
-{
-	BanEntry_t tBan;	// GhostlyDeath -- Temporary Ban Holder
-	std::string IP;
-
-	SV_IPListMakeIP(&tBan, IPtoBan);
-
-	for (size_t i = 0; i < (*list).size(); i++)
-	{
-		bool match = false;
-
-		for (int j = 0; j < IPADDRSIZE; j++)
-			if (((tBan.ip[j] == (*list)[i].ip[j]) || ((*list)[i].ip[j] == RANGEBAN)) &&
-				(((j > 0 && match) || (j == 0 && !match))))
-				match = true;
-			else
-			{
-				match = false;
-				break;
-			}
-
-		if (match)
-		{
-			SV_BanStringify(&IP, tBan.ip);
-			Printf(PRINT_HIGH, "%s on %s already exists!\n", listname.c_str(), IP.c_str());
-			return;
-		}
-	}
-
-	tBan.Reason = reason;
-
-	(*list).push_back(tBan);
-	SV_BanStringify(&IP, tBan.ip);
-	Printf(PRINT_HIGH, "%s on %s added.\n", listname.c_str(), IP.c_str());
-}
-
-// Nes - Delete IP from a certain IP list.
-void SV_IPListDelete (std::vector<BanEntry_t> *list, std::string listname, std::string IPtoBan)
-{
-	if (!(*list).size())
-		Printf(PRINT_HIGH, "%s list is empty.\n", listname.c_str());
-	else {
-		BanEntry_t tBan;	// GhostlyDeath -- Temporary Ban Holder
-		std::string IP;
-		int RemovalCount = 0;
-		size_t i;
-
-		SV_IPListMakeIP(&tBan, IPtoBan);
-
-		for (i = 0; i < (*list).size(); i++)
-		{
-			bool match = false;
-
-			for (int j = 0; j < IPADDRSIZE; j++)
-				if (tBan.ip[j] == (*list)[i].ip[j])
-					match = true;
-				else
-				{
-					match = false;
-					break;
-				}
-
-			if (match)
-			{
-				(*list)[i].ip[0] = 32000;
-				RemovalCount++;
-			}
-		}
-
-		i = 0;
-
-		while (i < (*list).size())
-		{
-			if ((*list)[i].ip[0] == 32000)
-				(*list).erase((*list).begin() + i);
-			else
-				i++;
-		}
-
-		if (RemovalCount == 0)
-			Printf(PRINT_HIGH, "%s entry not found.\n", listname.c_str());
-		else
-			Printf(PRINT_HIGH, "%i %ss removed.\n", RemovalCount, listname.c_str());
-	}
-}
-
-// Nes - List a certain IP list.
-void SV_IPListDisplay (std::vector<BanEntry_t> *list, std::string listname)
-{
-	if (!(*list).size())
-		Printf(PRINT_HIGH, "%s list is empty.\n", listname.c_str());
-	else {
-		for (size_t i = 0; i < (*list).size(); i++)
-		{
-			std::string IP;
-			SV_BanStringify(&IP, (*list)[i].ip);
-			Printf(PRINT_HIGH, "%s #%i: %s (Reason: %s)\n", listname.c_str(), i + 1, IP.c_str(), (*list)[i].Reason.c_str());
-		}
-
-		Printf(PRINT_HIGH, "%s list has %i entries.\n", listname.c_str(), (*list).size());
-	}
-}
-
-// Nes - Clears a certain IP list.
-void SV_IPListClear (std::vector<BanEntry_t> *list, std::string listname)
-{
-	if (!(*list).size())
-		Printf(PRINT_HIGH, "%s list is already empty!\n", listname.c_str());
-	else {
-		Printf(PRINT_HIGH, "All %i %ss removed.\n", (*list).size(), listname.c_str());
-		(*list).clear();
-	}
-}
-
 BEGIN_COMMAND (stepmode)
 {
     if (step_mode)
@@ -592,136 +406,6 @@ BEGIN_COMMAND (stepmode)
     return;
 }
 END_COMMAND (stepmode)
-
-BEGIN_COMMAND(addban)
-{
-	std::string reason;
-
-	if (argc < 2)
-		return;
-
-	if (argc >= 3)
-		reason = C_ArgCombine(argc - 2, (const char **)(argv + 2));
-	else
-		reason = "none given";
-
-	std::string IPtoBan = C_ArgCombine(argc - 1, (const char **)(argv + 1));
-	SV_IPListAdd (&BanList, "Ban", IPtoBan, reason);
-}
-END_COMMAND(addban)
-
-BEGIN_COMMAND(delban)
-{
-	if (argc < 2)
-		return;
-
-	std::string IPtoBan = C_ArgCombine(argc - 1, (const char **)(argv + 1));
-	SV_IPListDelete (&BanList, "Ban", IPtoBan);
-}
-END_COMMAND(delban)
-
-BEGIN_COMMAND(banlist)
-{
-	SV_IPListDisplay (&BanList, "Ban");
-}
-END_COMMAND(banlist)
-
-BEGIN_COMMAND(clearbans)
-{
-	SV_IPListClear (&BanList, "Ban");
-}
-END_COMMAND(clearbans)
-
-BEGIN_COMMAND(addexception)
-{
-	std::string reason;
-
-	if (argc < 2)
-		return;
-
-	if (argc >= 3)
-		reason = C_ArgCombine(argc - 2, (const char **)(argv + 2));
-	else
-		reason = "none given";
-
-	std::string IPtoBan = C_ArgCombine(argc - 1, (const char **)(argv + 1));
-	SV_IPListAdd (&WhiteList, "Exception", IPtoBan, reason);
-}
-END_COMMAND(addexception)
-
-BEGIN_COMMAND(delexception)
-{
-	if (argc < 2)
-		return;
-
-	std::string IPtoBan = C_ArgCombine(argc - 1, (const char **)(argv + 1));
-	SV_IPListDelete (&WhiteList, "Exception", IPtoBan);
-}
-END_COMMAND(delexception)
-
-BEGIN_COMMAND(exceptionlist)
-{
-	SV_IPListDisplay (&WhiteList, "Exception");
-}
-END_COMMAND(exceptionlist)
-
-BEGIN_COMMAND(clearexceptions)
-{
-	SV_IPListClear (&WhiteList, "Exception");
-}
-END_COMMAND(clearexceptions)
-
-// Nes - Same as kick, only add ban.
-BEGIN_COMMAND(kickban)
-{
-	if (argc < 2)
-		return;
-
-	player_t &player = idplayer(atoi(argv[1]));
-	std::string command, tempipstring;
-	short tempip[IPADDRSIZE];
-
-	// Check for validity...
-	if(!validplayer(player))
-	{
-		Printf(PRINT_HIGH, "bad client number: %d\n", atoi(argv[1]));
-		return;
-	}
-
-	if(!player.ingame())
-	{
-		Printf(PRINT_HIGH, "client %d not in game\n", atoi(argv[1]));
-		return;
-	}
-
-	// Generate IP for the ban...
-	for (int i = 0; i < IPADDRSIZE; i++)
-		tempip[i] = (short)player.client.address.ip[i];
-
-	SV_BanStringify(&tempipstring, tempip);
-
-	// The kick...
-	if (argc > 2)
-	{
-		std::string reason = C_ArgCombine(argc - 2, (const char **)(argv + 2));
-		SV_BroadcastPrintf(PRINT_HIGH, "%s was kickbanned from the server! (Reason: %s)\n", player.userinfo.netname, reason.c_str());
-	}
-	else
-		SV_BroadcastPrintf(PRINT_HIGH, "%s was kickbanned from the server!\n", player.userinfo.netname);
-
-	player.client.displaydisconnect = false;
-	SV_DropClient(player);
-
-	// ... and the ban!
-	command = "addban ";
-	command += tempipstring;
-	if (argc > 2) {
-		command += " ";
-		command += C_ArgCombine(argc - 2, (const char **)(argv + 2));
-	}
-	AddCommandString(command);
-}
-END_COMMAND(kickban)
 
 BEGIN_COMMAND (say)
 {
@@ -1785,7 +1469,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (ceiling_mover == SEC_ELEVATOR)
 	{
-		DElevator *Elevator = (DElevator *)sector->ceilingdata;
+		DElevator *Elevator = static_cast<DElevator *>(sector->ceilingdata);
 
         MSG_WriteByte(netbuf, Elevator->m_Type);
         MSG_WriteByte(netbuf, Elevator->m_Status);
@@ -1797,7 +1481,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 	
 	if (ceiling_mover == SEC_PILLAR)
 	{
-		DPillar *Pillar = (DPillar *)sector->ceilingdata;
+		DPillar *Pillar = static_cast<DPillar *>(sector->ceilingdata);
 
         MSG_WriteByte(netbuf, Pillar->m_Type);
         MSG_WriteByte(netbuf, Pillar->m_Status);
@@ -1810,7 +1494,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (ceiling_mover == SEC_CEILING)
 	{
-		DCeiling *Ceiling = (DCeiling *)sector->ceilingdata;
+		DCeiling *Ceiling = static_cast<DCeiling *>(sector->ceilingdata);
 		
         MSG_WriteByte(netbuf, Ceiling->m_Type);
         MSG_WriteShort(netbuf, Ceiling->m_BottomHeight >> FRACBITS);
@@ -1829,7 +1513,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (ceiling_mover == SEC_DOOR)
 	{
-		DDoor *Door = (DDoor *)sector->ceilingdata;
+		DDoor *Door = static_cast<DDoor *>(sector->ceilingdata);
 
         MSG_WriteByte(netbuf, Door->m_Type);
         MSG_WriteShort(netbuf, Door->m_TopHeight >> FRACBITS);
@@ -1843,7 +1527,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (floor_mover == SEC_FLOOR)
 	{
-		DFloor *Floor = (DFloor *)sector->floordata;
+		DFloor *Floor = static_cast<DFloor *>(sector->floordata);
 
         MSG_WriteByte(netbuf, Floor->m_Type);
         MSG_WriteByte(netbuf, Floor->m_Status);
@@ -1866,7 +1550,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (floor_mover == SEC_PLAT)
 	{
-		DPlat *Plat = (DPlat *)sector->floordata;
+		DPlat *Plat = static_cast<DPlat *>(sector->floordata);
 
         MSG_WriteShort(netbuf, Plat->m_Speed >> FRACBITS);
         MSG_WriteShort(netbuf, Plat->m_Low >> FRACBITS);
@@ -2006,26 +1690,34 @@ void SV_ClientFullUpdate (player_t &pl)
 //	Sends server setting info
 //
 
-void SV_SendServerSettings (client_t *cl)
+void SV_SendPackets(void);
+
+void SV_SendServerSettings (player_t &pl)
 {
 	// GhostlyDeath <June 19, 2008> -- Loop through all CVARs and send the CVAR_SERVERINFO stuff only
 	cvar_t *var = GetFirstCvar();
 
-	MSG_WriteMarker(&cl->reliablebuf, svc_serversettings);
+    client_t *cl = &pl.client;
 
 	while (var)
 	{
 		if (var->flags() & CVAR_SERVERINFO)
 		{
-			MSG_WriteByte(&cl->reliablebuf, 1);
+            if ((cl->reliablebuf.cursize + 1 + 1 + (strlen(var->name()) + 1) + (strlen(var->cstring()) + 1) + 1) >= 512)
+                SV_SendPacket(pl);
+                
+            MSG_WriteMarker(&cl->reliablebuf, svc_serversettings);
+                       
+            MSG_WriteByte(&cl->reliablebuf, 1); // TODO: REMOVE IN 0.7
+			
 			MSG_WriteString(&cl->reliablebuf, var->name());
 			MSG_WriteString(&cl->reliablebuf, var->cstring());
+            
+            MSG_WriteByte(&cl->reliablebuf, 2); // TODO: REMOVE IN 0.7
 		}
 
 		var = var->GetNext();
 	}
-
-	MSG_WriteByte(&cl->reliablebuf, 2);
 }
 
 //
@@ -2039,114 +1731,7 @@ void SV_ServerSettingChange (void)
 		return;
 
 	for (size_t i = 0; i < players.size(); i++)
-		SV_SendServerSettings (&clients[i]);
-}
-
-//
-//  SV_BanCheck
-//
-//  Checks a connecting player against a banlist
-//
-bool SV_BanCheck (client_t *cl, int n)
-{
-	for (size_t i = 0; i < BanList.size(); i++)
-	{
-		bool match = false;
-		bool exception = false;
-
-		for (int j = 0; j < IPADDRSIZE; j++)
-		{
-			if (((cl->address.ip[j] == BanList[i].ip[j]) || (BanList[i].ip[j] == RANGEBAN)) &&
-				(((j > 0 && match) || (j == 0 && !match))))
-				match = true;
-			else
-			{
-				match = false;
-				break;
-			}
-		}
-
-		// Now see if there is an exception on our ban...
-		if (WhiteList.empty() == false)
-		{
-			for (size_t k = 0; k < WhiteList.size(); k++)
-			{
-				exception = false;
-
-				for (int j = 0; j < IPADDRSIZE; j++)
-				{
-					if (((cl->address.ip[j] == WhiteList[k].ip[j]) || (WhiteList[k].ip[j] == RANGEBAN)) &&
-						(((j > 0 && exception) || (j == 0 && !exception))))
-						exception = true;
-					else
-					{
-						exception = false;
-						break;
-					}
-				}
-
-				if (exception)
-					break;	// we already know they are allowed in
-			}
-		}
-
-		if (match && !exception)
-		{
-			std::string BanStr;
-			BanStr += "\nYou are banned! (reason: ";
-			//if (*(BanList[i].Reason.c_str()))
-				BanStr += BanList[i].Reason;
-			//else
-			//	BanStr += "none given";
-			BanStr += ")\n";
-
-			MSG_WriteMarker   (&cl->reliablebuf, svc_print);
-			MSG_WriteByte   (&cl->reliablebuf, PRINT_HIGH);
-			MSG_WriteString (&cl->reliablebuf, BanStr.c_str());
-
-			// GhostlyDeath -- Do we include the e-mail or no?
-			if (*(sv_email.cstring()) == 0)
-			{
-				MSG_WriteMarker(&cl->reliablebuf, svc_print);
-				MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
-				MSG_WriteString(&cl->reliablebuf, "If you feel there has been an error, contact the server host. (No e-mail given)\n");
-			}
-			else
-			{
-				std::string ErrorStr;
-				ErrorStr += "If you feel there has been an error, contact the server host at ";
-				ErrorStr += sv_email.cstring();
-				ErrorStr += "\n\n";
-				MSG_WriteMarker(&cl->reliablebuf, svc_print);
-				MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
-				MSG_WriteString(&cl->reliablebuf, ErrorStr.c_str());
-			}
-
-			Printf(PRINT_HIGH, "%s is banned and unable to join! (reason: %s)\n", NET_AdrToString (net_from), BanList[i].Reason.c_str());
-
-			SV_SendPacket (players[n]);
-			cl->displaydisconnect = false;
-			return true;
-		}
-		else if (exception)	// don't bother because they'll be allowed multiple times
-		{
-			std::string BanStr;
-			BanStr += "\nBan Exception (reason: ";
-			//if (*(WhiteList[i].Reason.c_str()))
-				BanStr += WhiteList[i].Reason;
-			//else
-			//	BanStr += "none given";
-			//BanStr += ")\n\n";
-
-			MSG_WriteMarker(&cl->reliablebuf, svc_print);
-			MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
-			MSG_WriteString(&cl->reliablebuf, BanStr.c_str());
-
-			return false;
-		}
-	}
-
-	return false;
+		SV_SendServerSettings (players[i]);
 }
 
 // SV_CheckClientVersion
@@ -2405,6 +1990,7 @@ void SV_ConnectClient (void)
 
 	if (SV_BanCheck(cl, n))
 	{
+		cl->displaydisconnect = false;
 		SV_DropClient(players[n]);
 		return;
 	}
@@ -2432,7 +2018,7 @@ void SV_ConnectClient (void)
     SV_SendPacket(players[n]);
 
 	// [Toke] send server settings
-	SV_SendServerSettings (cl);
+	SV_SendServerSettings (players[n]);
 
 	cl->download.name = "";
 	if(connection_type == 1)
@@ -2956,6 +2542,20 @@ void STACK_ARGS SV_SpectatorPrintf (int level, const char *fmt, ...)
     }
 }
 
+// Print directly to a specific client.
+void STACK_ARGS SV_ClientPrintf(client_t *cl, int level, const char *fmt, ...) {
+	va_list argptr;
+	char string[2048];
+
+	va_start(argptr, fmt);
+	vsprintf(string, fmt, argptr);
+	va_end(argptr);
+
+	MSG_WriteMarker(&cl->reliablebuf, svc_print);
+	MSG_WriteByte(&cl->reliablebuf, level);
+	MSG_WriteString(&cl->reliablebuf, string);
+}
+
 // Print directly to a specific player.
 void STACK_ARGS SV_PlayerPrintf (int level, int who, const char *fmt, ...) {
 	va_list argptr;
@@ -2989,7 +2589,7 @@ void STACK_ARGS SV_TeamPrintf (int level, int who, const char *fmt, ...)
 		if(!(sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF) || players[i].userinfo.team != idplayer(who).userinfo.team)
 			continue;
 
-		if (players[i].spectator)
+		if (players[i].spectator || players[i].playerstate == PST_DOWNLOAD)
 			continue;
 
 		cl = &clients[i];
@@ -3904,7 +3504,7 @@ void SV_SetPlayerSpec(player_t &player, bool setting, bool silent) {
 	}
 }
 
-bool CMD_ForcespecCheck(const std::vector<std::string> arguments,
+bool CMD_ForcespecCheck(const std::vector<std::string> &arguments,
 						std::string &error, size_t &pid) {
 	if (arguments.empty()) {
 		error = "need a player id (try 'players').";
@@ -4357,7 +3957,7 @@ void SV_ParseCommands(player_t &player)
 
 		case clc_kill:
 			if(player.mo &&
-               level.time > player.respawn_time + TICRATE*10 &&
+               level.time > player.death_time + TICRATE*10 &&
                sv_allowcheats)
             {
 				SV_Suicide (player);
@@ -4569,7 +4169,7 @@ void SV_TimelimitCheck()
 		return;
 
 	// LEVEL TIMER
-	if (players.size()) {
+	if (!players.empty()) {
 		if (sv_gametype == GM_DM) {
 			player_t *winplayer = &players[0];
 			bool drawgame = false;
@@ -4725,7 +4325,7 @@ void SV_RunTics (void)
 	std::string cmd = I_ConsoleInput();
 	if (cmd.length())
 	{
-		AddCommandString (cmd.c_str());
+		AddCommandString (cmd);
 	}
 
 	if(CON.is_open())
@@ -4734,7 +4334,7 @@ void SV_RunTics (void)
 		if(!CON.eof())
 		{
 			std::getline(CON, cmd);
-			AddCommandString (cmd.c_str());
+			AddCommandString (cmd);
 		}
 	}
 

@@ -761,12 +761,11 @@ void R_DrawVisSprite (vissprite_t *vis, int x1, int x2)
 		dc_translevel = vis->translucency;
 	}
 
-	dc_iscale = FixedDiv (FRACUNIT, vis->yscale);
+	dc_iscale = FixedDiv (FRACUNIT, vis->yscale) + 1;
 	dc_texturemid = vis->texturemid;
 	frac = vis->startfrac;
 	spryscale = vis->yscale;
 	sprtopscreen = centeryfrac - FixedMul (dc_texturemid, spryscale);
-	sprtopscreen -= sprtopscreen%FRACUNIT; // denis - do not attempt to position on a half or quarter pixel!
 #ifdef RANGECHECK
 	patchwidth = (unsigned)(patch->width());
 #endif
