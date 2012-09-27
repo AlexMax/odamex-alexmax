@@ -127,6 +127,7 @@ void P_SerializeWorld (FArchive &arc)
 				<< sec->ceilingcolormap->fade
 				<< sec->alwaysfake
 				<< sec->waterzone
+				<< sec->SecActTarget
 				<< sec->MoreFlags;
 		}
 
@@ -161,6 +162,7 @@ void P_SerializeWorld (FArchive &arc)
 		{
 
 			unsigned int color=0, fade=0;
+			AActor* SecActTarget;
 
 			arc >> sec->floorheight
 				>> sec->ceilingheight
@@ -211,12 +213,14 @@ void P_SerializeWorld (FArchive &arc)
 				RPART(fade), GPART(fade), BPART(fade));
 			arc >> sec->alwaysfake
 				>> sec->waterzone
+				>> SecActTarget
 				>> sec->MoreFlags;
 
 			sec->floorplane.invc = FixedDiv(FRACUNIT, sec->floorplane.c);
 			sec->floorplane.sector = sec;
 			sec->ceilingplane.invc = FixedDiv(FRACUNIT, sec->ceilingplane.c);
 			sec->ceilingplane.sector = sec;
+			sec->SecActTarget.init(SecActTarget);
 		}
 
 		// do lines
