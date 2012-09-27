@@ -31,11 +31,12 @@
 class Warmup
 {
 public:
-	typedef enum {
-		DISABLED,
-		WARMUP,
-		INGAME,
-		COUNTDOWN,
+	typedef enum
+	{
+	    DISABLED,
+	    WARMUP,
+	    INGAME,
+	    COUNTDOWN,
 	} status_t;
 	Warmup() : status(Warmup::DISABLED), time_begin(0), ready_players(0) { }
 	Warmup::status_t get_status();

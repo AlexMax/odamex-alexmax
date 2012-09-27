@@ -39,7 +39,7 @@ Warmup warmup;
 // Broadcast warmup state to client.
 void SV_SendWarmupState(player_t &player, Warmup::status_t status)
 {
-	client_t *cl = &player.client;
+	client_t* cl = &player.client;
 	MSG_WriteMarker(&cl->reliablebuf, svc_warmupstate);
 	MSG_WriteByte(&cl->reliablebuf, static_cast<byte>(status));
 }
@@ -48,7 +48,7 @@ void SV_SendWarmupState(player_t &player, Warmup::status_t status)
 void SV_BroadcastWarmupState(Warmup::status_t status)
 {
 	std::vector<player_t>::iterator it;
-	for (it = players.begin();it != players.end();++it)
+	for (it = players.begin(); it != players.end(); ++it)
 	{
 		if (!it->ingame())
 			continue;
@@ -127,7 +127,7 @@ void Warmup::readytoggle()
 
 	bool everyone_ready = true;
 	std::vector<player_t>::iterator it;
-	for (it = players.begin();it != players.end();++it)
+	for (it = players.begin(); it != players.end(); ++it)
 	{
 		if (it->ingame() && !it->spectator && !it->ready)
 		{
@@ -165,7 +165,8 @@ void Warmup::tic()
 		return;
 
 	size_t npig = P_NumPlayersInGame();
-	if (npig != this->ready_players) {
+	if (npig != this->ready_players)
+	{
 		if (npig > this->ready_players)
 			SV_BroadcastPrintf(PRINT_HIGH, "Countdown aborted: Player joined.\n");
 		else

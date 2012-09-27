@@ -50,7 +50,7 @@ bool Warmup::checkfireweapon()
 }
 
 // Set the warmup status.  This is a clientside function, governed by
-// the server. 
+// the server.
 void Warmup::set_client_status(Warmup::status_t new_status)
 {
 	this->status = new_status;
