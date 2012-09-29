@@ -142,20 +142,37 @@ public:
 
 	// Output some text with the current font
 	inline void DrawText (int normalcolor, int x, int y, const byte *string) const;
-	inline void DrawTextLuc (int normalcolor, int x, int y, const byte *string) const;
+	inline void DrawTextLuc (int normalcolor, int x, int y, const byte *string, fixed_t trans=0x8000) const;
 	inline void DrawTextClean (int normalcolor, int x, int y, const byte *string) const;		// Does not adjust x and y
-	inline void DrawTextCleanLuc (int normalcolor, int x, int y, const byte *string) const;		// ditto
+	inline void DrawTextCleanLuc (int normalcolor, int x, int y, const byte *string, fixed_t trans=0x8000) const; // ditto
 	inline void DrawTextCleanMove (int normalcolor, int x, int y, const byte *string) const;	// This one does
 	inline void DrawTextStretched (int normalcolor, int x, int y, const byte *string, int scalex, int scaley) const;
-	inline void DrawTextStretchedLuc (int normalcolor, int x, int y, const byte *string, int scalex, int scaley) const;
+	inline void DrawTextStretchedLuc (int normalcolor, int x, int y, const byte *string, int scalex, int scaley, fixed_t trans=0x8000) const;
+	inline void DrawTextShadow (int normalcolor, int x, int y, const byte *string) const;
+	inline void DrawTextCleanShadow (int normalcolor, int x, int y, const byte *string) const;
+	inline void DrawTextCleanShadowMove (int normalcolor, int x, int y, const byte *string) const;
 
 	inline void DrawText (int normalcolor, int x, int y, const char *string) const;
-	inline void DrawTextLuc (int normalcolor, int x, int y, const char *string) const;
+	inline void DrawTextLuc (int normalcolor, int x, int y, const char *string, fixed_t trans=0x8000) const;
 	inline void DrawTextClean (int normalcolor, int x, int y, const char *string) const;
-	inline void DrawTextCleanLuc (int normalcolor, int x, int y, const char *string) const;
+	inline void DrawTextCleanLuc (int normalcolor, int x, int y, const char *string, fixed_t trans=0x8000) const;
 	inline void DrawTextCleanMove (int normalcolor, int x, int y, const char *string) const;
 	inline void DrawTextStretched (int normalcolor, int x, int y, const char *string, int scalex, int scaley) const;
-	inline void DrawTextStretchedLuc (int normalcolor, int x, int y, const char *string, int scalex, int scaley) const;
+	inline void DrawTextStretchedLuc (int normalcolor, int x, int y, const char *string, int scalex, int scaley, fixed_t trans=0x8000) const;
+	inline void DrawTextShadow (int normalcolor, int x, int y, const char *string) const;
+	inline void DrawTextCleanShadow (int normalcolor, int x, int y, const char *string) const;
+	inline void DrawTextCleanShadowMove (int normalcolor, int x, int y, const char *string) const;
+
+	inline void DrawChar (int normalcolor, int x, int y, byte character) const;
+	inline void DrawCharLuc (int normalcolor, int x, int y, byte character, fixed_t trans=0x8000) const;
+	inline void DrawCharClean (int normalcolor, int x, int y, byte character) const;
+	inline void DrawCharCleanLuc (int normalcolor, int x, int y, byte character, fixed_t trans=0x8000) const;
+	inline void DrawCharCleanMove (int normalcolor, int x, int y, byte character) const;
+	inline void DrawCharStretched (int normalcolor, int x, int y, byte character, int scalex, int scaley) const;
+	inline void DrawCharStretchedLuc (int normalcolor, int x, int y, byte character, int scalex, int scaley, fixed_t trans=0x8000) const;
+	inline void DrawCharShadow (int normalcolor, int x, int y, byte character) const;
+	inline void DrawCharCleanShadow (int normalcolor, int x, int y, byte character) const;
+	inline void DrawCharCleanShadowMove (int normalcolor, int x, int y, byte character) const;
 
 	// Patch drawing functions
 	void DrawPatchFlipped (const patch_t *patch, int x, int y) const;
@@ -265,71 +282,162 @@ inline int DCanvas::StringWidth (const char *str) const
 	return StringWidth ((const byte *)str);
 }
 
+extern fixed_t V_TextTrans;
+
+// DrawText byte*
 inline void DCanvas::DrawText (int normalcolor, int x, int y, const byte *string) const
 {
-	TextWrapper (EWrapper_Translated, normalcolor, x, y, string);
+	TextWrapper (ETWrapper_Normal, normalcolor, x, y, string);
 }
-inline void DCanvas::DrawTextLuc (int normalcolor, int x, int y, const byte *string) const
+inline void DCanvas::DrawTextLuc (int normalcolor, int x, int y, const byte *string, fixed_t trans) const
 {
-	TextWrapper (EWrapper_TlatedLucent, normalcolor, x, y, string);
+	V_TextTrans = trans;
+	TextWrapper (ETWrapper_Translucent, normalcolor, x, y, string);
 }
 inline void DCanvas::DrawTextClean (int normalcolor, int x, int y, const byte *string) const
 {
-	TextSWrapper (EWrapper_Translated, normalcolor, x, y, string);
+	TextSWrapper (ETWrapper_Normal, normalcolor, x, y, string);
 }
-inline void DCanvas::DrawTextCleanLuc (int normalcolor, int x, int y, const byte *string) const
+inline void DCanvas::DrawTextCleanLuc (int normalcolor, int x, int y, const byte *string, fixed_t trans) const
 {
-	TextSWrapper (EWrapper_TlatedLucent, normalcolor, x, y, string);
+	V_TextTrans = trans;
+	TextSWrapper (ETWrapper_Translucent, normalcolor, x, y, string);
 }
 inline void DCanvas::DrawTextCleanMove (int normalcolor, int x, int y, const byte *string) const
 {
-	TextSWrapper (EWrapper_Translated, normalcolor,
+	TextSWrapper (ETWrapper_Normal, normalcolor,
 		(x - 160) * CleanXfac + width / 2,
 		(y - 100) * CleanYfac + height / 2,
 		string);
 }
 inline void DCanvas::DrawTextStretched (int normalcolor, int x, int y, const byte *string, int scalex, int scaley) const
 {
-	TextSWrapper (EWrapper_Translated, normalcolor, x, y, string, scalex, scaley);
+	TextSWrapper (ETWrapper_Normal, normalcolor, x, y, string, scalex, scaley);
 }
-
-inline void DCanvas::DrawTextStretchedLuc (int normalcolor, int x, int y, const byte *string, int scalex, int scaley) const
+inline void DCanvas::DrawTextStretchedLuc (int normalcolor, int x, int y, const byte *string, int scalex, int scaley, fixed_t trans) const
 {
-	TextSWrapper (EWrapper_TlatedLucent, normalcolor, x, y, string, scalex, scaley);
+	V_TextTrans = trans;
+	TextSWrapper (ETWrapper_Translucent, normalcolor, x, y, string, scalex, scaley);
+}
+inline void DCanvas::DrawTextShadow (int normalcolor, int x, int y, const byte *string) const
+{
+	TextWrapper (ETWrapper_Shadow, normalcolor, x, y, string);
+}
+inline void DCanvas::DrawTextCleanShadow (int normalcolor, int x, int y, const byte *string) const
+{
+	TextSWrapper (ETWrapper_Shadow, normalcolor, x, y, string);
+}
+inline void DCanvas::DrawTextCleanShadowMove (int normalcolor, int x, int y, const byte *string) const
+{
+	TextSWrapper (ETWrapper_Shadow, normalcolor,
+		(x - 160) * CleanXfac + width / 2,
+		(y - 100) * CleanYfac + height / 2,
+		string);
 }
 
+// DrawText char*
 inline void DCanvas::DrawText (int normalcolor, int x, int y, const char *string) const
 {
-	TextWrapper (EWrapper_Translated, normalcolor, x, y, (const byte *)string);
+	TextWrapper (ETWrapper_Normal, normalcolor, x, y, (const byte *)string);
 }
-inline void DCanvas::DrawTextLuc (int normalcolor, int x, int y, const char *string) const
+inline void DCanvas::DrawTextLuc (int normalcolor, int x, int y, const char *string, fixed_t trans) const
 {
-	TextWrapper (EWrapper_TlatedLucent, normalcolor, x, y, (const byte *)string);
+	V_TextTrans = trans;
+	TextWrapper (ETWrapper_Translucent, normalcolor, x, y, (const byte *)string);
 }
 inline void DCanvas::DrawTextClean (int normalcolor, int x, int y, const char *string) const
 {
-	TextSWrapper (EWrapper_Translated, normalcolor, x, y, (const byte *)string);
+	TextSWrapper (ETWrapper_Normal, normalcolor, x, y, (const byte *)string);
 }
-inline void DCanvas::DrawTextCleanLuc (int normalcolor, int x, int y, const char *string) const
+inline void DCanvas::DrawTextCleanLuc (int normalcolor, int x, int y, const char *string, fixed_t trans) const
 {
-	TextSWrapper (EWrapper_TlatedLucent, normalcolor, x, y, (const byte *)string);
+	V_TextTrans = trans;
+	TextSWrapper (ETWrapper_Translucent, normalcolor, x, y, (const byte *)string);
 }
 inline void DCanvas::DrawTextCleanMove (int normalcolor, int x, int y, const char *string) const
 {
-	TextSWrapper (EWrapper_Translated, normalcolor,
+	TextSWrapper (ETWrapper_Normal, normalcolor,
 		(x - 160) * CleanXfac + width / 2,
 		(y - 100) * CleanYfac + height / 2,
 		(const byte *)string);
 }
 inline void DCanvas::DrawTextStretched (int normalcolor, int x, int y, const char *string, int scalex, int scaley) const
 {
-	TextSWrapper (EWrapper_Translated, normalcolor, x, y, (const byte *)string, scalex, scaley);
+	TextSWrapper (ETWrapper_Normal, normalcolor, x, y, (const byte *)string, scalex, scaley);
 }
-inline void DCanvas::DrawTextStretchedLuc (int normalcolor, int x, int y, const char *string, int scalex, int scaley) const
+inline void DCanvas::DrawTextStretchedLuc (int normalcolor, int x, int y, const char *string, int scalex, int scaley, fixed_t trans) const
 {
-	TextSWrapper (EWrapper_TlatedLucent, normalcolor, x, y, (const byte *)string, scalex, scaley);
+	V_TextTrans = trans;
+	TextSWrapper (ETWrapper_Translucent, normalcolor, x, y, (const byte *)string, scalex, scaley);
+}
+inline void DCanvas::DrawTextShadow (int normalcolor, int x, int y, const char *string) const
+{
+	TextWrapper (ETWrapper_Shadow, normalcolor, x, y, (const byte *)string);
+}
+inline void DCanvas::DrawTextCleanShadow (int normalcolor, int x, int y, const char *string) const
+{
+	TextSWrapper (ETWrapper_Shadow, normalcolor, x, y, (const byte *)string);
+}
+inline void DCanvas::DrawTextCleanShadowMove (int normalcolor, int x, int y, const char *string) const
+{
+	TextSWrapper (ETWrapper_Shadow, normalcolor,
+		(x - 160) * CleanXfac + width / 2,
+		(y - 100) * CleanYfac + height / 2,
+		(const byte *)string);
 }
 
+// DrawChar byte
+inline void DCanvas::DrawChar (int normalcolor, int x, int y, byte character) const
+{
+	CharWrapper (ETWrapper_Normal, normalcolor, x, y, character);
+}
+inline void DCanvas::DrawCharLuc (int normalcolor, int x, int y, byte character, fixed_t trans) const
+{
+	V_TextTrans = trans;
+	CharWrapper (ETWrapper_Translucent, normalcolor, x, y, character);
+}
+inline void DCanvas::DrawCharClean (int normalcolor, int x, int y, byte character) const
+{
+	CharSWrapper (ETWrapper_Normal, normalcolor, x, y, character);
+}
+inline void DCanvas::DrawCharCleanLuc (int normalcolor, int x, int y, byte character, fixed_t trans) const
+{
+	V_TextTrans = trans;
+	CharSWrapper (ETWrapper_Translucent, normalcolor, x, y, character);
+}
+inline void DCanvas::DrawCharCleanMove (int normalcolor, int x, int y, byte character) const
+{
+	CharSWrapper (ETWrapper_Normal, normalcolor,
+		(x - 160) * CleanXfac + width / 2,
+		(y - 100) * CleanYfac + height / 2,
+		character);
+}
+inline void DCanvas::DrawCharStretched (int normalcolor, int x, int y, byte character, int scalex, int scaley) const
+{
+	CharSWrapper (ETWrapper_Normal, normalcolor, x, y, character, scalex, scaley);
+}
+inline void DCanvas::DrawCharStretchedLuc (int normalcolor, int x, int y, byte character, int scalex, int scaley, fixed_t trans) const
+{
+	V_TextTrans = trans;
+	CharSWrapper (ETWrapper_Translucent, normalcolor, x, y, character, scalex, scaley);
+}
+inline void DCanvas::DrawCharShadow (int normalcolor, int x, int y, byte character) const
+{
+	CharWrapper (ETWrapper_Shadow, normalcolor, x, y, character);
+}
+inline void DCanvas::DrawCharCleanShadow (int normalcolor, int x, int y, byte character) const
+{
+	CharSWrapper (ETWrapper_Shadow, normalcolor, x, y, character);
+}
+inline void DCanvas::DrawCharCleanShadowMove (int normalcolor, int x, int y, byte character) const
+{
+	CharSWrapper (ETWrapper_Shadow, normalcolor,
+		(x - 160) * CleanXfac + width / 2,
+		(y - 100) * CleanYfac + height / 2,
+		character);
+}
+
+// DrawPatch
 inline void DCanvas::DrawPatch (const patch_t *patch, int x, int y) const
 {
 	DrawWrapper (EWrapper_Normal, patch, x, y);
