@@ -17,7 +17,7 @@
 // GNU General Public License for more details.
 //
 // DESCRIPTION:
-//	V_TEXT
+//   Draws text to a canvas. Also has a text line-breaker thingy.
 //
 //-----------------------------------------------------------------------------
 
@@ -29,82 +29,36 @@
 #include "v_font.h"
 
 struct brokenlines_s {
-	int width;
+	short width;
+	byte nlterminated;
+	byte pad;
 	char *string;
 };
 typedef struct brokenlines_s brokenlines_t;
 
-/*enum EColorRange
-{
-	CR_BRICK,
-	CR_TAN,
-	CR_GRAY,
-	CR_GREY = CR_GRAY,
-	CR_GREEN,
-	CR_BROWN,
-	CR_GOLD,
-	CR_RED,
-	CR_BLUE,
-	CR_ORANGE,
-	CR_WHITE,
-	CR_YELLOW,
+#define TEXTCOLOR_ESCAPE	'\x1c'
 
-	// [AM] Extended ZDoom colors.  Not all of these actually work yet.
-	CR_UNTRANSLATED,
-	CR_BLACK,
-	CR_LIGHTBLUE,
-	CR_CREAM,
-	CR_OLIVE,
-	CR_DARKGREEN,
-	CR_DARKRED,
-	CR_DARKBROWN,
-	CR_PURPLE,
-	CR_DARKGRAY,
-	CR_DARKGREY = CR_DARKGRAY,
-	CR_CYAN,
-	NUM_TEXT_COLORS
-};*/
+#define TEXTCOLOR_BRICK		"\x1c""A"
+#define TEXTCOLOR_TAN		"\x1c""B"
+#define TEXTCOLOR_GRAY		"\x1c""C"
+#define TEXTCOLOR_GREY		"\x1c""C"
+#define TEXTCOLOR_GREEN		"\x1c""D"
+#define TEXTCOLOR_BROWN		"\x1c""E"
+#define TEXTCOLOR_GOLD		"\x1c""F"
+#define TEXTCOLOR_RED		"\x1c""G"
+#define TEXTCOLOR_BLUE		"\x1c""H"
+#define TEXTCOLOR_ORANGE	"\x1c""I"
+#define TEXTCOLOR_WHITE		"\x1c""J"
+#define TEXTCOLOR_YELLOW	"\x1c""k"
 
-#define TEXTCOLOR_ESCAPE	'\x8a'
+#define TEXTCOLOR_NORMAL	"\x1c-"
+#define TEXTCOLOR_BOLD		"\x1c+"
 
-#define TEXTCOLOR_BRICK		"\x8aA"
-#define TEXTCOLOR_TAN		"\x8aB"
-#define TEXTCOLOR_GRAY		"\x8aC"
-#define TEXTCOLOR_GREY		"\x8aC"
-#define TEXTCOLOR_GREEN		"\x8aD"
-#define TEXTCOLOR_BROWN		"\x8aE"
-#define TEXTCOLOR_GOLD		"\x8aF"
-#define TEXTCOLOR_RED		"\x8aG"
-#define TEXTCOLOR_BLUE		"\x8aH"
-#define TEXTCOLOR_ORANGE	"\x8aI"
-#define TEXTCOLOR_WHITE		"\x8aJ"
-#define TEXTCOLOR_YELLOW	"\x8aK"
-
-// [AM] Extended ZDoom colors.  Not all of these actually work yet.
-#define TEXTCOLOR_UNTRANSLATED	"\x8aL"
-#define TEXTCOLOR_BLACK		"\x8aM"
-#define TEXTCOLOR_LIGHTBLUE	"\x8aN"
-#define TEXTCOLOR_CREAM		"\x8aO"
-#define TEXTCOLOR_OLIVE		"\x8aP"
-#define TEXTCOLOR_DARKGREEN	"\x8aQ"
-#define TEXTCOLOR_DARKRED	"\x8aR"
-#define TEXTCOLOR_DARKBROWN	"\x8aS"
-#define TEXTCOLOR_PURPLE	"\x8aT"
-#define TEXTCOLOR_DARKGRAY	"\x8aU"
-#define TEXTCOLOR_DARKGREY	"\x8aU"
-#define TEXTCOLOR_CYAN		"\x8aV"
-
-#define TEXTCOLOR_NORMAL	"\x8a-"
-#define TEXTCOLOR_BOLD		"\x8a+"
-
-int V_StringWidth (const byte *str);
-inline int V_StringWidth (const char *str) { return V_StringWidth ((const byte *)str); }
-
-brokenlines_t *V_BreakLines (int maxwidth, const byte *str);
+brokenlines_t *V_BreakLines (int maxwidth, const byte *str, bool keepspace=false);
 void V_FreeBrokenLines (brokenlines_t *lines);
-inline brokenlines_t *V_BreakLines (int maxwidth, const char *str) { return V_BreakLines (maxwidth, (const byte *)str); }
-
-void V_InitConChars (byte transcolor);
+inline brokenlines_t *V_BreakLines (int maxwidth, const char *str, bool keepspace=false)
+{
+	return V_BreakLines (maxwidth, (const byte *)str, keepspace);
+}
 
 #endif //__V_TEXT_H__
-

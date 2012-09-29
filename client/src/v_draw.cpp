@@ -915,6 +915,625 @@ void DCanvas::GetBlock (int x, int y, int _width, int _height, byte *dest) const
 	}
 }
 
+void DCanvas::DrawMaskedBlock (int x, int y, int _width, int _height,
+	const byte *src, const byte *colors) const
+{
+	int srcpitch = _width;
+	int destpitch;
+	byte *dest;
+
+	if (ClipBox (x, y, _width, _height, src, srcpitch))
+	{
+		return;		// Nothing to draw
+	}
+
+	destpitch = this->pitch;
+	dest = this->buffer + y*destpitch + x;
+
+	if (colors != NULL)
+	{
+		do
+		{
+			int i, j;
+
+			i = _width;
+			j = 0;
+
+			do
+			{
+				byte val = src[j];
+				if (val != 0)
+				{
+					dest[j] = colors[val];
+				}
+			} while (++j, --i);
+			dest += destpitch;
+			src += srcpitch;
+		}
+		while (--_height);
+	}
+	else
+	{
+		do
+		{
+			int i, j;
+
+			i = _width;
+			j = 0;
+
+			do
+			{
+				byte val = src[j];
+				if (val != 0)
+				{
+					dest[j] = val;
+				}
+			} while (++j, --i);
+			dest += destpitch;
+			src += srcpitch;
+		}
+		while (--_height);
+	}
+}
+
+void DCanvas::ScaleMaskedBlock (int x, int y, int _width, int _height,
+	int dwidth, int dheight, const byte *src, const byte *colors) const
+{
+	byte *dest;
+	int srcpitch;
+	int destpitch;
+	fixed_t err;
+	fixed_t xinc, yinc;
+	fixed_t xstart;
+
+	if (dwidth == _width && dheight == _height)
+	{
+		DrawMaskedBlock (x, y, _width, _height, src, colors);
+		return;
+	}
+
+	srcpitch = _width;
+
+	if (ClipScaleBox (x, y, _width, _height, dwidth, dheight, src, srcpitch, xinc, yinc, xstart, err))
+	{
+		return;		// Nothing to draw
+	}
+
+	destpitch = this->pitch;
+	dest = this->buffer + y*destpitch + x;
+
+	if (colors != NULL)
+	{
+		do
+		{
+			int i, x;
+
+			i = 0;
+			x = xstart;
+
+			do
+			{
+				byte in = src[x >> FRACBITS];
+				if (in)
+				{
+					dest[i] = colors[in];
+				}
+				x += xinc;
+			} while (++i < dwidth);
+			dest += destpitch;
+			err += yinc;
+			while (err >= FRACUNIT)
+			{
+				src += srcpitch;
+				err -= FRACUNIT;
+			}
+		}
+		while (--dheight);
+	}
+	else
+	{
+		do
+		{
+			int i, x;
+
+			i = 0;
+			x = xstart;
+
+			do
+			{
+				byte in = src[x >> FRACBITS];
+				if (in)
+				{
+					dest[i] = in;
+				}
+				x += xinc;
+			} while (++i < dwidth);
+			dest += destpitch;
+			err += yinc;
+			while (err >= FRACUNIT)
+			{
+				src += srcpitch;
+				err -= FRACUNIT;
+			}
+		}
+		while (--dheight);
+	}
+}
+
+void DCanvas::DrawTranslucentMaskedBlock (int x, int y, int _width, int _height,
+	const byte *src, const byte *colors, fixed_t fade) const
+{
+	int srcpitch = _width;
+	int destpitch;
+	byte *dest;
+
+	if (ClipBox (x, y, _width, _height, src, srcpitch))
+	{
+		return;		// Nothing to draw
+	}
+
+	unsigned int *fg2rgb, *bg2rgb;
+
+	{
+		fixed_t fglevel, bglevel;
+
+		fglevel = fade & ~0x3ff;
+		bglevel = FRACUNIT - fglevel;
+		fg2rgb = Col2RGB8[fglevel>>10];
+		bg2rgb = Col2RGB8[bglevel>>10];
+	}
+
+	destpitch = this->pitch;
+	dest = this->buffer + y*destpitch + x;
+
+	if (colors != NULL)
+	{
+		do
+		{
+			int i, j;
+
+			i = _width;
+			j = 0;
+
+			do
+			{
+				byte val = src[j];
+				if (val)
+				{
+					DWORD fg;
+					fg = (fg2rgb[colors[val]] + bg2rgb[dest[j]]) | 0x1f07c1f;
+					dest[j] = RGB32k[0][0][fg & (fg>>15)];
+				}
+			} while (++j, --i);
+			dest += destpitch;
+			src += srcpitch;
+		}
+		while (--_height);
+	}
+	else
+	{
+		do
+		{
+			int i, j;
+
+			i = _width;
+			j = 0;
+
+			do
+			{
+				byte val = src[j];
+				if (val)
+				{
+					DWORD fg;
+					fg = (fg2rgb[val] + bg2rgb[dest[j]]) | 0x1f07c1f;
+					dest[j] = RGB32k[0][0][fg & (fg>>15)];
+				}
+			} while (++j, --i);
+			dest += destpitch;
+			src += srcpitch;
+		}
+		while (--_height);
+	}
+}
+
+void DCanvas::ScaleTranslucentMaskedBlock (int x, int y, int _width, int _height,
+	int dwidth, int dheight, const byte *src, const byte *colors, fixed_t fade) const
+{
+	byte *dest;
+	int srcpitch;
+	int destpitch;
+	fixed_t err;
+	fixed_t xinc, yinc;
+	fixed_t xstart;
+
+	if (dwidth == _width && dheight == _height)
+	{
+		DrawTranslucentMaskedBlock (x, y, _width, _height, src, colors, fade);
+		return;
+	}
+
+	srcpitch = _width;
+
+	if (ClipScaleBox (x, y, _width, _height, dwidth, dheight, src, srcpitch, xinc, yinc, xstart, err))
+	{
+		return;		// Nothing to draw
+	}
+
+	unsigned int *fg2rgb, *bg2rgb;
+
+	{
+		fixed_t fglevel, bglevel;
+
+		fglevel = fade & ~0x3ff;
+		bglevel = FRACUNIT - fglevel;
+		fg2rgb = Col2RGB8[fglevel>>10];
+		bg2rgb = Col2RGB8[bglevel>>10];
+	}
+
+	destpitch = this->pitch;
+	dest = this->buffer + y*destpitch + x;
+
+	if (colors != NULL)
+	{
+		do
+		{
+			int i, x;
+
+			i = 0;
+			x = xstart;
+
+			do
+			{
+				byte in = src[x >> FRACBITS];
+				if (in)
+				{
+					DWORD fg;
+					fg = (fg2rgb[colors[in]] + bg2rgb[dest[i]]) | 0x1f07c1f;
+					dest[i] = RGB32k[0][0][fg & (fg>>15)];
+				}
+				x += xinc;
+			} while (++i < dwidth);
+			dest += destpitch;
+			err += yinc;
+			while (err >= FRACUNIT)
+			{
+				src += srcpitch;
+				err -= FRACUNIT;
+			}
+		}
+		while (--dheight);
+	}
+	else
+	{
+		do
+		{
+			int i, x;
+
+			i = 0;
+			x = xstart;
+
+			do
+			{
+				byte in = src[x >> FRACBITS];
+				if (in)
+				{
+					DWORD fg;
+					fg = (fg2rgb[in] + bg2rgb[dest[i]]) | 0x1f07c1f;
+					dest[i] = RGB32k[0][0][fg & (fg>>15)];
+				}
+				x += xinc;
+			} while (++i < dwidth);
+			dest += destpitch;
+			err += yinc;
+			while (err >= FRACUNIT)
+			{
+				src += srcpitch;
+				err -= FRACUNIT;
+			}
+		}
+		while (--dheight);
+	}
+}
+
+void DCanvas::DrawShadowedMaskedBlock (int x, int y, int _width, int _height,
+	const byte *src, const byte *colors, fixed_t shade) const
+{
+	int srcpitch = _width;
+	int destpitch;
+	byte *dest;
+
+	if (ClipBox (x, y, _width, _height, src, srcpitch))
+	{
+		return;		// Nothing to draw
+	}
+
+	if (y + _height + 2 >= this->height || x + _width + 2 >= this->width)
+	{
+		// Shadow extends past edge of canvas
+		DrawMaskedBlock (x, y, srcpitch, _height, src, colors);
+		DrawShadowBlock (x+2, y+2, srcpitch, _height, src, shade);
+		return;
+	}
+
+	unsigned int fg, *bg2rgb;
+
+	{
+		fixed_t fglevel, bglevel;
+
+		fglevel = shade & ~0x3ff;
+		bglevel = FRACUNIT - fglevel;
+		fg = Col2RGB8[fglevel>>10][0];
+		bg2rgb = Col2RGB8[bglevel>>10];
+	}
+
+	destpitch = this->pitch;
+	dest = this->buffer + y*this->pitch + x;
+
+	if (colors != NULL)
+	{
+		do
+		{
+			int i, j;
+
+			i = _width;
+			j = 0;
+
+			do
+			{
+				byte val = src[j];
+				if (val)
+				{
+					DWORD bg = bg2rgb[dest[j+destpitch*2+2]];
+					bg = (fg + bg) | 0x1f07c1f;
+					dest[j+destpitch*2+2] = RGB32k[0][0][bg & (bg>>15)];
+					dest[j] = colors[val];
+				}
+			} while (++j, --i);
+			dest += destpitch;
+			src += srcpitch;
+		}
+		while (--_height);
+	}
+	else
+	{
+		do
+		{
+			int i, j;
+
+			i = _width;
+			j = 0;
+
+			do
+			{
+				byte val = src[j];
+				if (val)
+				{
+					DWORD bg = bg2rgb[dest[j+destpitch*2+2]];
+					bg = (fg + bg) | 0x1f07c1f;
+					dest[j+destpitch*2+2] = RGB32k[0][0][bg & (bg>>15)];
+					dest[j] = val;
+				}
+			} while (++j, --i);
+			dest += destpitch;
+			src += srcpitch;
+		}
+		while (--_height);
+	}
+}
+
+void DCanvas::ScaleShadowedMaskedBlock (int x, int y, int _width, int _height,
+	int dwidth, int dheight, const byte *src, const byte *colors, fixed_t shade) const
+{
+	byte *dest;
+	int srcpitch;
+	int destpitch;
+	fixed_t err;
+	fixed_t xinc, yinc;
+	fixed_t xstart;
+
+	if (dwidth == _width && dheight == _height)
+	{
+		DrawShadowedMaskedBlock (x, y, _width, _height, src, colors, shade);
+		return;
+	}
+
+	srcpitch = _width;
+
+	if (ClipScaleBox (x, y, _width, _height, dwidth, dheight, src, srcpitch, xinc, yinc, xstart, err))
+	{
+		return;		// Nothing to draw
+	}
+
+	if (y + dheight + 2 >= this->height || x + dwidth + 2 >= this->width)
+	{
+		// Shadow extends past end of canvas
+		ScaleMaskedBlock (x, y, srcpitch, _height, dwidth, dheight, src, colors);
+		ScaleShadowBlock (x+2, y+2, srcpitch, _height, dwidth, dheight, src, shade);
+		return;
+	}
+
+	unsigned int fg, *bg2rgb;
+
+	{
+		fixed_t fglevel, bglevel;
+
+		fglevel = shade & ~0x3ff;
+		bglevel = FRACUNIT - fglevel;
+		fg = Col2RGB8[fglevel>>10][0];
+		bg2rgb = Col2RGB8[bglevel>>10];
+	}
+
+	destpitch = this->pitch;
+	dest = this->buffer + y*destpitch + x;
+
+	if (colors != NULL)
+	{
+		do
+		{
+			int i, x;
+
+			i = 0;
+			x = xstart;
+
+			do
+			{
+				byte in = src[x >> FRACBITS];
+				if (in)
+				{
+					DWORD bg;
+					bg = (fg + bg2rgb[dest[i+destpitch*2+2]]) | 0x1f07c1f;
+					dest[i+destpitch*2+2] = RGB32k[0][0][bg & (bg>>15)];
+					dest[i] = colors[in];
+				}
+				x += xinc;
+			} while (++i < dwidth);
+			dest += destpitch;
+			err += yinc;
+			while (err >= FRACUNIT)
+			{
+				src += _width;
+				err -= FRACUNIT;
+			}
+		}
+		while (--dheight);
+	}
+	else
+	{
+		do
+		{
+			int i, x;
+
+			i = 0;
+			x = xstart;
+
+			do
+			{
+				byte in = src[x >> FRACBITS];
+				if (in)
+				{
+					DWORD bg;
+					bg = (fg + bg2rgb[dest[i+destpitch*2+2]]) | 0x1f07c1f;
+					dest[i+destpitch*2+2] = RGB32k[0][0][bg & (bg>>15)];
+					dest[i] = in;
+				}
+				x += xinc;
+			} while (++i < dwidth);
+			dest += destpitch;
+			err += yinc;
+			while (err >= FRACUNIT)
+			{
+				src += _width;
+				err -= FRACUNIT;
+			}
+		}
+		while (--dheight);
+	}
+}
+
+void DCanvas::DrawShadowBlock (int x, int y, int w, int h, const byte *src, fixed_t shade) const
+{
+	int srcpitch = w;
+
+	if (ClipBox (x, y, w, h, src, srcpitch))
+	{
+		return;		// Nothing to draw
+	}
+
+	unsigned int fg, *bg2rgb;
+
+	{
+		fixed_t fglevel, bglevel;
+
+		fglevel = shade & ~0x3ff;
+		bglevel = FRACUNIT - fglevel;
+		fg = Col2RGB8[fglevel>>10][0];
+		bg2rgb = Col2RGB8[bglevel>>10];
+	}
+
+	int destpitch = this->pitch;
+	BYTE *dest = this->buffer + y*this->pitch + x;
+
+	do
+	{
+		int i, j;
+
+		i = w;
+		j = 0;
+
+		do
+		{
+			byte val = src[j];
+			if (val)
+			{
+				DWORD bg = bg2rgb[dest[j]];
+				bg = (fg + bg) | 0x1f07c1f;
+				dest[j] = RGB32k[0][0][bg & (bg>>15)];
+			}
+		} while (++j, --i);
+		dest += destpitch;
+		src += srcpitch;
+	}
+	while (--h);
+}
+
+void DCanvas::ScaleShadowBlock (int x, int y, int w, int h, int dwidth, int dheight, const byte *src, fixed_t shade) const
+{
+	unsigned int fg, *bg2rgb;
+	byte *dest;
+	int srcpitch;
+	int destpitch;
+	fixed_t err;
+	fixed_t xinc, yinc;
+	fixed_t xstart;
+
+	srcpitch = w;
+
+	if (ClipScaleBox (x, y, w, h, dwidth, dheight, src, srcpitch, xinc, yinc, xstart, err))
+	{
+		return;		// Nothing to draw
+	}
+
+	{
+		fixed_t fglevel, bglevel;
+
+		fglevel = shade & ~0x3ff;
+		bglevel = FRACUNIT - fglevel;
+		fg = Col2RGB8[fglevel>>10][0];
+		bg2rgb = Col2RGB8[bglevel>>10];
+	}
+
+	destpitch = this->pitch;
+	dest = this->buffer + y*destpitch + x;
+
+	do
+	{
+		int i, x;
+
+		i = 0;
+		x = xstart;
+
+		do
+		{
+			byte in = src[x >> FRACBITS];
+			if (in)
+			{
+				DWORD bg;
+				bg = (fg + bg2rgb[dest[i]]) | 0x1f07c1f;
+				dest[i] = RGB32k[0][0][bg & (bg>>15)];
+			}
+			x += xinc;
+		} while (++i < dwidth);
+		dest += destpitch;
+		err += yinc;
+		while (err >= FRACUNIT)
+		{
+			src += w;
+			err -= FRACUNIT;
+		}
+	}
+	while (--dheight);
+}
+
 int V_GetColorFromString (const DWORD *palette, const char *cstr)
 {
 	int c[3], i, p;
@@ -949,5 +1568,176 @@ int V_GetColorFromString (const DWORD *palette, const char *cstr)
 			   ((c[2] >> 8));
 }
 
-VERSION_CONTROL (v_draw_cpp, "$Id$")
+void DCanvas::DrawAlphaMaskedBlock (int x, int y, int _width, int _height,
+	const byte *src, int color) const
+{
+	int srcpitch = _width;
+	int destpitch;
+	byte *dest;
 
+	if (ClipBox (x, y, _width, _height, src, srcpitch))
+	{
+		return;		// Nothing to draw
+	}
+
+	destpitch = this->pitch;
+	dest = this->buffer + y*destpitch + x;
+	unsigned int *fgstart = &Col2RGB8[0][color];
+
+	do
+	{
+		int i, j;
+
+		i = _width;
+		j = 0;
+
+		do
+		{
+			DWORD val = src[j];
+			if (val)
+			{
+				val = (val + 1) >> 2;
+				DWORD fg = fgstart[val<<8];
+				val = Col2RGB8[64-val][dest[j]];
+				val = (val + fg) | 0x1f07c1f;
+				dest[j] = RGB32k[0][0][val & (val>>15)];
+			}
+		} while (++j, --i);
+		src += srcpitch;
+		dest += destpitch;
+	}
+	while (--_height);
+}
+
+void DCanvas::ScaleAlphaMaskedBlock (int x, int y, int _width, int _height,
+	int dwidth, int dheight, const byte *src, int color) const
+{
+	byte *dest;
+	int srcpitch;
+	int destpitch;
+	fixed_t err;
+	fixed_t xinc, yinc;
+	fixed_t xstart;
+
+	if (dwidth == _width && dheight == _height)
+	{
+		DrawAlphaMaskedBlock (x, y, _width, _height, src, color);
+		return;
+	}
+
+	srcpitch = _width;
+
+	if (ClipScaleBox (x, y, _width, _height, dwidth, dheight, src, srcpitch, xinc, yinc, xstart, err))
+	{
+		return;		// Nothing to draw
+	}
+
+	destpitch = this->pitch;
+	dest = this->buffer + y*destpitch + x;
+
+	unsigned int *fgstart = &Col2RGB8[0][color];
+
+	do
+	{
+		int i, x;
+
+		i = 0;
+		x = xstart;
+
+		do
+		{
+			DWORD val = src[x >> FRACBITS];
+			if (val)
+			{
+				val = (val + 2) >> 2;
+				DWORD fg = fgstart[val<<8];
+				val = Col2RGB8[64-val][dest[i]];
+				val = (fg + val) | 0x1f07c1f;
+				dest[i] = RGB32k[0][0][val & (val>>15)];
+			}
+			x += xinc;
+		} while (++i < dwidth);
+		dest += destpitch;
+		err += yinc;
+		while (err >= FRACUNIT)
+		{
+			src += srcpitch;
+			err -= FRACUNIT;
+		}
+	}
+	while (--dheight);
+}
+
+// Returns true if the box was completely clipped. False otherwise.
+bool DCanvas::ClipBox (int &x, int &y, int &w, int &h, const byte *&src, const int srcpitch) const
+{
+	if (x >= this->width || y >= this->height || x+w <= 0 || y+h <= 0)
+	{ // Completely clipped off screen
+		return true;
+	}
+	if (x < 0)				// clip left edge
+	{
+		src -= x;
+		w += x;
+		x = 0;
+	}
+	if (x+w > this->width)		// clip right edge
+	{
+		w = this->width - x;
+	}
+	if (y < 0)				// clip top edge
+	{
+		src -= y*srcpitch;
+		h += y;
+		y = 0;
+	}
+	if (y+h > this->height)		// clip bottom edge
+	{
+		h = this->height - y;
+	}
+	return false;
+}
+
+bool DCanvas::ClipScaleBox (
+	int &x, int &y,
+	int &w, int &h,
+	int &dw, int &dh,
+	const byte *&src, const int srcpitch,
+	fixed_t &xinc, fixed_t &yinc,
+	fixed_t &xstart, fixed_t &ystart) const
+{
+	if (x >= this->width || y >= this->height || x+dw <= 0 || y+dh <= 0)
+	{ // Completely clipped off screen
+		return true;
+	}
+
+	xinc = (w << FRACBITS) / dw;
+	yinc = (h << FRACBITS) / dh;
+	xstart = ystart = 0;
+
+	if (x < 0)				// clip left edge
+	{
+		dw += x;
+		xstart = -x*xinc;
+		x = 0;
+	}
+	if (x+dw > this->width)		// clip right edge
+	{
+		dw = this->width - x;
+	}
+	if (y < 0)				// clip top edge
+	{
+		dh += y;
+		ystart = -y*yinc;
+		src += (ystart>>FRACBITS)*srcpitch;
+		ystart &= FRACUNIT-1;
+		y = 0;
+	}
+	if (y+dh > this->height)		// clip bottom edge
+	{
+		dh = this->height - y;
+	}
+	return false;
+}
+
+VERSION_CONTROL (v_draw_cpp, "$Id$")

@@ -822,17 +822,14 @@ void C_DrawConsole (void)
 
 		if (ConBottom >= 12)
 		{
-			screen->PrintStr (screen->width - 8 - strlen(VersionString) * 8,
-						ConBottom - 12,
-						VersionString, strlen (VersionString));
+			screen->DrawText(CR_ORANGE, screen->width - 8 - strlen(VersionString) * 8,
+			                 ConBottom - 12, VersionString);
 
-            // Download progress bar hack
-            if (gamestate == GS_DOWNLOAD)
-            {
-                screen->PrintStr (left + 2,
-						ConBottom - 10,
-						DownloadStr.c_str(), DownloadStr.length());
-            }
+			// Download progress bar hack
+			if (gamestate == GS_DOWNLOAD)
+			{
+				screen->DrawText(CR_ORANGE, left + 2, ConBottom - 10, DownloadStr.c_str());
+			}
 
 			if (TickerMax)
 			{
@@ -857,7 +854,7 @@ void C_DrawConsole (void)
 					i = tickend;
 				tickstr[i] = -125;
 				sprintf (tickstr + tickend + 3, "%u%%", (TickerAt * 100) / TickerMax);
-				screen->PrintStr (8, ConBottom - 12, tickstr, strlen (tickstr));
+				screen->DrawText(CR_ORANGE, 8, ConBottom - 12, tickstr);
 			}
 		}
 	}
@@ -869,7 +866,7 @@ void C_DrawConsole (void)
 	{
 		for (; lines > 1; lines--)
 		{
-			screen->PrintStr (left, offset + lines * 8, (char*)&zap[2], zap[1]);
+			screen->DrawText(CR_ORANGE, left, offset + lines * 8, (char*)&zap[2]);
 			zap -= ConCols + 2;
 		}
 		if (ConBottom >= 20)
@@ -877,16 +874,13 @@ void C_DrawConsole (void)
 //			if (gamestate == GS_STARTUP)
 //				screen->PrintStr (8, ConBottom - 20, DoomStartupTitle, strlen (DoomStartupTitle));
 //			else
-			screen->PrintStr (left, ConBottom - 20, "\x8c", 1);
-#define MIN(a,b) (((a)<(b))?(a):(b))
-			screen->PrintStr (left + 8, ConBottom - 20,
-						(char *)&CmdLine[2+CmdLine[259]],
-						MIN(CmdLine[0] - CmdLine[259], ConCols - 1));
-#undef MIN
+			screen->DrawText(CR_ORANGE, left, ConBottom - 20, "\x8c");
+			screen->DrawText(CR_ORANGE, left + 8, ConBottom - 20,
+			                 (char *)&CmdLine[2+CmdLine[259]]);
 			if (cursoron)
 			{
-				screen->PrintStr (left + 8 + (CmdLine[1] - CmdLine[259])* 8,
-							ConBottom - 20, "\xb", 1);
+				screen->DrawText(CR_ORANGE, left + 8 + (CmdLine[1] - CmdLine[259])* 8,
+							ConBottom - 20, "\xb");
 			}
 			if (RowAdjust && ConBottom >= 28)
 			{
@@ -895,7 +889,7 @@ void C_DrawConsole (void)
 				// Indicate that the view has been scrolled up (10)
 				// and if we can scroll no further (12)
 				c = (SkipRows + RowAdjust + ConBottom/8 < ConRows) ? 10 : 12;
-				screen->PrintStr (0, ConBottom - 28, &c, 1);
+				screen->DrawText(CR_ORANGE, 0, ConBottom - 28, &c);
 			}
 		}
 	}

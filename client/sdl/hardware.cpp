@@ -155,8 +155,10 @@ void I_FinishUpdate ()
 			chars = sprintf (fpsbuff, "%lld ms (%d fps)",
 				howlong, lastcount);
             #endif
+
 			screen->Clear (0, screen->height - 8, chars * 8, screen->height, 0);
-			screen->PrintStr (0, screen->height - 8, (char *)&fpsbuff[0], chars);
+			screen->DrawText(CR_WHITE, 0, screen->height - 8, (char *)&fpsbuff[0]);
+
 			if (lastsec < ms / 1000)
 			{
 				lastcount = framecount / (ms/1000 - lastsec);

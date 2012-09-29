@@ -752,8 +752,13 @@ void V_Init (void)
         AddCommandString("checkres");
 
 	V_InitPalette();
-	V_InitConChars (0xf7);
 	ConFont = new FSingleLumpFont ("ConsoleFont", W_GetNumForName ("CONFONT"));
+	screen->SetFont(ConFont);
+
+	// Not really...
+	SmallFont = new FSingleLumpFont ("SmallFont", W_GetNumForName ("CONFONT"));
+	BigFont = new FSingleLumpFont ("BigFont", W_GetNumForName ("CONFONT"));
+
 	C_InitConsole (screen->width, screen->height, true);
 }
 

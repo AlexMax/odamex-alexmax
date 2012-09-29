@@ -396,7 +396,7 @@ void ST_voteDraw (int y) {
 	}
 
 	size_t x1, x2;
-	x1 = (screen->width - V_StringWidth(result_string.c_str()) * xscale) >> 1;
+	x1 = (screen->width - screen->StringWidth(result_string.c_str()) * xscale) >> 1;
 	if (hud_scale) {
 		screen->DrawTextClean(result_color, x1, y, result_string.c_str());
 	} else {

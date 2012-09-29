@@ -1252,7 +1252,7 @@ void M_SwitchMenu (menu_t *menu)
 			item = menu->items + i;
 			if (item->type != whitetext && item->type != redtext)
 			{
-				thiswidth = V_StringWidth (item->label);
+				thiswidth = screen->StringWidth(item->label);
 				if (thiswidth > widest)
 					widest = thiswidth;
 			}
@@ -1369,7 +1369,7 @@ void M_OptDrawer (void)
 		}
 		else
 		{
-			width = V_StringWidth (item->label);
+			width = screen->StringWidth(item->label);
 			switch (item->type)
 			{
 			case more:

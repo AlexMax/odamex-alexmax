@@ -69,8 +69,14 @@ public:
 		EWrapper_Translated = 2,	// Color translates the patch and draws it
 		EWrapper_TlatedLucent = 3,	// Translates the patch and mixes it with the background
 		EWrapper_Colored = 4,		// Fills the patch area with a solid color
-		EWrapper_ColoredLucent = 5	// Mixes a solid color in the patch area with the background
+		EWrapper_ColoredLucent = 5,	// Mixes a solid color in the patch area with the background
+
+		ETWrapper_Normal = 0,		// Normal text
+		ETWrapper_Translucent = 1,	// Translucent text
+		ETWrapper_Shadow = 2		// Shadowed text
 	};
+
+	FFont *Font;
 
 	DCanvas ();
 	virtual ~DCanvas ();
@@ -93,6 +99,18 @@ public:
 	// Draw a linear block of pixels into the view buffer.
 	void DrawBlock (int x, int y, int width, int height, const byte *src) const;
 
+	// Draw a masked, translated block of pixels (e.g. chars stored in an FFont)
+	virtual void DrawMaskedBlock (int x, int y, int width, int height, const byte *src, const byte *colors) const;
+	virtual void ScaleMaskedBlock (int x, int y, int width, int height, int dwidth, int dheight, const byte *src, const byte *colors) const;
+	virtual void DrawTranslucentMaskedBlock (int x, int y, int width, int height, const byte *src, const byte *colors, fixed_t fade) const;
+	virtual void ScaleTranslucentMaskedBlock (int x, int y, int width, int height, int dwidth, int dheight, const byte *src, const byte *colors, fixed_t fade) const;
+	virtual void DrawShadowedMaskedBlock (int x, int y, int width, int height, const byte *src, const byte *colors, fixed_t shade) const;
+	virtual void ScaleShadowedMaskedBlock (int x, int y, int width, int height, int dwidth, int dheight, const byte *src, const byte *colors, fixed_t shade) const;
+	virtual void DrawAlphaMaskedBlock (int x, int y, int width, int height, const byte *src, int color) const;
+	virtual void ScaleAlphaMaskedBlock (int x, int y, int width, int height, int dwidth, int dheight, const byte *src, int color) const;
+	virtual void DrawShadowBlock (int x, int y, int width, int height, const byte *src, fixed_t shade) const;
+	virtual void ScaleShadowBlock (int x, int y, int width, int height, int dwidth, int dheight, const byte *src, fixed_t shade) const;
+
 	// Reads a linear block of pixels into the view buffer.
 	void GetBlock (int x, int y, int width, int height, byte *dest) const;
 
@@ -114,11 +132,15 @@ public:
 	void DetachPalette ();
 
 	// Text drawing functions
-	// Output a line of text using the console font
-	void PrintStr (int x, int y, const char *s, int count) const;
-	void PrintStr2 (int x, int y, const char *s, int count) const;
 
-	// Output some text with wad heads-up font
+	// Set the font
+	virtual void SetFont (FFont *font);
+
+	// Return width of string in pixels (unscaled)
+	int StringWidth (const byte *str) const;
+	int StringWidth (const char *str) const;
+
+	// Output some text with the current font
 	inline void DrawText (int normalcolor, int x, int y, const byte *string) const;
 	inline void DrawTextLuc (int normalcolor, int x, int y, const byte *string) const;
 	inline void DrawTextClean (int normalcolor, int x, int y, const byte *string) const;		// Does not adjust x and y
@@ -181,15 +203,22 @@ public:
 	inline void DrawColoredLucentPatchCleanNoMove (const patch_t *patch, int x, int y) const;
 
 protected:
-	void TextWrapper (EWrapperCode drawer, int normalcolor, int x, int y, const byte *string) const;
-	void TextSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, const byte *string) const;
-	void TextSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, const byte *string, int scalex, int scaley) const;
+	virtual void TextWrapper (EWrapperCode drawer, int normalcolor, int x, int y, const byte *string) const;
+	virtual void TextSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, const byte *string) const;
+	virtual void TextSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, const byte *string, int scalex, int scaley) const;
+
+	virtual void CharWrapper (EWrapperCode drawer, int normalcolor, int x, int y, byte character) const;
+	virtual void CharSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, byte character) const;
+	virtual void CharSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, byte character, int scalex, int scaley) const;
 
 	void DrawWrapper (EWrapperCode drawer, const patch_t *patch, int x, int y) const;
 	void DrawSWrapper (EWrapperCode drawer, const patch_t *patch, int x, int y, int destwidth, int destheight) const;
 	void DrawIWrapper (EWrapperCode drawer, const patch_t *patch, int x, int y) const;
 	void DrawCWrapper (EWrapperCode drawer, const patch_t *patch, int x, int y) const;
 	void DrawCNMWrapper (EWrapperCode drawer, const patch_t *patch, int x, int y) const;
+
+	bool ClipBox (int &left, int &top, int &width, int &height, const byte *&src, const int srcpitch) const;
+	bool ClipScaleBox (int &left, int &top, int &width, int &height, int &dwidth, int &dheight, const byte *&src, const int srcpitch, fixed_t &xinc, fixed_t &yinc, fixed_t &xstart, fixed_t &yerr) const;
 
 	static void DrawPatchP (const byte *source, byte *dest, int count, int pitch);
 	static void DrawLucentPatchP (const byte *source, byte *dest, int count, int pitch);
@@ -230,6 +259,11 @@ protected:
 	static vdrawfunc *m_Drawfuncs;
 	static vdrawsfunc *m_Drawsfuncs;
 };
+
+inline int DCanvas::StringWidth (const char *str) const
+{
+	return StringWidth ((const byte *)str);
+}
 
 inline void DCanvas::DrawText (int normalcolor, int x, int y, const byte *string) const
 {

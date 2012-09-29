@@ -711,7 +711,7 @@ void M_DrawSave(void)
 
 	if (genStringEnter)
 	{
-		i = V_StringWidth(savegamestrings[saveSlot]);
+		i = screen->StringWidth(savegamestrings[saveSlot]);
 		screen->DrawTextCleanMove (CR_RED, LoadDef.x + i, LoadDef.y+LINEHEIGHT*saveSlot, "_");
 	}
 }
@@ -1218,7 +1218,7 @@ static void M_PlayerSetupDrawer (void)
 
 	// Draw cursor for either of the above
 	if (genStringEnter)
-		screen->DrawTextCleanMove (CR_RED, PSetupDef.x + V_StringWidth(savegamestrings[saveSlot]) + 56, PSetupDef.y + ((saveSlot == 0) ? 0 : LINEHEIGHT), "_");
+		screen->DrawTextCleanMove (CR_RED, PSetupDef.x + screen->StringWidth(savegamestrings[saveSlot]) + 56, PSetupDef.y + ((saveSlot == 0) ? 0 : LINEHEIGHT), "_");
 
 	// Draw player character
 	{
@@ -1407,7 +1407,7 @@ static void M_PlayerSetupDrawer (void)
 	screen->DrawTextCleanMove (CR_RED, PSetupDef.x, PSetupDef.y + LINEHEIGHT*4, "Blue");
 
 	{
-		int x = V_StringWidth ("Green") + 8 + PSetupDef.x;
+		int x = screen->StringWidth("Green") + 8 + PSetupDef.x;
 		int color = V_GetColorFromString(NULL, cl_color.cstring());
 
 		M_DrawSlider (x, PSetupDef.y + LINEHEIGHT*2, 0.0f, 255.0f, RPART(color));
@@ -1418,7 +1418,7 @@ static void M_PlayerSetupDrawer (void)
 	// Draw team setting
 	{
 		team_t team = D_TeamByName(cl_team.cstring());
-		int x = V_StringWidth ("Prefered Team") + 8 + PSetupDef.x;
+		int x = screen->StringWidth("Prefered Team") + 8 + PSetupDef.x;
 		screen->DrawTextCleanMove (CR_RED, PSetupDef.x, PSetupDef.y + LINEHEIGHT, "Prefered Team");
 		screen->DrawTextCleanMove (CR_GREY, x, PSetupDef.y + LINEHEIGHT, team == TEAM_NONE ? "NONE" : team_names[team]);
 	}
@@ -1426,7 +1426,7 @@ static void M_PlayerSetupDrawer (void)
 	// Draw gender setting
 	{
 		gender_t gender = D_GenderByName(cl_gender.cstring());
-		int x = V_StringWidth ("Gender") + 8 + PSetupDef.x;
+		int x = screen->StringWidth("Gender") + 8 + PSetupDef.x;
 		screen->DrawTextCleanMove (CR_RED, PSetupDef.x, PSetupDef.y + LINEHEIGHT*5, "Gender");
 		screen->DrawTextCleanMove (CR_GREY, x, PSetupDef.y + LINEHEIGHT*5, genders[gender]);
 	}
@@ -1435,7 +1435,7 @@ static void M_PlayerSetupDrawer (void)
 	{
 		if (sv_gametype != GM_CTF) // [Toke - CTF] Dont allow skin selection if in CTF or Teamplay mode
 		{
-			int x = V_StringWidth ("Skin") + 8 + PSetupDef.x;
+			int x = screen->StringWidth("Skin") + 8 + PSetupDef.x;
 			screen->DrawTextCleanMove (CR_RED, PSetupDef.x, PSetupDef.y + LINEHEIGHT*6, "Skin");
 			screen->DrawTextCleanMove (CR_GREY, x, PSetupDef.y + LINEHEIGHT*6, cl_skin.cstring());
 		}
@@ -1443,7 +1443,7 @@ static void M_PlayerSetupDrawer (void)
 
 	// Draw autoaim setting
 	{
-		int x = V_StringWidth ("Autoaim") + 8 + PSetupDef.x;
+		int x = screen->StringWidth("Autoaim") + 8 + PSetupDef.x;
 		float aim = cl_autoaim;
 
 		screen->DrawTextCleanMove (CR_RED, PSetupDef.x, PSetupDef.y + LINEHEIGHT*7, "Autoaim");
@@ -1815,7 +1815,7 @@ bool M_Responder (event_t* ev)
 					break;
 			if (ch >= 32 && ch <= 127 &&
 				saveCharIndex < genStringLen &&
-				V_StringWidth(savegamestrings[saveSlot]) <
+				screen->StringWidth(savegamestrings[saveSlot]) <
 				(genStringLen-1)*8)
 			{
 				savegamestrings[saveSlot][saveCharIndex++] = ch;
