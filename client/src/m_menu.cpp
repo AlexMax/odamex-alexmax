@@ -1128,6 +1128,7 @@ void M_QuitDOOM (int choice)
 	sprintf (endstring, "%s\n\n%s",
 		GStrings(QUITMSG + (gametic % NUM_QUITMESSAGES)), GStrings(DOSY));
 
+	screen->SetFont(DoomFont);
 	M_StartMessage(endstring,M_QuitResponse,true);
 }
 

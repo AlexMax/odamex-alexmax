@@ -822,6 +822,7 @@ void C_DrawConsole (void)
 
 		if (ConBottom >= 12)
 		{
+			screen->SetFont(ConFont);
 			screen->DrawText(CR_ORANGE, screen->width - 8 - strlen(VersionString) * 8,
 			                 ConBottom - 12, VersionString);
 
@@ -860,10 +861,15 @@ void C_DrawConsole (void)
 	}
 
 	if (menuactive)
+	{
+		screen->SetFont(SmallFont);
 		return;
+	}
 
 	if (lines > 0)
 	{
+		screen->SetFont(ConFont);
+
 		for (; lines > 1; lines--)
 		{
 			screen->DrawText(CR_ORANGE, left, offset + lines * 8, (char*)&zap[2]);
@@ -893,6 +899,7 @@ void C_DrawConsole (void)
 			}
 		}
 	}
+	screen->SetFont(SmallFont);
 }
 
 

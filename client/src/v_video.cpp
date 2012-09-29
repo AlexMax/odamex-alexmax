@@ -66,7 +66,11 @@ IMPLEMENT_CLASS (DCanvas, DObject)
 
 int DisplayWidth, DisplayHeight, DisplayBits;
 
-FFont *SmallFont, *BigFont, *ConFont;
+// [AM] Store DoomFont and SmallFont separately.  The default Doom font is
+//      missing some glyphs and we can't legally provide look-alikes since they
+//      would fall under being a derived work.  So we keep the Doom font around
+//      to draw status messages and use our own custom SmallFont elsewhere.
+FFont *SmallFont, *BigFont, *ConFont, *DoomFont;
 
 unsigned int Col2RGB8[65][256];
 byte RGB32k[32][32][32];
@@ -499,15 +503,14 @@ BOOL V_DoModeSetup (int width, int height, int bits)
 	int basew = 320, baseh = 200;
 	
 	// Free the virtual framebuffer
-	if(screen)
+	if (screen)
 	{
 		I_FreeScreen(screen);
 		screen = NULL;
 	}
 
-	I_SetMode (width, height, bits);
-	
-	I_SetOverscan (vid_overscan);
+	I_SetMode(width, height, bits);
+	I_SetOverscan(vid_overscan);
 
 	/*
 	CleanXfac = ((height * 4)/3) / 320;
@@ -524,17 +527,17 @@ BOOL V_DoModeSetup (int width, int height, int bits)
 	// This uses the smaller of the two results. It's still not ideal but at least
 	// this allows con_scaletext to have some purpose...
 	
-    CleanXfac = width / basew; 
-    CleanYfac = height / baseh;
-    
+	CleanXfac = width / basew;
+	CleanYfac = height / baseh;
+
 	if (CleanXfac == 0 || CleanYfac == 0)
 		CleanXfac = CleanYfac = 1;
 	else
 	{
-		if (CleanXfac < CleanYfac) 
-			CleanYfac = CleanXfac; 
+		if (CleanXfac < CleanYfac)
+			CleanYfac = CleanXfac;
 		else 
-			CleanXfac = CleanYfac;		
+			CleanXfac = CleanYfac;
 	}
 
 	CleanWidth = width / CleanXfac;
@@ -546,23 +549,24 @@ BOOL V_DoModeSetup (int width, int height, int bits)
 
 	// Allocate a new virtual framebuffer
 	if (I_CheckVideoDriver("directx") && vid_fullscreen)
-		screen = I_AllocateScreen (width, height, bits, false);
+		screen = I_AllocateScreen(width, height, bits, false);
 	else
-		screen = I_AllocateScreen (width, height, bits, true);
+		screen = I_AllocateScreen(width, height, bits, true);
 
-	V_ForceBlend (0,0,0,0);
+	V_ForceBlend(0, 0, 0, 0);
 	if (bits == 8)
-		RefreshPalettes ();
+		RefreshPalettes();
 
-	R_InitColumnDrawers (screen->is8bit());
-	R_MultiresInit ();
+	screen->SetFont(SmallFont);
+	R_InitColumnDrawers(screen->is8bit());
+	R_MultiresInit();
 
 	// [SL] 2011-11-30 - Prevent the player's view angle from moving
 	I_FlushInput();
 
 //	M_RefreshModesList (); // [Toke - crap]
 
-    gotconback = false;
+	gotconback = false;
 
 	return true;
 }
@@ -702,7 +706,6 @@ void V_InitPalette (void)
 void V_Init (void)
 {
 	int width, height, bits;
-
 	width = height = bits = 0;
 
 	const char *w = Args.CheckValue ("-width");
@@ -737,29 +740,27 @@ void V_Init (void)
 
 	if (bits == 0)
 	{
-      // SoM: We have to enforce 8-bit for now
+		// SoM: We have to enforce 8-bit for now
 		//bits = (int)(vid_defbits);
-      bits = 8;
+		bits = 8;
 	}
 
-    if ((int)(autoadjust_video_settings))
-        I_ClosestResolution (&width, &height, bits);
+	if ((int)(autoadjust_video_settings))
+		I_ClosestResolution(&width, &height, bits);
 
 	if (!V_SetResolution (width, height, bits))
 		I_FatalError ("Could not set resolution to %d x %d x %d %s\n", width, height, bits,
-            (vid_fullscreen ? "FULLSCREEN" : "WINDOWED"));
+		              (vid_fullscreen ? "FULLSCREEN" : "WINDOWED"));
 	else
-        AddCommandString("checkres");
+		AddCommandString("checkres");
 
 	V_InitPalette();
-	ConFont = new FSingleLumpFont ("ConsoleFont", W_GetNumForName ("CONFONT"));
-	screen->SetFont(ConFont);
 
-	// Not really...
-	SmallFont = new FSingleLumpFont ("SmallFont", W_GetNumForName ("CONFONT"));
-	BigFont = new FSingleLumpFont ("BigFont", W_GetNumForName ("CONFONT"));
-
-	C_InitConsole (screen->width, screen->height, true);
+	BigFont = new FSingleLumpFont("BigFont", W_GetNumForName("CONFONT"));
+	DoomFont = new FFont("DoomFont", "STCFN%.3d", HU_FONTSTART, HU_FONTSIZE, HU_FONTSTART);
+	SmallFont = new FSingleLumpFont("SmallFont", W_GetNumForName("CONFONT"));
+	ConFont = new FSingleLumpFont("ConsoleFont", W_GetNumForName("CONFONT"));
+	C_InitConsole(screen->width, screen->height, true);
 }
 
 void DCanvas::AttachPalette (palette_t *pal)
