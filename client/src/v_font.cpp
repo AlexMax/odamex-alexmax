@@ -331,6 +331,9 @@ int FFont::SimpleTranslation(byte* colorsused, byte* translation, byte* reverse,
 
 void FFont::BuildTranslations(const double* luminosity, const BYTE* identity)
 {
+	if (DefaultPalette == 0)
+		I_Error("FFont::BuildTranslations requires DefaultPalette.");
+
 	static const struct tp
 	{
 		double mul, add;
@@ -688,6 +691,9 @@ void FSingleLumpFont::LoadFON2(BYTE* data)
 
 void FSingleLumpFont::FixupPalette(BYTE* identity, double* luminosity, const BYTE* palette, bool rescale)
 {
+	if (DefaultPalette == 0)
+		I_Error("FSingleLumpFont::FixupPalette requires DefaultPalette.");
+
 	int i;
 	double maxlum = 0.0;
 	double minlum = 100000000.0;
@@ -726,6 +732,9 @@ void FSingleLumpFont::FixupPalette(BYTE* identity, double* luminosity, const BYT
 
 void FSingleLumpFont::BuildTranslations2()
 {
+	if (DefaultPalette == 0)
+		I_Error("FSingleLumpFont::BuildTranslations2 requires DefaultPalette.");
+
 	// Create different translations for different color ranges
 	// These are not the same as FFont::BuildTranslations()
 	static const struct tp

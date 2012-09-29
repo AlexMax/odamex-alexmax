@@ -144,6 +144,6 @@ protected:
 void RawDrawPatch(patch_s* patch, byte* output, byte* tlate);
 void RecordPatchColors(patch_s* patch, byte* colorsused);
 
-extern FFont* SmallFont, *BigFont, *ConFont;
+extern FFont *SmallFont, *BigFont, *ConFont;
 
 #endif //__V_FONT_H__

@@ -26,6 +26,7 @@
 #define __V_TEXT_H__
 
 #include "doomtype.h"
+#include "v_font.h"
 
 struct brokenlines_s {
 	int width;
@@ -33,7 +34,7 @@ struct brokenlines_s {
 };
 typedef struct brokenlines_s brokenlines_t;
 
-enum EColorRange
+/*enum EColorRange
 {
 	CR_BRICK,
 	CR_TAN,
@@ -62,7 +63,7 @@ enum EColorRange
 	CR_DARKGREY = CR_DARKGRAY,
 	CR_CYAN,
 	NUM_TEXT_COLORS
-};
+};*/
 
 #define TEXTCOLOR_ESCAPE	'\x8a'
 

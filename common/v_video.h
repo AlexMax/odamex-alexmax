@@ -30,6 +30,7 @@
 
 #include "doomtype.h"
 
+#include "v_font.h"
 #include "v_palette.h"
 
 #include "doomdef.h"
