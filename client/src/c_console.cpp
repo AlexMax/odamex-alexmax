@@ -786,14 +786,14 @@ void C_SetTicker (unsigned int at)
 	TickerAt = at > TickerMax ? TickerMax : at;
 }
 
-void C_DrawConsole (void)
+void C_DrawConsole()
 {
 	unsigned char *zap;
 	int lines, left, offset;
 
 	left = 8;
-	lines = (ConBottom-12)/8;
-	if (-12 + lines*8 > ConBottom - 28)
+	lines = (ConBottom-12) / 8;
+	if (-12 + lines * 8 > ConBottom - 28)
 		offset = -16;
 	else
 		offset = -12;
@@ -801,7 +801,7 @@ void C_DrawConsole (void)
 
 	if (ConsoleState == c_up)
 	{
-		C_DrawNotifyText ();
+		C_DrawNotifyText();
 		return;
 	}
 	else if (ConBottom)
@@ -816,20 +816,20 @@ void C_DrawConsole (void)
 		}
 		else
 		{
-			conback->Blit (0, 0, conback->width, conback->height,
-						screen, 0, 0, screen->width, screen->height);
+			conback->Blit(0, 0, conback->width, conback->height,
+			              screen, 0, 0, screen->width, screen->height);
 		}
 
 		if (ConBottom >= 12)
 		{
 			screen->SetFont(ConFont);
-			screen->DrawText(CR_ORANGE, screen->width - 8 - strlen(VersionString) * 8,
+			screen->DrawText(CR_WHITE, screen->width - 8 - strlen(VersionString) * 8,
 			                 ConBottom - 12, VersionString);
 
 			// Download progress bar hack
 			if (gamestate == GS_DOWNLOAD)
 			{
-				screen->DrawText(CR_ORANGE, left + 2, ConBottom - 10, DownloadStr.c_str());
+				screen->DrawText(CR_WHITE, left + 2, ConBottom - 10, DownloadStr.c_str());
 			}
 
 			if (TickerMax)
@@ -840,9 +840,9 @@ void C_DrawConsole (void)
 
 				if (TickerLabel)
 				{
-					tickbegin = strlen (TickerLabel) + 2;
+					tickbegin = strlen(TickerLabel) + 2;
 					tickend -= tickbegin;
-					sprintf (tickstr, "%s: ", TickerLabel);
+					sprintf(tickstr, "%s: ", TickerLabel);
 				}
 				if (tickend > 256 - 8)
 					tickend = 256 - 8;
@@ -854,8 +854,8 @@ void C_DrawConsole (void)
 				if (i > tickend)
 					i = tickend;
 				tickstr[i] = -125;
-				sprintf (tickstr + tickend + 3, "%u%%", (TickerAt * 100) / TickerMax);
-				screen->DrawText(CR_ORANGE, 8, ConBottom - 12, tickstr);
+				sprintf(tickstr + tickend + 3, "%u%%", (TickerAt * 100) / TickerMax);
+				screen->DrawText(CR_WHITE, 8, ConBottom - 12, tickstr);
 			}
 		}
 	}
@@ -872,7 +872,7 @@ void C_DrawConsole (void)
 
 		for (; lines > 1; lines--)
 		{
-			screen->DrawText(CR_ORANGE, left, offset + lines * 8, (char*)&zap[2]);
+			screen->DrawText(CR_WHITE, left, offset + lines * 8, (char*)&zap[2]);
 			zap -= ConCols + 2;
 		}
 		if (ConBottom >= 20)
@@ -880,13 +880,13 @@ void C_DrawConsole (void)
 //			if (gamestate == GS_STARTUP)
 //				screen->PrintStr (8, ConBottom - 20, DoomStartupTitle, strlen (DoomStartupTitle));
 //			else
-			screen->DrawText(CR_ORANGE, left, ConBottom - 20, "\x8c");
-			screen->DrawText(CR_ORANGE, left + 8, ConBottom - 20,
-			                 (char *)&CmdLine[2+CmdLine[259]]);
+			screen->DrawChar(CR_BLUE, left, ConBottom - 20, '\x1c');
+			screen->DrawText(CR_WHITE, left + 8, ConBottom - 20,
+			                 (char *)&CmdLine[2 + CmdLine[259]]);
 			if (cursoron)
 			{
-				screen->DrawText(CR_ORANGE, left + 8 + (CmdLine[1] - CmdLine[259])* 8,
-							ConBottom - 20, "\xb");
+				screen->DrawChar(CR_GOLD, left + 8 + (CmdLine[1] - CmdLine[259])* 8,
+				                 ConBottom - 20, '\xb');
 			}
 			if (RowAdjust && ConBottom >= 28)
 			{
@@ -894,8 +894,8 @@ void C_DrawConsole (void)
 
 				// Indicate that the view has been scrolled up (10)
 				// and if we can scroll no further (12)
-				c = (SkipRows + RowAdjust + ConBottom/8 < ConRows) ? 10 : 12;
-				screen->DrawText(CR_ORANGE, 0, ConBottom - 28, &c);
+				c = (SkipRows + RowAdjust + ConBottom / 8 < ConRows) ? 10 : 12;
+				screen->DrawText(CR_WHITE, 0, ConBottom - 28, &c);
 			}
 		}
 	}

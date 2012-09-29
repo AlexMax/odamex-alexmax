@@ -101,36 +101,7 @@ void DCanvas::CharWrapper (EWrapperCode drawer, int normalcolor, int x, int y, b
 
 void DCanvas::CharSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, byte character) const
 {
-	if (Font == NULL)
-		return;
-
-	if (normalcolor >= NUM_TEXT_COLORS)
-		normalcolor = CR_UNTRANSLATED;
-
-	const byte *data;
-	int w, h, xo, yo;
-	const byte *range = Font->GetColorTranslation ((EColorRange)normalcolor);
-
-	if ((data = Font->GetChar (character, &w, &h, &xo, &yo)))
-	{
-		int sw = w * CleanXfac;
-		int sh = h * CleanYfac;
-		x -= xo * CleanXfac;
-		y -= yo * CleanYfac;
-		switch (drawer)
-		{
-		default:
-			case ETWrapper_Normal:
-				ScaleMaskedBlock (x, y, w, h, sw, sh, data, range);
-				break;
-			case ETWrapper_Translucent:
-				ScaleTranslucentMaskedBlock (x, y, w, h, sw, sh, data, range, V_TextTrans);
-				break;
-			case ETWrapper_Shadow:
-				ScaleShadowedMaskedBlock (x, y, w, h, sw, sh, data, range, TRANSLUC50);
-				break;
-		}
-	}
+	CharSWrapper(drawer, normalcolor, x, y, character, CleanXfac, CleanYfac);
 }
 
 void DCanvas::CharSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, byte character, int scalex, int scaley) const
@@ -147,10 +118,10 @@ void DCanvas::CharSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, 
 
 	if ((data = Font->GetChar (character, &w, &h, &xo, &yo)))
 	{
-		int sw = w * CleanXfac;
-		int sh = h * CleanYfac;
-		x -= xo * CleanXfac;
-		y -= yo * CleanYfac;
+		int sw = w * scalex;
+		int sh = h * scaley;
+		x -= xo * scalex;
+		y -= yo * scaley;
 		switch (drawer)
 		{
 		default:
@@ -271,101 +242,7 @@ void DCanvas::TextWrapper (EWrapperCode drawer, int normalcolor, int x, int y, c
 
 void DCanvas::TextSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, const byte *string) const
 {
-	int 		w, h, xo, yo;
-	const byte *ch;
-	int 		c;
-	int 		cx;
-	int 		cy;
-	int			boldcolor;
-	const byte *range;
-	int			height;
-	const byte *data;
-
-	if (Font == NULL)
-		return;
-
-	if (normalcolor > NUM_TEXT_COLORS)
-		normalcolor = CR_UNTRANSLATED;
-	boldcolor = normalcolor ? normalcolor - 1 : NUM_TEXT_COLORS - 1;
-
-	range = Font->GetColorTranslation ((EColorRange)normalcolor);
-	height = (Font->GetHeight () + 1) * CleanYfac;
-
-	ch = string;
-	cx = x;
-	cy = y;
-		
-	for (;;)
-	{
-		c = *ch++;
-		if (!c)
-			break;
-
-		if (c == TEXTCOLOR_ESCAPE)
-		{
-			int newcolor = toupper(*ch++);
-
-			if (newcolor == 0)
-			{
-				return;
-			}
-			else if (newcolor == '-')
-			{
-				newcolor = normalcolor;
-			}
-			else if (newcolor >= 'A' && newcolor < 'A' + NUM_TEXT_COLORS)
-			{
-				newcolor -= 'A';
-			}
-			else if (newcolor == '+')
-			{
-				newcolor = boldcolor;
-			}
-			else
-			{
-				continue;
-			}
-			range = Font->GetColorTranslation ((EColorRange)newcolor);
-			continue;
-		}
-		
-		if (c == '\n')
-		{
-			cx = x;
-			cy += height;
-			continue;
-		}
-
-		if ((data = Font->GetChar (c, &w, &h, &xo, &yo)))
-		{
-			int sw = w * CleanXfac;
-
-			if (cx + sw > screen->width /*Width*/)
-				break;
-
-			switch (drawer)
-			{
-			default:
-			case ETWrapper_Normal:
-				ScaleMaskedBlock (cx - xo * CleanXfac, cy - yo * CleanYfac, w, h,
-					sw, h * CleanYfac, data, range);
-				break;
-			case ETWrapper_Translucent:
-				ScaleTranslucentMaskedBlock (cx - xo * CleanXfac, cy - yo * CleanYfac, w, h,
-					sw, h * CleanYfac, data, range, V_TextTrans);
-				break;
-			case ETWrapper_Shadow:
-				ScaleShadowedMaskedBlock (cx - xo * CleanXfac, cy - yo * CleanYfac, w, h,
-					sw, h * CleanYfac, data, range, TRANSLUC50);
-				break;
-			}
-			cx += sw;
-		}
-		else
-		{
-			cx += w * CleanXfac;
-		}
-	}
+	TextSWrapper(drawer, normalcolor, x, y, string, CleanXfac, CleanYfac);
 }
 
 void DCanvas::TextSWrapper (EWrapperCode drawer, int normalcolor, int x, int y, const byte *string, int scalex, int scaley) const
