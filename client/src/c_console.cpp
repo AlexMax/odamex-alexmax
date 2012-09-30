@@ -85,6 +85,10 @@ static bool midprinting;
 
 #define CONSOLEBUFFER 512
 
+#define LEFTMARGIN 8
+#define RIGHTMARGIN 8
+#define BOTTOMARGIN 12
+
 #define SCROLLUP 1
 #define SCROLLDN 2
 #define SCROLLNO 0
@@ -282,7 +286,7 @@ void C_InitConsole (int width, int height, BOOL ingame)
 								v = fadetable + (x - 289) * 256;
 
 							if (v == NULL)
-                                I_FatalError("COuld not stylize the console\n");
+								I_FatalError("COuld not stylize the console\n");
 
 							*i = v[*i];
 							i++;
@@ -785,7 +789,7 @@ void C_DrawConsole()
 	int lines, left, offset;
 
 	left = 8;
-	lines = (ConBottom-12) / 8;
+	lines = (ConBottom - 12) / ConFont->GetHeight();
 	if (-12 + lines * 8 > ConBottom - 28)
 		offset = -16;
 	else
@@ -867,7 +871,7 @@ void C_DrawConsole()
 		{
 			strncpy(linebuffer, (char*)&zap[2], zap[1]);
 			linebuffer[zap[1]] = '\0';
-			screen->DrawText(CR_WHITE, left, offset + lines * 8, linebuffer);
+			screen->DrawText(CR_WHITE, left, offset + lines * ConFont->GetHeight(), linebuffer);
 			zap -= ConCols + 2;
 		}
 		if (ConBottom >= 20)
@@ -878,10 +882,10 @@ void C_DrawConsole()
 			screen->DrawChar(CR_BLUE, left, ConBottom - 20, '\x1c');
 			strncpy(linebuffer, &CmdLine.buffer[CmdLine.offset], CmdLine.length);
 			linebuffer[CmdLine.length] = '\0';
-			screen->DrawText(CR_WHITE, left + 8, ConBottom - 20, linebuffer);
+			screen->DrawText(CR_WHITE, left + ConFont->GetSpaceWidth(), ConBottom - 20, linebuffer);
 			if (cursoron)
 			{
-				screen->DrawChar(CR_GOLD, left + 8 + (CmdLine.cursor - CmdLine.offset) * 8,
+				screen->DrawChar(CR_GOLD, left + (1 + CmdLine.cursor - CmdLine.offset) * ConFont->GetSpaceWidth(),
 				                 ConBottom - 20, '\xb');
 			}
 			if (RowAdjust && ConBottom >= 28)
