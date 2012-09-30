@@ -692,7 +692,7 @@ void C_Ticker (void)
 					if (--RepeatCountdown == 0)
 					{
 						RepeatCountdown = KeyRepeatRate;
-						C_HandleKey (&RepeatEvent, CmdLine, 255);
+						C_HandleKey(&RepeatEvent, CmdLine, CMDBUFSIZE - 1);
 					}
 				}
 				break;
@@ -874,10 +874,12 @@ void C_DrawConsole()
 	if (lines > 0)
 	{
 		screen->SetFont(ConFont);
-
+		char linebuffer[256];
 		for (; lines > 1; lines--)
 		{
-			screen->DrawText(CR_WHITE, left, offset + lines * 8, (char*)&zap[2]);
+			strncpy(linebuffer, (char*)&zap[2], zap[1]);
+			linebuffer[zap[1]] = '\0';
+			screen->DrawText(CR_WHITE, left, offset + lines * 8, linebuffer);
 			zap -= ConCols + 2;
 		}
 		if (ConBottom >= 20)
@@ -886,8 +888,9 @@ void C_DrawConsole()
 //				screen->PrintStr (8, ConBottom - 20, DoomStartupTitle, strlen (DoomStartupTitle));
 //			else
 			screen->DrawChar(CR_BLUE, left, ConBottom - 20, '\x1c');
-			screen->DrawText(CR_WHITE, left + 8, ConBottom - 20,
-			                 &CmdLine.buffer[CmdLine.offset]);
+			strncpy(linebuffer, &CmdLine.buffer[CmdLine.offset], CmdLine.length);
+			linebuffer[CmdLine.length] = '\0';
+			screen->DrawText(CR_WHITE, left + 8, ConBottom - 20, linebuffer);
 			if (cursoron)
 			{
 				screen->DrawChar(CR_GOLD, left + 8 + (CmdLine.cursor - CmdLine.offset) * 8,
@@ -1011,13 +1014,13 @@ static void makestartposgood (void)
 
 static bool C_HandleKey(event_t *ev, cmdline_s &buffer, int len)
 {
-	const char *cmd = C_GetBinding (ev->data1);
+	const char *cmd = C_GetBinding(ev->data1);
 
 	switch (ev->data1)
 	{
 	case KEY_TAB:
 		// Try to do tab-completion
-		C_TabComplete ();
+		C_TabComplete();
 		break;
 #ifdef _XBOX
 	case KEY_JOY7: // Left Trigger
@@ -1046,22 +1049,20 @@ static bool C_HandleKey(event_t *ev, cmdline_s &buffer, int len)
 		break;
 	case KEY_HOME:
 		// Move cursor to start of line
-
-		buffer.cursor = buffer.buffer[len + 2] = 0;
+		buffer.cursor = buffer.offset = 0;
 		break;
 	case KEY_END:
 		// Move cursor to end of line
-
 		buffer.cursor = buffer.length;
-		makestartposgood ();
+		makestartposgood();
 		break;
 	case KEY_LEFTARROW:
 		if(KeysCtrl)
 		{
 			// Move cursor to beginning of word
-			if(buffer.cursor)
+			if (buffer.cursor)
 				buffer.cursor--;
-			while(buffer.cursor && buffer.buffer[1 + buffer.cursor] != ' ')
+			while (buffer.cursor && buffer.buffer[buffer.cursor] != ' ')
 				buffer.cursor--;
 		}
 		else
@@ -1072,7 +1073,7 @@ static bool C_HandleKey(event_t *ev, cmdline_s &buffer, int len)
 				buffer.cursor--;
 			}
 		}
-		makestartposgood ();
+		makestartposgood();
 		break;
 	case KEY_RIGHTARROW:
 		if(KeysCtrl)
@@ -1089,11 +1090,10 @@ static bool C_HandleKey(event_t *ev, cmdline_s &buffer, int len)
 				buffer.cursor++;
 			}
 		}
-		makestartposgood ();
+		makestartposgood();
 		break;
 	case KEY_BACKSPACE:
 		// Erase character to left of cursor
-
 		if (buffer.length && buffer.cursor)
 		{
 			char *c, *e;
@@ -1115,7 +1115,6 @@ static bool C_HandleKey(event_t *ev, cmdline_s &buffer, int len)
 		break;
 	case KEY_DEL:
 		// Erase charater under cursor
-
 		if (buffer.cursor < buffer.length)
 		{
 			char *c, *e;
@@ -1446,7 +1445,7 @@ BOOL C_Responder (event_t *ev)
 			RepeatCountdown = KeyRepeatDelay;
 			*/
 		RepeatEvent = *ev;
-		return C_HandleKey (ev, CmdLine, 255);
+		return C_HandleKey(ev, CmdLine, CMDBUFSIZE - 1);
 	}
 
 	if(ev->type == ev_mouse)
