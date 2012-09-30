@@ -106,7 +106,14 @@ struct History
 // CmdLine[1]  = cursor position
 // CmdLine[2+] = command line (max 255 chars + NULL)
 // CmdLine[259]= offset from beginning of cmdline to display
-static byte CmdLine[260];
+#define CMDBUFSIZE 256
+struct cmdline_s {
+	byte length;
+	byte cursor;
+	byte offset;
+	char buffer[CMDBUFSIZE];
+};
+static cmdline_s CmdLine;
 
 static byte printxormask;
 
@@ -138,10 +145,8 @@ static struct NotifyText
 #define PRINTLEVELS 5
 int PrintColors[PRINTLEVELS+1] = { CR_RED, CR_GOLD, CR_GRAY, CR_GREEN, CR_GREEN, CR_GOLD };
 
-static void setmsgcolor (int index, const char *color);
-
-
-BOOL C_HandleKey (event_t *ev, byte *buffer, int len);
+static void setmsgcolor(int index, const char *color);
+static bool C_HandleKey(event_t *ev, cmdline_s &buffer, int len);
 
 cvar_t msglevel ("msg", "0", "", CVARTYPE_STRING, CVAR_ARCHIVE);
 
@@ -847,7 +852,7 @@ void C_DrawConsole()
 				if (tickend > 256 - 8)
 					tickend = 256 - 8;
 				tickstr[tickbegin] = -128;
-				memset (tickstr + tickbegin + 1, 0x81, tickend - tickbegin);
+				memset(tickstr + tickbegin + 1, 0x81, tickend - tickbegin);
 				tickstr[tickend + 1] = -126;
 				tickstr[tickend + 2] = ' ';
 				i = tickbegin + 1 + (TickerAt * (tickend - tickbegin - 1)) / TickerMax;
@@ -882,10 +887,10 @@ void C_DrawConsole()
 //			else
 			screen->DrawChar(CR_BLUE, left, ConBottom - 20, '\x1c');
 			screen->DrawText(CR_WHITE, left + 8, ConBottom - 20,
-			                 (char *)&CmdLine[2 + CmdLine[259]]);
+			                 &CmdLine.buffer[CmdLine.offset]);
 			if (cursoron)
 			{
-				screen->DrawChar(CR_GOLD, left + 8 + (CmdLine[1] - CmdLine[259])* 8,
+				screen->DrawChar(CR_GOLD, left + 8 + (CmdLine.cursor - CmdLine.offset) * 8,
 				                 ConBottom - 20, '\xb');
 			}
 			if (RowAdjust && ConBottom >= 28)
@@ -981,9 +986,9 @@ void C_ServerDisconnectEffect(void)
 static void makestartposgood (void)
 {
 	int n;
-	int pos = CmdLine[259];
-	int curs = CmdLine[1];
-	int len = CmdLine[0];
+	int pos = CmdLine.offset;
+	int curs = CmdLine.cursor;
+	int len = CmdLine.length;
 
 	n = pos;
 
@@ -1001,10 +1006,10 @@ static void makestartposgood (void)
 	}
 	if (n < 0)
 		n = 0;
-	CmdLine[259] = n;
+	CmdLine.offset = n;
 }
 
-BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
+static bool C_HandleKey(event_t *ev, cmdline_s &buffer, int len)
 {
 	const char *cmd = C_GetBinding (ev->data1);
 
@@ -1042,29 +1047,29 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 	case KEY_HOME:
 		// Move cursor to start of line
 
-		buffer[1] = buffer[len+4] = 0;
+		buffer.cursor = buffer.buffer[len + 2] = 0;
 		break;
 	case KEY_END:
 		// Move cursor to end of line
 
-		buffer[1] = buffer[0];
+		buffer.cursor = buffer.length;
 		makestartposgood ();
 		break;
 	case KEY_LEFTARROW:
 		if(KeysCtrl)
 		{
 			// Move cursor to beginning of word
-			if(buffer[1])
-				buffer[1]--;
-			while(buffer[1] && buffer[1+buffer[1]] != ' ')
-				buffer[1]--;
+			if(buffer.cursor)
+				buffer.cursor--;
+			while(buffer.cursor && buffer.buffer[1 + buffer.cursor] != ' ')
+				buffer.cursor--;
 		}
 		else
 		{
 			// Move cursor left one character
-			if (buffer[1])
+			if (buffer.cursor)
 			{
-				buffer[1]--;
+				buffer.cursor--;
 			}
 		}
 		makestartposgood ();
@@ -1072,15 +1077,16 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 	case KEY_RIGHTARROW:
 		if(KeysCtrl)
 		{
-			while(buffer[1] < buffer[0]+1 && buffer[2+buffer[1]] != ' ')
-				buffer[1]++;
+			// Move cursor right one word
+			while (buffer.cursor < buffer.length + 1 && buffer.buffer[buffer.cursor] != ' ')
+				buffer.cursor++;
 		}
 		else
 		{
 			// Move cursor right one character
-			if (buffer[1] < buffer[0])
+			if (buffer.cursor < buffer.length)
 			{
-				buffer[1]++;
+				buffer.cursor++;
 			}
 		}
 		makestartposgood ();
@@ -1088,21 +1094,21 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 	case KEY_BACKSPACE:
 		// Erase character to left of cursor
 
-		if (buffer[0] && buffer[1])
+		if (buffer.length && buffer.cursor)
 		{
 			char *c, *e;
 
-			e = (char *)&buffer[buffer[0] + 2];
-			c = (char *)&buffer[buffer[1] + 2];
+			e = &buffer.buffer[buffer.length];
+			c = &buffer.buffer[buffer.cursor];
 
 			for (; c < e; c++)
 				*(c - 1) = *c;
 
-			buffer[0]--;
-			buffer[1]--;
-			if (buffer[len+4])
-				buffer[len+4]--;
-			makestartposgood ();
+			buffer.length--;
+			buffer.cursor--;
+			if (buffer.buffer[len + 2])
+				buffer.buffer[len + 2]--;
+			makestartposgood();
 		}
 
 		TabbedLast = false;
@@ -1110,18 +1116,18 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 	case KEY_DEL:
 		// Erase charater under cursor
 
-		if (buffer[1] < buffer[0])
+		if (buffer.cursor < buffer.length)
 		{
 			char *c, *e;
 
-			e = (char *)&buffer[buffer[0] + 2];
-			c = (char *)&buffer[buffer[1] + 3];
+			e = &buffer.buffer[buffer.length];
+			c = &buffer.buffer[buffer.cursor + 1];
 
 			for (; c < e; c++)
 				*(c - 1) = *c;
 
-			buffer[0]--;
-			makestartposgood ();
+			buffer.length--;
+			makestartposgood();
 		}
 
 		TabbedLast = false;
@@ -1150,9 +1156,9 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 
 		if (HistPos)
 		{
-			strcpy ((char *)&buffer[2], HistPos->String);
-			buffer[0] = buffer[1] = (BYTE)strlen ((char *)&buffer[2]);
-			buffer[len+4] = 0;
+			strcpy(&buffer.buffer[0], HistPos->String);
+			buffer.length = buffer.cursor = (byte)strlen(&buffer.buffer[0]);
+			buffer.buffer[len + 2] = 0;
 			makestartposgood();
 		}
 
@@ -1165,15 +1171,15 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 		{
 			HistPos = HistPos->Newer;
 
-			strcpy ((char *)&buffer[2], HistPos->String);
-			buffer[0] = buffer[1] = (BYTE)strlen ((char *)&buffer[2]);
+			strcpy(&buffer.buffer[0], HistPos->String);
+			buffer.length = buffer.cursor = (byte)strlen(&buffer.buffer[0]);
 		}
 		else
 		{
 			HistPos = NULL;
-			buffer[0] = buffer[1] = 0;
+			buffer.length = buffer.cursor = 0;
 		}
-		buffer[len+4] = 0;
+		buffer.buffer[len + 2] = 0;
 		makestartposgood();
 		TabbedLast = false;
 		break;
@@ -1185,28 +1191,28 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 			for(size_t i = 0; i < text.length(); i++)
 			{
 				// Add each character to command line
-				if (buffer[0] < len)
+				if (buffer.length < len)
 				{
 					char data = text[i];
 
-					if (buffer[1] == buffer[0])
+					if (buffer.cursor == buffer.length)
 					{
-						buffer[buffer[0] + 2] = data;
+						buffer.buffer[buffer.length] = data;
 					}
 					else
 					{
 						char *c, *e;
 
-						e = (char *)&buffer[buffer[0] + 1];
-						c = (char *)&buffer[buffer[1] + 2];
+						e = &buffer.buffer[buffer.length + 1];
+						c = &buffer.buffer[buffer.cursor + 2];
 
 						for (; e >= c; e--)
 							*(e + 1) = *e;
 
 						*c = data;
 					}
-					buffer[0]++;
-					buffer[1]++;
+					buffer.length++;
+					buffer.cursor++;
 					makestartposgood ();
 					HistPos = NULL;
 				}
@@ -1218,12 +1224,12 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 		if (ev->data2 == '\r')
 		{
 			// Execute command line (ENTER)
-			buffer[2 + buffer[0]] = 0;
+			buffer.buffer[buffer.length] = 0;
 
 			if (con_scrlock == 1) // NES - If con_scrlock = 1, send console scroll to bottom.
 				RowAdjust = 0;   // con_scrlock = 0 does it automatically.
 
-			if (HistHead && stricmp (HistHead->String, (char *)&buffer[2]) == 0)
+			if (HistHead && stricmp(HistHead->String, &buffer.buffer[0]) == 0)
 			{
 				// Command line was the same as the previous one,
 				// so leave the history list alone
@@ -1234,9 +1240,9 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 				// or there is nothing in the history list,
 				// so add it to the history list.
 
-				History *temp = (History *)Malloc (sizeof(struct History) + buffer[0]);
+				History *temp = (History *)Malloc (sizeof(struct History) + buffer.length);
 
-				strcpy (temp->String, (char *)&buffer[2]);
+				strcpy(temp->String, &buffer.buffer[0]);
 				temp->Older = HistHead;
 				if (HistHead)
 				{
@@ -1261,9 +1267,9 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 				}
 			}
 			HistPos = NULL;
-			Printf (127, "]%s\n", &buffer[2]);
-			buffer[0] = buffer[1] = buffer[len+4] = 0;
-			AddCommandString ((char *)&buffer[2]);
+			Printf(127, "]%s\n", &buffer.buffer[0]);
+			buffer.length = buffer.cursor = buffer.buffer[len + 2] = 0;
+			AddCommandString(&buffer.buffer[0]);
 			TabbedLast = false;
 		}
 		else if (ev->data1 == KEY_ESCAPE || (cmd && !strcmp(cmd, "toggleconsole")))
@@ -1284,7 +1290,7 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 					return true;
 				return false;
 			}
-			buffer[0] = buffer[1] = buffer[len+4] = 0;
+			buffer.length = buffer.cursor = buffer.buffer[len + 2] = 0;
 			HistPos = NULL;
 			C_ToggleConsole ();
 		}
@@ -1293,13 +1299,13 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 			// Go to beginning of line
  			if(KeysCtrl && (ev->data1 == 'a' || ev->data1 == 'A'))
 			{
-				buffer[1] = 0;
+				buffer.cursor = 0;
 			}
 
 			// Go to end of line
  			if(KeysCtrl && (ev->data1 == 'e' || ev->data1 == 'E'))
 			{
-				buffer[1] = buffer[0];
+				buffer.cursor = buffer.length;
 			}
 
 			// Paste from clipboard
@@ -1310,28 +1316,28 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 				for(size_t i = 0; i < text.length(); i++)
 				{
 					// Add each character to command line
-					if (buffer[0] < len)
+					if (buffer.length < len)
 					{
 						char data = text[i];
 
-						if (buffer[1] == buffer[0])
+						if (buffer.cursor == buffer.length)
 						{
-							buffer[buffer[0] + 2] = data;
+							buffer.buffer[buffer.length] = data;
 						}
 						else
 						{
 							char *c, *e;
 
-							e = (char *)&buffer[buffer[0] + 1];
-							c = (char *)&buffer[buffer[1] + 2];
+							e = &buffer.buffer[buffer.length + 1];
+							c = &buffer.buffer[buffer.cursor + 2];
 
 							for (; e >= c; e--)
 								*(e + 1) = *e;
 
 							*c = data;
 						}
-						buffer[0]++;
-						buffer[1]++;
+						buffer.length++;
+						buffer.cursor++;
 						makestartposgood ();
 						HistPos = NULL;
 					}
@@ -1342,28 +1348,28 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 		else
 		{
 			// Add keypress to command line
-			if (buffer[0] < len)
+			if (buffer.length < len)
 			{
 				char data = ev->data3;
 
-				if (buffer[1] == buffer[0])
+				if (buffer.cursor == buffer.length)
 				{
-					buffer[buffer[0] + 2] = data;
+					buffer.buffer[buffer.length] = data;
 				}
 				else
 				{
 					char *c, *e;
 
-					e = (char *)&buffer[buffer[0] + 1];
-					c = (char *)&buffer[buffer[1] + 2];
+					e = &buffer.buffer[buffer.length + 1];
+					c = &buffer.buffer[buffer.cursor + 2];
 
 					for (; e >= c; e--)
 						*(e + 1) = *e;
 
 					*c = data;
 				}
-				buffer[0]++;
-				buffer[1]++;
+				buffer.length++;
+				buffer.cursor++;
 				makestartposgood ();
 				HistPos = NULL;
 			}
@@ -1611,7 +1617,7 @@ static void C_TabComplete (void)
 	static unsigned int	TabStart;			// First char in CmdLine to use for tab completion
 	static unsigned int	TabSize;			// Size of tab string
 
-	if (!TabbedLast)
+	/*if (!TabbedLast)
 	{
 		// Skip any spaces at beginning of command line
 		for (TabStart = 2; TabStart < CmdLine[0]; TabStart++)
@@ -1639,7 +1645,7 @@ static void C_TabComplete (void)
 	CmdLine[0] = CmdLine[1] = (BYTE)strlen ((char *)(CmdLine + 2)) + 1;
 	CmdLine[CmdLine[0] + 1] = ' ';
 
-	makestartposgood ();
+	makestartposgood ();*/
 }
 
 VERSION_CONTROL (c_console_cpp, "$Id$")
