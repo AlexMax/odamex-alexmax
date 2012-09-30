@@ -1065,13 +1065,13 @@ static std::string IdentifyVersion (std::string custwad)
 {
 	std::string titlestring = "Public DOOM - ";
 
-	Printf(PRINT_HIGH, "\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36"
-                       "\36\36\36\36\36\36\36\36\36\36\36\36\37\n");
+	Printf_Bold("\n\34H\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36"
+	            "\36\36\36\36\36\36\36\36\36\36\36\36\37\n");
 
 	if(!CheckIWAD(custwad, titlestring))
-		Printf_Bold ("Game mode indeterminate, no standard wad found.\n\n");
+		Printf_Bold ("\34DGame mode indeterminate, no standard wad found.\n\n");
 	else
-		Printf_Bold ("%s\n\n", titlestring.c_str());
+		Printf_Bold ("\34D%s\n\n", titlestring.c_str());
 
 	return titlestring;
 }
@@ -1611,10 +1611,10 @@ void D_DoomMain (void)
 	// do all commands on the command line other than +set
 	C_ExecCmdLineParams (false, false);
 
-	Printf_Bold("\n\35\36\36\36\36 Odamex Client Initialized \36\36\36\36\37\n");
-	if(gamestate != GS_CONNECTING)
+	Printf_Bold("\n\34H\35\36\36\36\36 \34FOdamex Client Initialized \34H\36\36\36\36\37\n");
+	if (gamestate != GS_CONNECTING)
 		Printf(PRINT_HIGH, "Type connect <address> or use the Odamex Launcher to connect to a game.\n");
-    Printf(PRINT_HIGH, "\n");
+	Printf(PRINT_HIGH, "\n");
 
 	setmodeneeded = false; // [Fly] we don't need to set a video mode here!
     //gamestate = GS_FULLCONSOLE;

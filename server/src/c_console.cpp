@@ -82,14 +82,6 @@ struct History
 	char String[1];
 };
 
-// CmdLine[0]  = # of chars on command line
-// CmdLine[1]  = cursor position
-// CmdLine[2+] = command line (max 255 chars + NULL)
-// CmdLine[259]= offset from beginning of cmdline to display
-//static byte CmdLine[260];
-
-static byte printxormask;
-
 #define MAXHISTSIZE 50
 static struct History *HistTail = NULL;
 
@@ -271,7 +263,6 @@ int STACK_ARGS Printf_Bold (const char *format, ...)
 	va_list argptr;
 	int count;
 
-	printxormask = 0x80;
 	va_start (argptr, format);
 	count = VPrintf (PRINT_HIGH, format, argptr);
 	va_end (argptr);

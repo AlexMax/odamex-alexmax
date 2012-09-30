@@ -115,8 +115,6 @@ struct cmdline_s {
 };
 static cmdline_s CmdLine;
 
-static byte printxormask;
-
 #define MAXHISTSIZE 50
 static struct History *HistHead = NULL, *HistTail = NULL, *HistPos = NULL;
 static int HistSize;
@@ -440,7 +438,6 @@ int PrintString (int printlevel, const char *outline)
 	const char *cp, *newcp;
 	static unsigned int xp = 0;
 	unsigned int newxp;
-	int mask;
 	BOOL scroll;
 
 	if(print_stdout && gamestate != GS_FORCEWIPE)
@@ -454,11 +451,6 @@ int PrintString (int printlevel, const char *outline)
 
 	if (vidactive && !midprinting)
 		C_AddNotifyString (printlevel, outline);
-
-	if (printlevel >= PRINT_CHAT && printlevel < 64)
-		mask = 0x80;
-	else
-		mask = printxormask;
 
 	cp = outline;
 	while (*cp)
@@ -475,7 +467,7 @@ int PrintString (int printlevel, const char *outline)
 
 			for (x = xp, poop = cp; poop < newcp; poop++, x++)
 			{
-				Last[x+2] = ((*poop) < 32) ? (*poop) : ((*poop) ^ mask);
+				Last[x+2] = *poop;
 			}
 
 			if (Last[1] < xp + (newcp - cp))
@@ -502,10 +494,10 @@ int PrintString (int printlevel, const char *outline)
 					case 0:
 						break;
 					case '+':
-						mask = printxormask ^ 0x80;
+						//mask = printxormask ^ 0x80;
 						break;
 					default:
-						mask = printxormask;
+						//mask = printxormask;
 						break;
 					}
 				}
@@ -541,9 +533,6 @@ int PrintString (int printlevel, const char *outline)
 				cp = newcp;
 		}
 	}
-
-	printxormask = 0;
-
 	return strlen (outline);
 }
 
@@ -615,7 +604,6 @@ int STACK_ARGS Printf_Bold (const char *format, ...)
 	va_list argptr;
 	int count;
 
-	printxormask = 0x80;
 	va_start (argptr, format);
 	count = VPrintf (PRINT_HIGH, format, argptr);
 	va_end (argptr);
