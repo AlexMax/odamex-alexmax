@@ -80,7 +80,7 @@ int			SkipRows, ConBottom;
 unsigned int	RowAdjust;
 int			CursorTicker, ScrollState = 0;
 constate_e	ConsoleState = c_up;
-char		VersionString[8];
+char		VersionString[32];
 
 event_t		RepeatEvent;		// always type ev_keydown
 int			RepeatCountdown;
@@ -301,13 +301,8 @@ void C_InitConsole (int width, int height, BOOL ingame)
 				}
 			}
 
-			VersionString[0] = 0x11;
-			size_t i;
-			for (i = 0; i < strlen(DOTVERSIONSTR); i++)
-				VersionString[i+1] = ((DOTVERSIONSTR[i]>='0'&&DOTVERSIONSTR[i]<='9')||DOTVERSIONSTR[i]=='.')?DOTVERSIONSTR[i]-30:DOTVERSIONSTR[i] ^ 0x80;
-			VersionString[i+1] = 0;
-
-			conback->Unlock ();
+			sprintf(VersionString, "\34FOdamex \34I%s", DOTVERSIONSTR);
+			conback->Unlock();
 
 			gotconback = true;
 		}
@@ -728,13 +723,14 @@ void C_DrawConsole()
 
 	// Draw Odamex Version String.
 	screen->SetFont(ConFont);
-	screen->DrawText(CR_WHITE, screen->width - RIGHTMARGIN - strlen(VersionString) * ConFont->GetSpaceWidth(),
+	screen->DrawText(CR_WHITE, screen->width - RIGHTMARGIN - screen->StringWidth(VersionString),
 	                 vpos, VersionString);
+
+	// [AM] REMOVE_ME: How far along our history are we?
 	char buf[32];
 	sprintf(buf, "%d/%d", RowAdjust, ConMessages.size());
-
-	screen->DrawText(CR_YELLOW, screen->width - RIGHTMARGIN - strlen(VersionString) * ConFont->GetSpaceWidth(),
-	                 vpos, buf);
+	screen->DrawText(CR_YELLOW, screen->width - RIGHTMARGIN - screen->StringWidth(VersionString),
+	                 vpos - 8, buf);
 
 	// Download progress bar hack
 	size_t lines = 1;
