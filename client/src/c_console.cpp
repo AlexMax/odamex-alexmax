@@ -445,11 +445,6 @@ void C_AddNotifyString (int printlevel, const char *source)
  */
 int PrintString (int printlevel, const char *outline)
 {
-	const char *cp, *newcp;
-	static unsigned int xp = 0;
-	unsigned int newxp;
-	BOOL scroll;
-
 	if(print_stdout && gamestate != GS_FORCEWIPE)
 	{
 		printf("%s", outline);
@@ -460,92 +455,10 @@ int PrintString (int printlevel, const char *outline)
 		return 0;
 
 	if (vidactive && !midprinting)
-		C_AddNotifyString (printlevel, outline);
+		C_AddNotifyString(printlevel, outline);
 
 	ConMessages.push_back(outline);
-
-	cp = outline;
-	while (*cp)
-	{
-		for (newcp = cp, newxp = xp;
-			 *newcp != '\n' && *newcp != '\0' && *newcp != '\x8a' && newxp < ConCols;
-			 newcp++, newxp++)
-			;
-
-		if (*cp)
-		{
-			const char *poop;
-			int x;
-
-			for (x = xp, poop = cp; poop < newcp; poop++, x++)
-			{
-				Last[x+2] = *poop;
-			}
-
-			if (Last[1] < xp + (newcp - cp))
-				Last[1] = xp + (newcp - cp);
-
-			if (*newcp == '\n' || xp == ConCols)
-			{
-				if (*newcp != '\n')
-				{
-					Last[0] = 1;
-				}
-				memmove (Lines, Lines + (ConCols + 2), (ConCols + 2) * (CONSOLEBUFFER - 1));
-				Last[0] = 0;
-				Last[1] = 0;
-				newxp = 0;
-				scroll = true;
-			}
-			else
-			{
-				if (*newcp == '\x8a')
-				{
-					switch (newcp[1])
-					{
-					case 0:
-						break;
-					case '+':
-						//mask = printxormask ^ 0x80;
-						break;
-					default:
-						//mask = printxormask;
-						break;
-					}
-				}
-				scroll = false;
-			}
-
-			if (!vidactive)
-			{
-				I_PrintStr (xp, cp, newcp - cp, scroll);
-			}
-
-			if (scroll)
-			{
-				SkipRows = 1;
-
-				if (con_scrlock > 0 && RowAdjust != 0)
-					RowAdjust++;
-				else
-					RowAdjust = 0;
-			}
-			else
-			{
-				SkipRows = 0;
-			}
-
-			xp = newxp;
-
-			if (*newcp == '\n')
-				cp = newcp + 1;
-			else if (*newcp == '\x8a' && newcp[1])
-				cp = newcp + 2;
-			else
-				cp = newcp;
-		}
-	}
-	return strlen (outline);
+	return strlen(outline);
 }
 
 extern BOOL gameisdead;
@@ -677,7 +590,7 @@ void C_Ticker (void)
 		switch (ScrollState)
 		{
 			case SCROLLUP:
-				if (RowAdjust < ConRows - SkipRows - ConBottom/8)
+				if (RowAdjust < ConMessages.size() - 1)
 					RowAdjust++;
 				break;
 
@@ -735,9 +648,9 @@ void C_Ticker (void)
 			}
 		}
 
-		if (SkipRows + RowAdjust + (ConBottom/8) + 1 > CONSOLEBUFFER)
+		if (RowAdjust >= ConMessages.size())
 		{
-			RowAdjust = CONSOLEBUFFER - SkipRows - ConBottom;
+			RowAdjust = ConMessages.size() - 1;
 		}
 	}
 
@@ -814,8 +727,14 @@ void C_DrawConsole()
 	int vpos = ConBottom - BOTTOMARGIN - ConFont->GetHeight();
 
 	// Draw Odamex Version String.
+	screen->SetFont(ConFont);
 	screen->DrawText(CR_WHITE, screen->width - RIGHTMARGIN - strlen(VersionString) * ConFont->GetSpaceWidth(),
 	                 vpos, VersionString);
+	char buf[32];
+	sprintf(buf, "%d/%d", RowAdjust, ConMessages.size());
+
+	screen->DrawText(CR_YELLOW, screen->width - RIGHTMARGIN - strlen(VersionString) * ConFont->GetSpaceWidth(),
+	                 vpos, buf);
 
 	// Download progress bar hack
 	size_t lines = 1;
@@ -839,19 +758,33 @@ void C_DrawConsole()
 	if (cursoron)
 		screen->DrawChar(CR_GOLD, LEFTMARGIN + (1 + CmdLine.cursor - CmdLine.offset) * ConFont->GetSpaceWidth(), vpos, '\xb');
 
-	// [AM] Draw Console History from the bottom up.
+	// Draw Console History from the bottom up.
 	if (ConMessages.size() > 0)
 	{
 		lines++;
-		for (ConsoleHistory::const_reverse_iterator it = ConMessages.rbegin(), eit = ConMessages.rend();it != eit;++it)
+		for (ConsoleHistory::const_reverse_iterator it = ConMessages.rbegin() + RowAdjust, eit = ConMessages.rend();it != eit;++it)
 		{
-			vpos = ConBottom - BOTTOMARGIN - (ConFont->GetHeight() * lines);
-			screen->DrawText(CR_WHITE, LEFTMARGIN, vpos, it->c_str());
+			int linecount = 0;
+			brokenlines_t* broken = V_BreakLines(screen->width - LEFTMARGIN - RIGHTMARGIN, it->c_str());
+
+			// Go over the broken lines backwards.
+			while (broken[linecount].width != -1)
+				linecount++;
+
+			while (linecount > 0)
+			{
+				linecount--;
+				vpos = ConBottom - BOTTOMARGIN - (ConFont->GetHeight() * lines);
+				screen->DrawText(CR_WHITE, LEFTMARGIN + ConFont->GetSpaceWidth(), vpos, broken[linecount].string);
+				lines++;
+			}
+
+			V_FreeBrokenLines(broken);
 
 			if (vpos < 0)
 				// We've rendered off the screen, so we're done.
 				break;
-			lines++;
+
 		}
 	}
 	screen->SetFont(SmallFont);
@@ -977,7 +910,7 @@ static bool C_HandleKey(event_t *ev, cmdline_s &buffer, int len)
 		{
 			if (KeysShifted)
 				// Move to top of console buffer
-				RowAdjust = ConRows - SkipRows - ConBottom/8;
+				RowAdjust = ConMessages.size() - 1;
 			else
 				// Start scrolling console buffer up
 				ScrollState = SCROLLUP;
