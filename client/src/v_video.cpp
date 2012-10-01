@@ -245,6 +245,8 @@ void DCanvas::Clear (int left, int top, int right, int bottom, int color) const
 	}
 }
 
+float V_DimTrans = 0.75;
+char* V_DimColor = "00 00 00";
 
 void DCanvas::Dim(int x1, int y1, int w, int h) const
 {
@@ -254,12 +256,14 @@ void DCanvas::Dim(int x1, int y1, int w, int h) const
 	if (x1 < 0 || x1 + w > width || y1 < 0 || y1 + h > height)
 		return;
 
-	if (ui_dimamount < 0)
-		ui_dimamount.Set (0.0f);
-	else if (ui_dimamount > 1)
-		ui_dimamount.Set (1.0f);
+	// [AM] Now that we're no longer tied to a single CVAR, we can be selective
+	//      in how we dim parts of the screen.
+	if (V_DimTrans < 0)
+		V_DimTrans = 0.0f;
+	else if (V_DimTrans > 1)
+		V_DimTrans = 1.0f;
 
-	if (ui_dimamount == 0)
+	if (V_DimTrans == 0.0f)
 		return;
 
 	if (is8bit())
@@ -267,11 +271,11 @@ void DCanvas::Dim(int x1, int y1, int w, int h) const
 		int bg;
 		int x, y;
 
-		fixed_t amount = (fixed_t)(ui_dimamount * 64);
+		fixed_t amount = (fixed_t)(V_DimTrans * 64);
 		unsigned int *fg2rgb = Col2RGB8[amount];
 		unsigned int *bg2rgb = Col2RGB8[64-amount];
 		unsigned int fg = 
-				fg2rgb[V_GetColorFromString(DefaultPalette->basecolors, ui_dimcolor.cstring())];
+				fg2rgb[V_GetColorFromString(DefaultPalette->basecolors, V_DimColor)];
 		
 		byte *dest = buffer + y1 * pitch + x1;
 		int gap = pitch - w;
@@ -312,9 +316,10 @@ void DCanvas::Dim(int x1, int y1, int w, int h) const
 	}
 	else
 	{
+		// [AM] Dead Code.
 		int x, y;
 		int *line;
-		int fill = V_GetColorFromString (NULL, ui_dimcolor.cstring());
+		int fill = V_GetColorFromString(NULL, ui_dimcolor.cstring());
 
 		line = (int *)(screen->buffer);
 

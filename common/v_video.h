@@ -44,6 +44,9 @@ extern BOOL    gotconback;
 
 extern int DisplayWidth, DisplayHeight, DisplayBits;
 
+extern float V_DimTrans;
+extern char* V_DimColor;
+
 //
 // VIDEO
 //
