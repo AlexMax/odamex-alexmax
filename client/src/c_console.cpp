@@ -53,6 +53,12 @@
 #include <vector>
 #include <algorithm>
 
+// [AM] Keep console message history in a deque.
+#define MAX_MESSAGES 8192
+typedef std::deque<std::string> ConsoleHistory;
+ConsoleHistory ConMessages;
+size_t ConMsgPosition;
+
 std::string DownloadStr;
 
 static void C_TabComplete (void);
@@ -456,6 +462,8 @@ int PrintString (int printlevel, const char *outline)
 	if (vidactive && !midprinting)
 		C_AddNotifyString (printlevel, outline);
 
+	ConMessages.push_back(outline);
+
 	cp = outline;
 	while (*cp)
 	{
@@ -785,118 +793,65 @@ void C_SetTicker (unsigned int at)
 
 void C_DrawConsole()
 {
-	unsigned char *zap;
-	int lines, left, offset;
-
-	left = 8;
-	lines = (ConBottom - 12) / ConFont->GetHeight();
-	if (-12 + lines * 8 > ConBottom - 28)
-		offset = -16;
-	else
-		offset = -12;
-	zap = Last - (SkipRows + RowAdjust) * (ConCols + 2);
-
-	if (ConsoleState == c_up)
+	// The console is up, so don't draw anything.
+	if (ConsoleState == c_up || !ConBottom)
 	{
 		C_DrawNotifyText();
 		return;
 	}
-	else if (ConBottom)
+
+	// Either provide a dimmed console background or the Odamex logo.
+	if (gamestate == GS_LEVEL || gamestate == GS_INTERMISSION)
 	{
-		int visheight;//, realheight;
-
-		visheight = ConBottom;
-
-		if(gamestate == GS_LEVEL || gamestate == GS_INTERMISSION)
-		{
-			screen->Dim(0, 0, screen->width, visheight);
-		}
-		else
-		{
-			conback->Blit(0, 0, conback->width, conback->height,
-			              screen, 0, 0, screen->width, screen->height);
-		}
-
-		if (ConBottom >= 12)
-		{
-			screen->SetFont(ConFont);
-			screen->DrawText(CR_WHITE, screen->width - 8 - strlen(VersionString) * 8,
-			                 ConBottom - 12, VersionString);
-
-			// Download progress bar hack
-			if (gamestate == GS_DOWNLOAD)
-			{
-				screen->DrawText(CR_WHITE, left + 2, ConBottom - 10, DownloadStr.c_str());
-			}
-
-			if (TickerMax)
-			{
-				char tickstr[256];
-				unsigned int i, tickend = ConCols - screen->width / 90 - 6;
-				unsigned int tickbegin = 0;
-
-				if (TickerLabel)
-				{
-					tickbegin = strlen(TickerLabel) + 2;
-					tickend -= tickbegin;
-					sprintf(tickstr, "%s: ", TickerLabel);
-				}
-				if (tickend > 256 - 8)
-					tickend = 256 - 8;
-				tickstr[tickbegin] = -128;
-				memset(tickstr + tickbegin + 1, 0x81, tickend - tickbegin);
-				tickstr[tickend + 1] = -126;
-				tickstr[tickend + 2] = ' ';
-				i = tickbegin + 1 + (TickerAt * (tickend - tickbegin - 1)) / TickerMax;
-				if (i > tickend)
-					i = tickend;
-				tickstr[i] = -125;
-				sprintf(tickstr + tickend + 3, "%u%%", (TickerAt * 100) / TickerMax);
-				screen->DrawText(CR_WHITE, 8, ConBottom - 12, tickstr);
-			}
-		}
+		screen->Dim(0, 0, screen->width, ConBottom);
+	}
+	else
+	{
+		conback->Blit(0, 0, conback->width, conback->height,
+		              screen, 0, 0, screen->width, screen->height);
 	}
 
-	if (menuactive)
+	int vpos = ConBottom - BOTTOMARGIN - ConFont->GetHeight();
+
+	// Draw Odamex Version String.
+	screen->DrawText(CR_WHITE, screen->width - RIGHTMARGIN - strlen(VersionString) * ConFont->GetSpaceWidth(),
+	                 vpos, VersionString);
+
+	// Download progress bar hack
+	size_t lines = 1;
+	if (gamestate == GS_DOWNLOAD)
 	{
-		screen->SetFont(SmallFont);
-		return;
+		screen->DrawText(CR_WHITE, LEFTMARGIN, vpos, DownloadStr.c_str());
+		lines++;
 	}
 
-	if (lines > 0)
-	{
-		screen->SetFont(ConFont);
-		char linebuffer[256];
-		for (; lines > 1; lines--)
-		{
-			strncpy(linebuffer, (char*)&zap[2], zap[1]);
-			linebuffer[zap[1]] = '\0';
-			screen->DrawText(CR_WHITE, left, offset + lines * ConFont->GetHeight(), linebuffer);
-			zap -= ConCols + 2;
-		}
-		if (ConBottom >= 20)
-		{
-//			if (gamestate == GS_STARTUP)
-//				screen->PrintStr (8, ConBottom - 20, DoomStartupTitle, strlen (DoomStartupTitle));
-//			else
-			screen->DrawChar(CR_BLUE, left, ConBottom - 20, '\x1c');
-			strncpy(linebuffer, &CmdLine.buffer[CmdLine.offset], CmdLine.length);
-			linebuffer[CmdLine.length] = '\0';
-			screen->DrawText(CR_WHITE, left + ConFont->GetSpaceWidth(), ConBottom - 20, linebuffer);
-			if (cursoron)
-			{
-				screen->DrawChar(CR_GOLD, left + (1 + CmdLine.cursor - CmdLine.offset) * ConFont->GetSpaceWidth(),
-				                 ConBottom - 20, '\xb');
-			}
-			if (RowAdjust && ConBottom >= 28)
-			{
-				char c;
+	// Draw the prompt.
+	vpos = ConBottom - BOTTOMARGIN - (ConFont->GetHeight() * lines);
+	screen->DrawChar(CR_BLUE, LEFTMARGIN, vpos, '\x1c');
 
-				// Indicate that the view has been scrolled up (10)
-				// and if we can scroll no further (12)
-				c = (SkipRows + RowAdjust + ConBottom / 8 < ConRows) ? 10 : 12;
-				screen->DrawText(CR_WHITE, 0, ConBottom - 28, &c);
-			}
+	// Draw the input buffer.
+	char linebuffer[256];
+	strncpy(linebuffer, &CmdLine.buffer[CmdLine.offset], CmdLine.length);
+	linebuffer[CmdLine.length] = '\0';
+	screen->DrawText(CR_WHITE, LEFTMARGIN + ConFont->GetSpaceWidth(), vpos, linebuffer);
+
+	// Draw the cursor.
+	if (cursoron)
+		screen->DrawChar(CR_GOLD, LEFTMARGIN + (1 + CmdLine.cursor - CmdLine.offset) * ConFont->GetSpaceWidth(), vpos, '\xb');
+
+	// [AM] Draw Console History from the bottom up.
+	if (ConMessages.size() > 0)
+	{
+		lines++;
+		for (ConsoleHistory::const_reverse_iterator it = ConMessages.rbegin(), eit = ConMessages.rend();it != eit;++it)
+		{
+			vpos = ConBottom - BOTTOMARGIN - (ConFont->GetHeight() * lines);
+			screen->DrawText(CR_WHITE, LEFTMARGIN, vpos, it->c_str());
+
+			if (vpos < 0)
+				// We've rendered off the screen, so we're done.
+				break;
+			lines++;
 		}
 	}
 	screen->SetFont(SmallFont);
