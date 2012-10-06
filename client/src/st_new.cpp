@@ -92,6 +92,7 @@ int V_TextScaleXAmount();
 int V_TextScaleYAmount();
 
 EXTERN_CVAR (hud_scale)
+EXTERN_CVAR (hud_teaminfo)
 EXTERN_CVAR (hud_timer)
 EXTERN_CVAR (hud_targetcount)
 EXTERN_CVAR (st_scale)
@@ -656,6 +657,12 @@ void OdamexHUD() {
 	              hud::X_RIGHT, hud::Y_BOTTOM,
 	              hud::X_RIGHT, hud::Y_BOTTOM,
 	              str.c_str(), color);
+
+	// Draw teaminfo in coop and teamgames.
+	if (multiplayer && hud_teaminfo && sv_gametype != GM_DM) {
+		hud::EATeamPlayerInfo(4, 4, hud_scale, hud::X_RIGHT, hud::Y_TOP,
+		                      hud::X_RIGHT, hud::Y_TOP, 0, 8);
+	}
 
 	// Draw keys in coop
 	if (sv_gametype == GM_COOP) {

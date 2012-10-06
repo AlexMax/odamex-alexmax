@@ -26,6 +26,7 @@
 
 #include "c_cvars.h"
 #include "cl_demo.h"
+#include "d_items.h"
 #include "m_fixed.h" // This should probably go into d_netinf.h
 #include "d_netinf.h"
 #include "d_player.h"
@@ -82,6 +83,16 @@ int MobjToMobjDistance(AActor *a, AActor *b) {
 }
 
 namespace hud {
+
+// Short weapon abbreviations
+static char const* shortweps[NUMWEAPONS] = {
+	"FIS", "PST", "SG", "CG", "RL", "PG", "BFG", "SAW", "SSG"
+};
+
+// Normal weapon names
+static char const* longweps[NUMWEAPONS] = {
+	"Fist", "Pistol", "Shotgun", "Chaingun", "Rocket launcher", "Plasma gun", "BFG900", "Chainsaw", "Super shotgun"
+};
 
 // Player sorting functions
 static bool STACK_ARGS cmpFrags(const player_t *arg1, const player_t *arg2) {
@@ -1135,6 +1146,41 @@ void EASpectatorPings(int x, int y, const float scale,
 			} else {
 				skip -= 1;
 			}
+		}
+	}
+}
+
+// Draw a list of players information on a team.
+void EATeamPlayerInfo(int x, int y, const float scale,
+                      const x_align_t x_align, const y_align_t y_align,
+                      const x_align_t x_origin, const y_align_t y_origin,
+                      const short padding, const short limit,
+                      const bool force_opaque) {
+	char buffer[32];
+	byte drawn = 0;
+
+	for (size_t i = 0;i < sortedPlayers().size();i++) {
+		// Make sure we're not overrunning our limit.
+		if (limit != 0 && drawn >= limit) {
+			break;
+		}
+
+		player_t* player = sortedPlayers()[i];
+
+		// Skip current player, we already know about ourselves.
+		if (player == &displayplayer())
+			continue;
+
+		if (inTeamPlayer(player, displayplayer().userinfo.team)) {
+			int color = CR_GREY;
+			snprintf(buffer, 32, "%-15s %-3s:%d %d:%d", player->userinfo.netname,
+			         shortweps[player->readyweapon],
+			         player->ammo[weaponinfo[player->readyweapon].ammo],
+			         player->mo->health, player->armorpoints);
+			hud::DrawText(x, y, scale, x_align, y_align, x_origin, y_origin,
+			              buffer, color, force_opaque);
+			y += 7 + padding;
+			drawn += 1;
 		}
 	}
 }

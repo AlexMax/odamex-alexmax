@@ -220,6 +220,8 @@ CVAR_FUNC_DECL (hud_targetcount, "2", "Number of players to reveal",
                 CVARTYPE_BYTE, CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 CVAR (hud_targetnames, "1", "Show names of players you're aiming at",
       CVARTYPE_BOOL, CVAR_ARCHIVE)
+CVAR (hud_teaminfo, "1", "Show status of other players on your team", CVARTYPE_BOOL,
+      CVAR_ARCHIVE)
 CVAR (hud_timer, "1", "Show the HUD timer", CVARTYPE_BOOL,
       CVAR_ARCHIVE)
 CVAR (hud_transparency, "0.5", "HUD transparency",	CVARTYPE_FLOAT,
