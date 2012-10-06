@@ -22,6 +22,7 @@
 //-----------------------------------------------------------------------------
 
 #include <algorithm>
+#include <iomanip>
 #include <sstream>
 
 #include "c_cvars.h"
@@ -1156,7 +1157,6 @@ void EATeamPlayerInfo(int x, int y, const float scale,
                       const x_align_t x_origin, const y_align_t y_origin,
                       const short padding, const short limit,
                       const bool force_opaque) {
-	char buffer[32];
 	byte drawn = 0;
 
 	for (size_t i = 0;i < sortedPlayers().size();i++) {
@@ -1168,17 +1168,73 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 		player_t* player = sortedPlayers()[i];
 
 		// Skip current player, we already know about ourselves.
-		if (player == &displayplayer())
-			continue;
+		//if (player == &displayplayer())
+		//	continue;
 
 		if (inTeamPlayer(player, displayplayer().userinfo.team)) {
-			int color = CR_GREY;
-			snprintf(buffer, 32, "%-15s %-3s:%d %d:%d", player->userinfo.netname,
-			         shortweps[player->readyweapon],
-			         player->ammo[weaponinfo[player->readyweapon].ammo],
-			         player->mo->health, player->armorpoints);
-			hud::DrawText(x, y, scale, x_align, y_align, x_origin, y_origin,
-			              buffer, color, force_opaque);
+			int pcolor, wcolor, hcolor, acolor;
+			size_t prammo = weaponinfo[player->readyweapon].ammo;
+
+			// Player color
+			if (displayplayer().ready)
+				pcolor = CR_GREEN;
+			else
+				pcolor = CR_GREY;
+			// Weapon color
+			if (player->ammo[prammo] > (player->maxammo[prammo]) / 2)
+				wcolor = CR_GREEN;
+			else if (player->ammo[prammo] > (player->maxammo[prammo]) / 4)
+				wcolor = CR_GOLD;
+			else
+				wcolor = CR_BRICK;
+			// Health color
+			if (player->mo->health > deh.MaxHealth)
+				hcolor = CR_BLUE;
+			else if (player->mo->health > (deh.MaxHealth / 2))
+				hcolor = CR_GREEN;
+			else if (player->mo->health > (deh.MaxHealth / 4))
+				hcolor = CR_GOLD;
+			else
+				hcolor = CR_BRICK;
+			// Armor color
+			if (player->armortype == deh.BlueAC)
+				acolor = CR_BLUE;
+			else if (player->armortype == deh.GreenAC)
+				acolor = CR_GREEN;
+			else
+				acolor = CR_BRICK;
+
+			if (x_origin == hud::X_LEFT)
+			{
+				// Draw from left
+				std::stringstream buffer;
+				buffer << player->userinfo.netname << std::endl
+				       << player->mo->health << std::endl
+				       << player->armorpoints;
+				//buffer << " " << std::right << player->ammo[weaponinfo[player->readyweapon].ammo];
+
+				std::string name, ammo, health, armor;
+				std::getline(buffer, name);
+				std::getline(buffer, health);
+				std::getline(buffer, armor);
+
+				int offset = 0;
+
+				offset += V_StringWidth("MMM");
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_RIGHT, y_origin,
+				              shortweps[player->readyweapon], wcolor, force_opaque);
+				offset += V_StringWidth(" 000");
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_RIGHT, y_origin,
+				              health.c_str(), hcolor, force_opaque);
+				offset += V_StringWidth("/");
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_RIGHT, y_origin,
+				              "/", CR_WHITE, force_opaque);
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_LEFT, y_origin,
+				              armor.c_str(), acolor, force_opaque);
+				offset += V_StringWidth("000 ");
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_LEFT, y_origin,
+				              name.c_str(), pcolor, force_opaque);
+			}
 			y += 7 + padding;
 			drawn += 1;
 		}
