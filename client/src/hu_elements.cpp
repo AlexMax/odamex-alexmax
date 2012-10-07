@@ -181,6 +181,35 @@ int teamTextColor(byte team) {
 	return color;
 }
 
+// Return a text color based on what a player's name should be colored as.
+int playerTextColor(const player_t* player) {
+	if (!player)
+		return CR_GREY;
+
+	if (player->userinfo.team == TEAM_BLUE) {
+		if (player->flags[it_redflag]) {
+			return CR_RED;
+		} else if (player->flags[it_blueflag]) {
+			return CR_BLUE;
+		} else if (player->ready) {
+			return CR_GREEN;
+		} else if (player->id == displayplayer().id) {
+			return CR_GOLD;
+		}
+	} else if (player->userinfo.team == TEAM_RED) {
+		if (player->flags[it_blueflag]) {
+			return CR_BLUE;
+		} else if (player->flags[it_redflag]) {
+			return CR_RED;
+		} else if (player->ready) {
+			return CR_GREEN;
+		} else if (player->id == displayplayer().id) {
+			return CR_GOLD;
+		}
+	}
+	return CR_GREY;
+}
+
 //// OLD-STYLE "VARIABLES" ////
 // Please don't add any more of these.
 
@@ -736,27 +765,7 @@ void EATeamPlayerNames(int x, int y, const float scale,
 		if (inTeamPlayer(player, team)) {
 			int color = CR_GREY;
 			if (sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF) {
-				if (player->userinfo.team == TEAM_BLUE) {
-					if (player->flags[it_redflag]) {
-						color = CR_RED;
-					} else if (player->flags[it_blueflag]) {
-						color = CR_BLUE;
-					} else if (player->ready) {
-						color = CR_GREEN;
-					} else if (player->id == displayplayer().id) {
-						color = CR_GOLD;
-					}
-				} else if (player->userinfo.team == TEAM_RED) {
-					if (player->flags[it_blueflag]) {
-						color = CR_BLUE;
-					} else if (player->flags[it_redflag]) {
-						color = CR_RED;
-					} else if (player->ready) {
-						color = CR_GREEN;
-					} else if (player->id == displayplayer().id) {
-						color = CR_GOLD;
-					}
-				}
+				color = playerTextColor(player);
 			} else {
 				if (player->id == displayplayer().id) {
 					color = CR_GOLD;
@@ -1157,29 +1166,39 @@ void EATeamPlayerInfo(int x, int y, const float scale,
                       const x_align_t x_origin, const y_align_t y_origin,
                       const short padding, const short limit,
                       const bool force_opaque) {
-	byte drawn = 0;
+	// Don't show teaminfo through the eyes of a flying-around spectator.
+	if (displayplayer().spectator)
+		return;
 
-	for (size_t i = 0;i < sortedPlayers().size();i++) {
+	int teamcount = CountTeamPlayers(displayplayer().userinfo.team);
+
+	// If you are ingame, you are either looking through your own eyes or f12ing
+	// someone else on your team, so that's one less player we need info on.
+	if (ingamePlayer(&consoleplayer()))
+		teamcount -= 1;
+
+	int maxwidth = V_StringWidth("MMMMMMMMMMMMMMM MMM 000/000");
+	hud::Dim(x, y, maxwidth, 7 * teamcount, scale, x_align, y_align, x_origin, y_origin);
+
+	byte drawn = 0;
+	for (size_t i = 0;i < players.size();i++) {
 		// Make sure we're not overrunning our limit.
 		if (limit != 0 && drawn >= limit) {
 			break;
 		}
 
-		player_t* player = sortedPlayers()[i];
+		player_t* player = &players[i];
 
-		// Skip current player, we already know about ourselves.
-		//if (player == &displayplayer())
-		//	continue;
+		// We already know about ourselves.
+		if (player == &consoleplayer())
+			continue;
 
 		if (inTeamPlayer(player, displayplayer().userinfo.team)) {
 			int pcolor, wcolor, hcolor, acolor;
 			size_t prammo = weaponinfo[player->readyweapon].ammo;
 
 			// Player color
-			if (displayplayer().ready)
-				pcolor = CR_GREEN;
-			else
-				pcolor = CR_GREY;
+			pcolor = playerTextColor(player);
 			// Weapon color
 			if (player->ammo[prammo] > (player->maxammo[prammo]) / 2)
 				wcolor = CR_GREEN;
@@ -1204,20 +1223,19 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 			else
 				acolor = CR_BRICK;
 
+			std::stringstream buffer;
+			buffer << player->userinfo.netname << std::endl
+			       << ((player->mo->health >= 0) ? player->mo->health : 0) << std::endl
+			       << player->armorpoints;
+
+			std::string name, ammo, health, armor;
+			std::getline(buffer, name);
+			std::getline(buffer, health);
+			std::getline(buffer, armor);
+
 			if (x_origin == hud::X_LEFT)
 			{
 				// Draw from left
-				std::stringstream buffer;
-				buffer << player->userinfo.netname << std::endl
-				       << player->mo->health << std::endl
-				       << player->armorpoints;
-				//buffer << " " << std::right << player->ammo[weaponinfo[player->readyweapon].ammo];
-
-				std::string name, ammo, health, armor;
-				std::getline(buffer, name);
-				std::getline(buffer, health);
-				std::getline(buffer, armor);
-
 				int offset = 0;
 
 				offset += V_StringWidth("MMM");
@@ -1235,6 +1253,26 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_LEFT, y_origin,
 				              name.c_str(), pcolor, force_opaque);
 			}
+			else if (x_origin == hud::X_RIGHT)
+			{
+				// Draw from right
+				int offset = 0;
+				offset += V_StringWidth("000");
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_LEFT, y_origin,
+				              armor.c_str(), acolor, force_opaque);
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_RIGHT, y_origin,
+				              "/", CR_WHITE, force_opaque);
+				offset += V_StringWidth("/");
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_RIGHT, y_origin,
+				              health.c_str(), hcolor, force_opaque);
+				offset += V_StringWidth(" 000");
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_RIGHT, y_origin,
+				              shortweps[player->readyweapon], wcolor, force_opaque);
+				offset += V_StringWidth("MMM");
+				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_RIGHT, y_origin,
+				              name.c_str(), pcolor, force_opaque);
+			}
+
 			y += 7 + padding;
 			drawn += 1;
 		}
