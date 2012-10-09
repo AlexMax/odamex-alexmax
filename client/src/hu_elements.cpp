@@ -1177,7 +1177,12 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 	if (ingamePlayer(&consoleplayer()))
 		teamcount -= 1;
 
-	int maxwidth = V_StringWidth("MMMMMMMMMMMMMMM MMM 000/000");
+	int maxwidth;
+	if (level.info->locations == NULL)
+		maxwidth = V_StringWidth("MMMMMMMMMMMMMMM MMM 000/000");
+	else
+		maxwidth = V_StringWidth("MMMMMMMMMMMMMMM MMM 000/000 MMMMMMMMMMMMMMM");
+
 	hud::Dim(x, y, maxwidth, 7 * teamcount, scale, x_align, y_align, x_origin, y_origin);
 
 	byte drawn = 0;
@@ -1221,7 +1226,7 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 			else if (player->armortype == deh.GreenAC)
 				acolor = CR_GREEN;
 			else
-				acolor = CR_BRICK;
+				acolor = CR_GREY;
 
 			std::stringstream buffer;
 			buffer << player->userinfo.netname << std::endl
@@ -1237,7 +1242,6 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 			{
 				// Draw from left
 				int offset = 0;
-
 				offset += V_StringWidth("MMM");
 				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_RIGHT, y_origin,
 				              shortweps[player->readyweapon], wcolor, force_opaque);
@@ -1256,7 +1260,14 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 			else if (x_origin == hud::X_RIGHT)
 			{
 				// Draw from right
-				int offset = 0;
+				int offset = V_StringWidth("M") * 15;
+				if (level.info->locations != NULL)
+				{
+					const std::string* location = level.info->locations->get_location(player->mo->x, player->mo->y, player->mo->z);
+					hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_LEFT, y_origin,
+					              location->c_str(), CR_GREY, force_opaque);
+					offset += V_StringWidth(" ");
+				}
 				offset += V_StringWidth("000");
 				hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_LEFT, y_origin,
 				              armor.c_str(), acolor, force_opaque);

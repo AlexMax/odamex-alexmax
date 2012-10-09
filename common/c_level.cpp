@@ -71,6 +71,31 @@ size_t numwadclusterinfos = 0;
 
 BOOL HexenHack;
 
+// [AM] Add point to location list.
+void MapLocations::add_point(fixed_t x, fixed_t y, fixed_t z, const char* location) {
+	pointlocations.push_back(PointLocation(x, y, z, location));
+}
+
+// [AM] Get location based on passed x, y and z location.
+//      TODO: Just X and Y location is okay for now.
+const std::string* MapLocations::get_location(fixed_t x, fixed_t y, fixed_t z)
+{
+	fixed_t lowestdist = 0;
+	const std::string* location;
+
+	for (PointLocations::const_iterator it = pointlocations.begin();it != pointlocations.end();++it)
+	{
+		fixed_t dist = P_AproxDistance(it->x - x, it->y - y);
+		if (lowestdist == 0 || lowestdist > dist)
+		{
+			lowestdist = dist;
+			location = &(it->location);
+		}
+	}
+
+	return location;
+}
+
 static const char *MapInfoTopLevel[] =
 {
 	"map",
@@ -218,6 +243,20 @@ MapInfoHandler ClusterHandlers[] =
 	{ MITYPE_SETFLAG,	CLUSTER_HUB, 0 }
 };
 
+// [AM] For lOCINFO
+static const char* LocInfo[] =
+{
+	"map",
+	"point",
+	NULL
+};
+
+enum
+{
+	LOC_MAP,
+	LOC_POINT
+};
+
 static void ParseMapInfoLower (MapInfoHandler *handlers,
 							   const char *strings[],
 							   level_pwad_info_t *levelinfo,
@@ -246,6 +285,7 @@ static void SetLevelDefaults (level_pwad_info_t *levelinfo)
 {
 	memset (levelinfo, 0, sizeof(*levelinfo));
 	levelinfo->snapshot = NULL;
+	levelinfo->locations = NULL;
 	levelinfo->outsidefog = 0xff000000;
 	strncpy (levelinfo->fadetable, "COLORMAP", 8);
 }
@@ -457,6 +497,75 @@ static void ParseMapInfoLower (MapInfoHandler *handlers,
 		levelinfo->flags = flags;
 	else
 		clusterinfo->flags = flags;
+}
+
+// [AM] Parse LOCINFO lumps for locations in a map
+//      The format of LOCINFO is quite simple.  A line can either be a map
+//      line or a point line.
+//      - A map line consists of "map <maplump>" and simply starts the location
+//        definition for a particular map.  All locations that follow a map
+//        line are applied to that map.
+//      - A point line consists of "point <x> <y> <z> <location name>".  The x, y
+//        and z are integers that make up a point on the map, and the location
+//        name is the name of the location at that point.
+//      In order to determine which location to display for a player, Odamex
+//      will calculate the closest point to the player.  The location name can
+//      be as long as a string can in theory, but practically the HUD will
+//      probably truncate them to some reasonable length.  Perhaps in the future
+//      there can be some other primitives, like "rect" or "shape".
+void G_ParseLocInfo()
+{
+	int lump, lastlump = 0;
+
+	while ((lump = W_FindLump("LOCINFO", &lastlump)) != -1)
+	{
+		char current_map[9];
+		level_info_t* current_mapinfo = 0;
+
+		SC_OpenLumpNum(lump, "LOCINFO");
+
+		while (SC_GetString())
+		{
+			int x, y, z;
+			char* location;
+
+			switch (SC_MustMatchString(LocInfo))
+			{
+				case LOC_MAP:
+				// Switch to a new map context.
+				SC_MustGetString();
+				uppercopy(current_map, sc_String);
+				current_mapinfo = FindLevelInfo(current_map);
+				// TODO: Handle unloaded current_mapinfo
+				if (current_mapinfo->locations == NULL)
+					current_mapinfo->locations = new MapLocations;
+				break;
+
+				case LOC_POINT:
+				// Add a point location
+				if (strlen(current_map) == 0) {
+					SC_ScriptError("'point' outside of 'map' context", NULL);
+					break;
+				}
+
+				SC_MustGetNumber();
+				x = sc_Number << FRACBITS;
+				SC_MustGetNumber();
+				y = sc_Number << FRACBITS;
+				SC_MustGetNumber();
+				z = sc_Number << FRACBITS;
+				SC_MustGetString();
+				location = sc_String;
+
+				current_mapinfo->locations->add_point(x, y, z, location);
+				break;
+
+				default:
+				// Do nothing.
+				break;
+			}
+		}
+	}
 }
 
 static void zapDefereds (acsdefered_t *def)

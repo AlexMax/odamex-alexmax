@@ -1399,6 +1399,7 @@ std::vector<size_t> D_DoomWadReboot(
 
 	G_SetLevelStrings ();
 	G_ParseMapInfo ();
+	G_ParseLocInfo();
 	G_ParseMusInfo ();
 	S_ParseSndInfo();
 
@@ -1561,7 +1562,10 @@ void D_DoomMain (void)
 
 	// [RH] Parse through all loaded mapinfo lumps
 	G_ParseMapInfo ();
-	
+
+	// [AM] Parse location info lump
+	G_ParseLocInfo();
+
 	// [ML] Parse musinfo lump
 	G_ParseMusInfo ();
 

@@ -66,6 +66,30 @@
 #define LEVEL_CHANGEMAPCHEAT	0x40000000		// Don't display cluster messages
 #define LEVEL_VISITED			0x80000000		// Used for intermission map
 
+struct PointLocation {
+	fixed_t x;
+	fixed_t y;
+	fixed_t z;
+	std::string location;
+	PointLocation(fixed_t x, fixed_t y, fixed_t z, const char* location)
+	{
+		this->x = x;
+		this->y = y;
+		this->z = z;
+		this->location = location;
+	}
+};
+
+typedef std::vector<PointLocation> PointLocations;
+
+class MapLocations {
+private:
+	PointLocations pointlocations;
+public:
+	void add_point(fixed_t x, fixed_t y, fixed_t z, const char* location);
+	const std::string* get_location(fixed_t x, fixed_t y, fixed_t z);
+};
+
 struct acsdefered_s;
 class FBehavior;
 
@@ -83,6 +107,7 @@ struct level_info_s {
 	int			cluster;
 	FLZOMemFile	*snapshot;
 	struct acsdefered_s *defered;
+	MapLocations* locations;
 };
 typedef struct level_info_s level_info_t;
 
@@ -102,6 +127,7 @@ struct level_pwad_info_s
 	int			cluster;
 	FLZOMemFile	*snapshot;
 	struct acsdefered_s *defered;
+	MapLocations* locations;
 
 	// level_pwad_info_s				[ML] 5/11/06 Removed sky scrolling/sky2
 	char		skypic2[9];
@@ -209,6 +235,7 @@ level_info_t *FindLevelByNum (int num);
 char *CalcMapName (int episode, int level);
 
 void G_ParseMapInfo (void);
+void G_ParseLocInfo (void);
 void G_ParseMusInfo (void);
 
 void G_ClearSnapshots (void);
