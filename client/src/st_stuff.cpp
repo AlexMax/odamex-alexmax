@@ -73,6 +73,7 @@ EXTERN_CVAR (idmypos)
 EXTERN_CVAR (sv_allowredscreen)
 EXTERN_CVAR (screenblocks)
 EXTERN_CVAR (hud_fullhudtype)
+EXTERN_CVAR (r_widescreen)
 
 CVAR_FUNC_IMPL (r_painintensity)
 {
@@ -86,9 +87,13 @@ void ST_AdjustStatusBarScale(bool scale)
 {
 	if (scale)
 	{
-		// Stretch status bar to fill width of screen
-		ST_WIDTH = screen->width;
-   		ST_HEIGHT = (32 * screen->height) / 200;
+		// Scale status bar height to screen.
+		ST_HEIGHT = (32 * screen->height) / 200;
+		// [AM] Scale status bar width according to height, unless there isn't
+		//      enough room for it.  Fixes widescreen status bar scaling.
+		ST_WIDTH = ST_HEIGHT * 10;
+		if (ST_WIDTH > screen->width || r_widescreen.asInt() == 0)
+			ST_WIDTH = screen->width;
 	}
 	else
 	{
@@ -827,7 +832,7 @@ END_COMMAND (notarget)
 
 BEGIN_COMMAND (fly)
 {
-	if (CheckCheatmode ())
+	if (!consoleplayer().spectator && CheckCheatmode ())
 		return;
 
 	consoleplayer().cheats ^= CF_FLY;
@@ -837,8 +842,11 @@ BEGIN_COMMAND (fly)
     else
         Printf(PRINT_HIGH, "Fly mode off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
-	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
+	if (!consoleplayer().spectator)
+	{
+		MSG_WriteMarker(&net_buffer, clc_cheat);
+		MSG_WriteByte(&net_buffer, consoleplayer().cheats);
+	}
 }
 END_COMMAND (fly)
 

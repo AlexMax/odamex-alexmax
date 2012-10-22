@@ -72,6 +72,8 @@ size_t			numlumps;
 
 void**			lumpcache;
 
+static unsigned	stdisk_lumpnum;
+
 #define MAX_HASHES 10
 
 typedef struct
@@ -567,6 +569,8 @@ std::vector<std::string> W_InitMultipleFiles (std::vector<std::string> &filename
 
 	memset (lumpcache,0, size);
 
+	stdisk_lumpnum = W_GetNumForName("STDISK");
+
 	return hashes;
 }
 
@@ -668,7 +672,8 @@ W_ReadLump
 
 	l = lumpinfo + lump;
 
-    I_BeginRead();
+	if (lump != stdisk_lumpnum)
+    	I_BeginRead();
 
 	fseek (l->handle, l->position, SEEK_SET);
 	c = fread (dest, l->size, 1, l->handle);
@@ -676,7 +681,8 @@ W_ReadLump
 	if (feof(l->handle))
 		I_Error ("W_ReadLump: only read %i of %i on lump %i", c, l->size, lump);
 
-    I_EndRead();
+	if (lump != stdisk_lumpnum)
+    	I_EndRead();
 }
 
 //
@@ -771,26 +777,55 @@ W_CacheLumpName
 	return W_CacheLumpNum (W_GetNumForName(name), tag);
 }
 
+size_t R_CalculateNewPatchSize(patch_t *patch);
+void R_ConvertPatch(patch_t *rawpatch, patch_t *newpatch);
+
 //
 // W_CachePatch
 //
-patch_t* W_CachePatch
-( unsigned	lump,
- int		tag )
+// [SL] Reads and caches a patch from disk. This takes care of converting the
+// patch from the standard Doom format of posts with 1-byte lengths and offsets
+// to a new format for posts that uses 2-byte lengths and offsets.
+// 
+patch_t* W_CachePatch(unsigned lumpnum, int tag)
 {
-	patch_t *patch = (patch_t *)W_CacheLumpNum (lump, tag);
+	if (lumpnum >= numlumps)
+		I_Error ("W_CachePatch: %u >= numlumps", lumpnum);
+
+	if (!lumpcache[lumpnum])
+	{
+		// temporary storage of the raw patch in the old format
+		byte *rawlumpdata = new byte[W_LumpLength(lumpnum)];
+
+		W_ReadLump(lumpnum, rawlumpdata);
+		patch_t *rawpatch = (patch_t*)(rawlumpdata);
+
+		size_t newlumplen = R_CalculateNewPatchSize(rawpatch);
+
+		byte *ptr = (byte *)Z_Malloc(newlumplen + 1, tag, &lumpcache[lumpnum]);
+		patch_t *newpatch = (patch_t*)lumpcache[lumpnum];	
+
+		R_ConvertPatch(newpatch, rawpatch);
+
+		delete [] rawlumpdata;
+
+		ptr[newlumplen] = 0;
+	}
+	else
+	{
+		Z_ChangeTag(lumpcache[lumpnum], tag);
+	}
 
 	// denis - todo - would be good to check whether the patch violates W_LumpLength here
 	// denis - todo - would be good to check for width/height == 0 here, and maybe replace those with a valid patch
 
-	return patch;
+	return (patch_t*)lumpcache[lumpnum];
 }
 
-patch_t* W_CachePatch
-( const char* name,
- int		tag )
+patch_t* W_CachePatch(const char* name, int tag)
 {
-	return W_CachePatch(W_GetNumForName(name), tag); // denis - todo - would be good to replace non-existant patches with a default '404' patch
+	return W_CachePatch(W_GetNumForName(name), tag);
+	// denis - todo - would be good to replace non-existant patches with a default '404' patch
 }
 
 //
