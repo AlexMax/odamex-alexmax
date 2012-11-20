@@ -31,6 +31,7 @@
 #include "p_acs.h"
 #include "p_saveg.h"
 #include "p_lnspec.h"
+#include "p_inventory.h"
 #include "m_random.h"
 #include "doomstat.h"
 #include "c_console.h"
@@ -2413,7 +2414,7 @@ void DLevelScript::RunScript ()
 			pc += 4;
 			break;
         */
-		/*case PCD_CLEARINVENTORY:
+		case PCD_CLEARINVENTORY:
 			ClearInventory (activator);
 			break;
 
@@ -2445,7 +2446,6 @@ void DLevelScript::RunScript ()
 			PushToStack (CheckInventory (activator, level.behavior->LookupString (pc[0])));
 			pc += 1;
 			break;
-        */
 
 		case PCD_SETMUSIC:
 			S_ChangeMusic (level.behavior->LookupString (STACK(3)), STACK(2));
