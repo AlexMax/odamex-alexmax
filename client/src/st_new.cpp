@@ -665,10 +665,10 @@ void OdamexHUD() {
 	              str.c_str(), color);
 
 	// Draw teaminfo in coop and teamgames.
-	if (multiplayer && hud_teaminfo && sv_gametype != GM_DM) {
+	//if (multiplayer && hud_teaminfo && sv_gametype != GM_DM) {
 		hud::EATeamPlayerInfo(4, 4, hud_scale, hud::X_RIGHT, hud::Y_TOP,
 		                      hud::X_RIGHT, hud::Y_TOP, 0, 8);
-	}
+	//}
 
 	// Draw keys in coop
 	if (sv_gametype == GM_COOP) {

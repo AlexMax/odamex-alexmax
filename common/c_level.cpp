@@ -71,25 +71,40 @@ size_t numwadclusterinfos = 0;
 
 BOOL HexenHack;
 
-// [AM] Add point to location list.
-void MapLocations::add_point(fixed_t x, fixed_t y, fixed_t z, const char* location) {
-	pointlocations.push_back(PointLocation(x, y, z, location));
+bool RectLocation::inside(fixed_t x, fixed_t y, fixed_t z) const
+{
+	return true;
+}
+
+fixed_t PointLocation::distance(fixed_t x, fixed_t y, fixed_t z) const
+{
+	return P_AproxDistance(this->x - x, this->y - y);
 }
 
 // [AM] Get location based on passed x, y and z location.
 //      TODO: Just X and Y location is okay for now.
 const std::string* MapLocations::get_location(fixed_t x, fixed_t y, fixed_t z)
 {
-	fixed_t lowestdist = 0;
+	fixed_t dist, lowestdist;
 	const std::string* location;
 
+	// [AM] Look for the first shapelike entry that matches.
+	for (ShapeLocations::const_iterator it = shapelocations.begin();it != shapelocations.end();++it)
+	{
+		if (it->inside(x, y, 0))
+			return it->get_location();
+	}
+
+	lowestdist = 0;
+
+	// [AM] Could not find a shape entry, last resort is on point locations.
 	for (PointLocations::const_iterator it = pointlocations.begin();it != pointlocations.end();++it)
 	{
-		fixed_t dist = P_AproxDistance(it->x - x, it->y - y);
+		dist = it->distance(x, y, 0);
 		if (lowestdist == 0 || lowestdist > dist)
 		{
 			lowestdist = dist;
-			location = &(it->location);
+			location = it->get_location();
 		}
 	}
 
@@ -248,13 +263,15 @@ static const char* LocInfo[] =
 {
 	"map",
 	"point",
+	"rect",
 	NULL
 };
 
 enum
 {
 	LOC_MAP,
-	LOC_POINT
+	LOC_POINT,
+	LOC_RECT
 };
 
 static void ParseMapInfoLower (MapInfoHandler *handlers,
@@ -526,7 +543,7 @@ void G_ParseLocInfo()
 
 		while (SC_GetString())
 		{
-			int x, y, z;
+			int x, x1, x2, y, y1, y2, z;
 			char* location;
 
 			switch (SC_MustMatchString(LocInfo))
@@ -557,7 +574,28 @@ void G_ParseLocInfo()
 				SC_MustGetString();
 				location = sc_String;
 
-				current_mapinfo->locations->add_point(x, y, z, location);
+				current_mapinfo->locations->add(PointLocation(x, y, z, location));
+				break;
+
+				case LOC_RECT:
+				// Add a rectangle location
+				if (strlen(current_map) == 0) {
+					SC_ScriptError("'rect' outside of 'map' context", NULL);
+					break;
+				}
+
+				SC_MustGetNumber();
+				x1 = sc_Number << FRACBITS;
+				SC_MustGetNumber();
+				y1 = sc_Number << FRACBITS;
+				SC_MustGetNumber();
+				x2 = sc_Number << FRACBITS;
+				SC_MustGetNumber();
+				y2 = sc_Number << FRACBITS;
+				SC_MustGetString();
+				location = sc_String;
+
+				current_mapinfo->locations->add(RectLocation(x1, y1, x2, y2, location));
 				break;
 
 				default:

@@ -66,27 +66,62 @@
 #define LEVEL_CHANGEMAPCHEAT	0x40000000		// Don't display cluster messages
 #define LEVEL_VISITED			0x80000000		// Used for intermission map
 
-struct PointLocation {
+class PointLocation {
+private:
 	fixed_t x;
 	fixed_t y;
 	fixed_t z;
 	std::string location;
-	PointLocation(fixed_t x, fixed_t y, fixed_t z, const char* location)
+public:
+	PointLocation(fixed_t cx, fixed_t cy, fixed_t cz, const char* clocation) :
+		x(cx), y(cy), z(cz), location(clocation) { }
+	fixed_t distance(fixed_t x, fixed_t y, fixed_t z) const;
+	const std::string* get_location() const
 	{
-		this->x = x;
-		this->y = y;
-		this->z = z;
-		this->location = location;
+		return &(this->location);
 	}
 };
 
 typedef std::vector<PointLocation> PointLocations;
 
+class ShapeLocation {
+private:
+	std::string location;
+public:
+	virtual bool inside(fixed_t x, fixed_t y, fixed_t z) const;
+	const std::string* get_location() const
+	{
+		return &(this->location);
+	}
+};
+
+class RectLocation : public ShapeLocation {
+private:
+	fixed_t x1;
+	fixed_t y1;
+	fixed_t x2;
+	fixed_t y2;
+public:
+	RectLocation(fixed_t cx1, fixed_t cy1, fixed_t cx2, fixed_t cy2, const char* clocation) :
+		x1(cx1), y1(cy1), x2(cx2), y2(cy2), location(clocation) { }
+	bool inside(fixed_t x, fixed_t y, fixed_t z) const;
+};
+
+typedef std::vector<ShapeLocation> ShapeLocations;
+
 class MapLocations {
 private:
 	PointLocations pointlocations;
+	ShapeLocations shapelocations;
 public:
-	void add_point(fixed_t x, fixed_t y, fixed_t z, const char* location);
+	void add(const PointLocation& point)
+	{
+		pointlocations.push_back(point);
+	}
+	void add(const ShapeLocation& shape)
+	{
+		shapelocations.push_back(shape);
+	}
 	const std::string* get_location(fixed_t x, fixed_t y, fixed_t z);
 };
 

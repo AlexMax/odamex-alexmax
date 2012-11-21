@@ -1234,8 +1234,8 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 		player_t* player = &players[i];
 
 		// We already know about ourselves.
-		if (player == &consoleplayer())
-			continue;
+		//if (player == &consoleplayer())
+		//	continue;
 
 		if (inTeamPlayer(player, displayplayer().userinfo.team)) {
 			int pcolor, wcolor, hcolor, acolor;
