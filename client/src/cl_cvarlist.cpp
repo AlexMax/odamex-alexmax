@@ -196,8 +196,7 @@ CVAR (mouse_threshold,		"0", 	"",	CVARTYPE_FLOAT, CVAR_ARCHIVE | CVAR_NOENABLEDI
 CVAR (m_filter,				"0",	"Smooth mouse input",	CVARTYPE_STRING, CVAR_ARCHIVE)
 CVAR (dynres_state,			"0", 	"",	CVARTYPE_FLOAT,	CVAR_ARCHIVE)
 CVAR (dynresval,			"1.0",	"",	CVARTYPE_FLOAT, CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
-CVAR (displaymouse,			"0",	"Display mouse values",	CVARTYPE_BOOL,	CVAR_ARCHIVE)		// [Toke - Mouse] added for mouse menu
-
+CVAR (hud_mousegraph,			"0",	"Display mouse values",	CVARTYPE_BOOL,	CVAR_ARCHIVE)		// [Toke - Mouse] added for mouse menu
 
 CVAR (idmypos, "0", "Shows current player position on map",	CVARTYPE_BOOL, CVAR_NULL)
 
@@ -364,7 +363,7 @@ CVAR (vid_fps, "0", "",	CVARTYPE_BOOL, CVAR_CLIENTINFO)
 // TODO: document
 CVAR_FUNC_DECL (screenblocks, "10", "",	CVARTYPE_BYTE, CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 // How to handle widescreen resolutions
-CVAR_FUNC_DECL (r_widescreen, "3", "Determine how widescreen video modes are handled.\n// 0: Stretched to fit.\n// 1: Pillarboxed/Letterboxed (Not Implemented).\n// 2: Zoomed-in field of view.\n// 3: Widened field-of-view (true widescreen).",
+CVAR_FUNC_DECL (r_widescreen, "3", "Determine how widescreen video modes are handled.\n// 0: Stretched to fit.\n// 1: Zoomed-in field of view.\n// 2: Widened field-of-view (true widescreen) with a stretched fallback.\n// 3: Widened field-of-view (true widescreen) with a zoomed fallback.",
                 CVARTYPE_BYTE, CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 // Older (Doom-style) FPS counter
 CVAR (vid_ticker, "0", "",	CVARTYPE_BOOL, CVAR_CLIENTINFO)

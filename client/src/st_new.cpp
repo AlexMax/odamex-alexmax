@@ -623,8 +623,14 @@ void OdamexHUD() {
 	int color;
 	std::string str;
 
-	// Draw Timer
-	if (hud_timer) {
+	// Draw warmup state or timer
+	str = hud::Warmup(color);
+	if (!str.empty()) {
+		hud::DrawText(0, 4, hud_scale,
+		              hud::X_CENTER, hud::Y_BOTTOM,
+		              hud::X_CENTER, hud::Y_BOTTOM,
+		              str.c_str(), color);
+	} else if (hud_timer) {
 		str = hud::Timer(color);
 		hud::DrawText(0, 4, hud_scale,
 		              hud::X_CENTER, hud::Y_BOTTOM,
@@ -688,8 +694,14 @@ void SpectatorHUD() {
 	int color;
 	std::string str;
 
-	// Draw Timer
-	if (hud_timer) {
+	// Draw warmup state or timer
+	str = hud::Warmup(color);
+	if (!str.empty()) {
+		hud::DrawText(0, 4, hud_scale,
+		              hud::X_CENTER, hud::Y_BOTTOM,
+		              hud::X_CENTER, hud::Y_BOTTOM,
+		              str.c_str(), color);
+	} else if (hud_timer) {
 		str = hud::Timer(color);
 		hud::DrawText(0, 4, hud_scale,
 		              hud::X_CENTER, hud::Y_BOTTOM,
@@ -807,8 +819,14 @@ void ZDoomHUD() {
 	int color;
 	std::string str;
 
-	// Draw Timer
-	if (hud_timer) {
+	// Draw warmup state or timer
+	str = hud::Warmup(color);
+	if (!str.empty()) {
+		hud::DrawText(0, 4, hud_scale,
+		              hud::X_CENTER, hud::Y_BOTTOM,
+		              hud::X_CENTER, hud::Y_BOTTOM,
+		              str.c_str(), color);
+	} else if (hud_timer) {
 		str = hud::Timer(color);
 		hud::DrawText(0, 4, hud_scale,
 		              hud::X_CENTER, hud::Y_BOTTOM,
@@ -847,8 +865,14 @@ void DoomHUD() {
 		st_y = screen->height - ST_Y;
 	}
 
-	// Draw Timer
-	if (hud_timer) {
+	// Draw warmup state or timer
+	str = hud::Warmup(color);
+	if (!str.empty()) {
+		hud::DrawText(0, st_y + 4, hud_scale,
+		              hud::X_CENTER, hud::Y_BOTTOM,
+		              hud::X_CENTER, hud::Y_BOTTOM,
+		              str.c_str(), color);
+	} else if (hud_timer) {
 		str = hud::Timer(color);
 		hud::DrawText(0, st_y + 4, hud_scale,
 		              hud::X_CENTER, hud::Y_BOTTOM,

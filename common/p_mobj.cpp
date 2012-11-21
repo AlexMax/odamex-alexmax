@@ -60,6 +60,7 @@ EXTERN_CVAR(co_zdoomphys)
 EXTERN_CVAR(co_realactorheight)
 EXTERN_CVAR(sv_teamspawns)
 EXTERN_CVAR(sv_nomonsters)
+EXTERN_CVAR(sv_monstershealth)
 EXTERN_CVAR(co_fixweaponimpacts)
 EXTERN_CVAR(co_allowdropoff)
 
@@ -743,7 +744,7 @@ void AActor::Serialize (FArchive &arc)
 			<< threshold
 			<< playerid
 			<< lastlook
-			/*<< tracer ? tracer->netid : 0*/
+			<< tracer
 			<< tid
             << special
 			<< args[0]
@@ -768,6 +769,7 @@ void AActor::Serialize (FArchive &arc)
 		unsigned dummy;
 		unsigned playerid;
 		int newnetid;
+		AActor* tmptracer;
 
 		arc >> newnetid
 			>> x
@@ -804,7 +806,7 @@ void AActor::Serialize (FArchive &arc)
 			>> threshold
 			>> playerid
 			>> lastlook
-			/*>> tracer->netid*/
+			>> tmptracer
 			>> tid
 			>> special
 			>> args[0]
@@ -817,6 +819,8 @@ void AActor::Serialize (FArchive &arc)
 			>> translucency
 			>> waterlevel
 			>> gear;
+
+		tracer.init(tmptracer);
 
 		P_SetThingId(this, newnetid);
 
@@ -861,16 +865,14 @@ int P_ThingInfoHeight(mobjinfo_t *mi)
        mi->cdheight : mi->height);
 }
 
-//
-//
+extern void SV_UpdateMobjState(AActor *mo);
+
 // P_SetMobjState
 //
 // Returns true if the mobj is still present.
-//
-//
-bool P_SetMobjState(AActor *mobj, statenum_t state)
+bool P_SetMobjState(AActor *mobj, statenum_t state, bool cl_update)
 {
-    state_t*	st;
+	state_t* st;
 
 	// denis - prevent harmful state cycles
 	static unsigned int callstack;
@@ -880,8 +882,8 @@ bool P_SetMobjState(AActor *mobj, statenum_t state)
 		I_Error("P_SetMobjState: callstack depth exceeded bounds");
 	}
 
-    do
-    {
+	do
+	{
 		if (state == S_NULL)
 		{
 			mobj->state = (state_t *) S_NULL;
@@ -897,16 +899,21 @@ bool P_SetMobjState(AActor *mobj, statenum_t state)
 		mobj->sprite = st->sprite;
 		mobj->frame = st->frame;
 
+		// [AM] Broadcast the state of the mobj to every player, after changing
+		//      it but before running the action associated with it.
+		if (serverside && cl_update)
+			SV_UpdateMobjState(mobj);
+
 		// Modified handling.
 		// Call action functions when the state is set
 		if (st->action)
 			st->action(mobj);
 
 		state = st->nextstate;
-    } while (!mobj->tics);
+	} while (!mobj->tics);
 
 	callstack--;
-    return true;
+	return true;
 }
 
 //
@@ -974,8 +981,11 @@ void P_XYMovement(AActor *mo)
 	
 	do
 	{
-		if ((xmove > maxmove || ymove > maxmove)
-		     || (co_zdoomphys && (xmove < -maxmove || ymove < -maxmove)))
+		// This is where the "wallrunning" effect happens. Vanilla only
+		// allows wallrunning North and East, while ZDoom physics allow
+		// North and South.
+		if ((!co_zdoomphys && (xmove > maxmove)) || ymove > maxmove ||
+		    (co_zdoomphys && (ymove < -maxmove)))
 		{
 			ptryx = mo->x + xmove/2;
 			ptryy = mo->y + ymove/2;
@@ -2425,6 +2435,10 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 		mobj->radius = mobj->args[0] << FRACBITS;
 		mobj->height = mobj->args[1] << FRACBITS;
 	}
+
+	// [AM] Adjust monster health based on server setting
+	if ((i == MT_SKULL || (mobjinfo[i].flags & MF_COUNTKILL)) && sv_monstershealth != 1.0f)
+		mobj->health *= sv_monstershealth;
 
 	if (mobj->tics > 0)
 		mobj->tics = 1 + (P_Random () % mobj->tics);

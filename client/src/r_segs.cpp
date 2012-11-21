@@ -95,7 +95,7 @@ void R_ColumnToPointOnSeg(int column, line_t *line, fixed_t &x, fixed_t &y);
 //
 // R_StoreWallRange
 //
-static void BlastMaskedColumn (void (*blastfunc)(column_t *column), int texnum)
+static void BlastMaskedColumn (void (*blastfunc)(tallpost_t *post), int texnum)
 {
 	if (maskedtexturecol[dc_x] != MAXINT && spryscale > 0)
 	{
@@ -120,28 +120,31 @@ static void BlastMaskedColumn (void (*blastfunc)(column_t *column), int texnum)
 		// arithmetic and by skipping the drawing of 2s normals whose
 		// mapping to screen coordinates is totally out of range:
 
+		int64_t t = ((int64_t)centeryfrac << FRACBITS) -
+					(int64_t)dc_texturemid * spryscale;
+			
+		// [RH] This doesn't work properly as-is with freelook. Probably just me.
+		// [SL] Seems to work for me and prevents overflows after increasing
+		//      the max scale factor for segs.
+		// Skip if the texture is out of the screen's range	
+		if (t + (int64_t)textureheight[texnum] * spryscale >= 0 &&
+		    t < (int64_t)screen->height << (FRACBITS * 2))
 		{
-			__int64 t = ((__int64) centeryfrac << FRACBITS) -
-				(__int64) dc_texturemid * spryscale;
-// [RH] This doesn't work properly as-is with freelook. Probably just me.
-//				if (t + (__int64) textureheight[texnum] * spryscale < 0 ||
-//					 t > (__int64) screen.height << FRACBITS*2)
-//					continue;		// skip if the texture is out of screen's range
 			sprtopscreen = (fixed_t)(t >> FRACBITS);
+			dc_iscale = 0xffffffffu / (unsigned)spryscale;
+
+			// killough 1/25/98: here's where Medusa came in, because
+			// it implicitly assumed that the column was all one patch.
+			// Originally, Doom did not construct complete columns for
+			// multipatched textures, so there were no header or trailer
+			// bytes in the column referred to below, which explains
+			// the Medusa effect. The fix is to construct true columns
+			// when forming multipatched textures (see r_data.c).
+
+			// draw the texture
+			blastfunc (R_GetColumn(texnum, maskedtexturecol[dc_x]));
+			maskedtexturecol[dc_x] = MAXINT;
 		}
-		dc_iscale = 0xffffffffu / (unsigned)spryscale;
-
-		// killough 1/25/98: here's where Medusa came in, because
-		// it implicitly assumed that the column was all one patch.
-		// Originally, Doom did not construct complete columns for
-		// multipatched textures, so there were no header or trailer
-		// bytes in the column referred to below, which explains
-		// the Medusa effect. The fix is to construct true columns
-		// when forming multipatched textures (see r_data.c).
-
-		// draw the texture
-		blastfunc ((column_t *)((byte *)R_GetColumn(texnum, maskedtexturecol[dc_x]) -3));
-		maskedtexturecol[dc_x] = MAXINT;
 	}
 	spryscale += rw_scalestep;
 	rw_light += rw_lightstep;
@@ -400,7 +403,7 @@ static void BlastColumn (void (*blastfunc)())
 		dc_yl = yl;
 		dc_yh = yh;
 		dc_texturefrac = rw_midtexturemid + dc_yl * dc_iscale - texfracdiff;
-		dc_source = R_GetColumn (midtexture, texturecolumn);
+		dc_source = R_GetColumnData(midtexture, texturecolumn);
 		blastfunc ();
 		ceilingclip[rw_x] = viewheight;
 		floorclip[rw_x] = -1;
@@ -421,7 +424,7 @@ static void BlastColumn (void (*blastfunc)())
 				dc_yl = yl;
 				dc_yh = mid;
 				dc_texturefrac = rw_toptexturemid + dc_yl * dc_iscale - texfracdiff;
-				dc_source = R_GetColumn (toptexture, texturecolumn);
+				dc_source = R_GetColumnData(toptexture, texturecolumn);
 				blastfunc ();
 				ceilingclip[rw_x] = mid;
 			}
@@ -449,7 +452,7 @@ static void BlastColumn (void (*blastfunc)())
 				dc_yl = mid;
 				dc_yh = yh;
 				dc_texturefrac = rw_bottomtexturemid + dc_yl * dc_iscale - texfracdiff;
-				dc_source = R_GetColumn (bottomtexture, texturecolumn);
+				dc_source = R_GetColumnData(bottomtexture, texturecolumn);
 				blastfunc ();
 				floorclip[rw_x] = mid;
 			}
@@ -727,6 +730,8 @@ void R_StoreWallRange(int start, int stop)
 	else
 	{
 		ds_p->scale2 = ds_p->scale1;
+		ds_p->scalestep = rw_scalestep = 0;
+		ds_p->lightstep = rw_lightstep = 0;
 	}
 
 	// calculate texture boundaries
@@ -1040,60 +1045,59 @@ void R_StoreWallRange(int start, int stop)
 			markceiling = false;	
 	}
 
+	float fscale1 = FIXED2FLOAT(ds_p->scale1);
+	float fscale2 = FIXED2FLOAT(ds_p->scale2);
+
 	// [SL] 2012-01-31 - Calculate front side ceiling height values
-	fixed_t topf_start = ((rw_frontcz1 - viewz) >> 4) * FIXED2FLOAT(ds_p->scale1);
-	fixed_t topf_stop = ((rw_frontcz2 - viewz) >> 4) * FIXED2FLOAT(ds_p->scale2);
+	fixed_t topf_start = ((rw_frontcz1 - viewz) >> 4) * fscale1; 
+	fixed_t topf_stop  = ((rw_frontcz2 - viewz) >> 4) * fscale2;
+	fixed_t topf_step  = 0;
+
 	if (stop > start)
-	{
-		fixed_t topf_step = (topf_start - topf_stop) / (stop - start);
-		for (int n = start; n <= stop; n++)
-			walltopf[n] = (centeryfrac >> 4) - topf_start + (n - start) * topf_step;	
-	}
-	else
-		walltopf[start] = (centeryfrac >> 4)- topf_start;
+		topf_step = (topf_start - topf_stop) / (stop - start);
+	
+	for (int n = start; n <= stop; n++)
+		walltopf[n] = (centeryfrac >> 4) - topf_start + (n - start) * topf_step;	
 
 	// [SL] 2012-01-31 - Calculate front side floor height values
-	fixed_t bottomf_start = ((rw_frontfz1 - viewz) >> 4) * FIXED2FLOAT(ds_p->scale1);
-	fixed_t bottomf_stop = ((rw_frontfz2 - viewz) >> 4) * FIXED2FLOAT(ds_p->scale2);
+	fixed_t bottomf_start = ((rw_frontfz1 - viewz) >> 4) * fscale1; 
+	fixed_t bottomf_stop  = ((rw_frontfz2 - viewz) >> 4) * fscale2; 
+	fixed_t bottomf_step  = 0;
+
 	if (stop > start)
-	{
-		fixed_t bottomf_step = (bottomf_start - bottomf_stop) / (stop - start);
-		for (int n = start; n <= stop; n++)
-			wallbottomf[n] = (centeryfrac >> 4) - bottomf_start + (n - start) * bottomf_step;	
-	}
-	else
-		wallbottomf[start] = (centeryfrac >> 4) - bottomf_start;
+		bottomf_step = (bottomf_start - bottomf_stop) / (stop - start);
+
+	for (int n = start; n <= stop; n++)
+		wallbottomf[n] = (centeryfrac >> 4) - bottomf_start + (n - start) * bottomf_step;	
 
 	if (backsector)
 	{
 		if (rw_backcz1 < rw_frontcz1 || rw_backcz2 < rw_frontcz2)
 		{
 			// [SL] 2012-01-31 - Calculate back side ceiling height values
-			fixed_t topb_start = ((rw_backcz1 - viewz) >> 4) * FIXED2FLOAT(ds_p->scale1);
-			fixed_t topb_stop = ((rw_backcz2 - viewz) >> 4) * FIXED2FLOAT(ds_p->scale2);
+			fixed_t topb_start = ((rw_backcz1 - viewz) >> 4) * fscale1; 
+			fixed_t topb_stop  = ((rw_backcz2 - viewz) >> 4) * fscale2; 
+			fixed_t topb_step  = 0;
+
 			if (stop > start)
-			{
-				fixed_t topb_step = (topb_start - topb_stop) / (stop - start);
-				for (int n = start; n <= stop; n++)
-					walltopb[n] = (centeryfrac >> 4) - topb_start + (n - start) * topb_step;	
-			}
-			else
-				walltopb[start] = (centeryfrac >> 4) - topb_start;
+				topb_step = (topb_start - topb_stop) / (stop - start);
+
+			for (int n = start; n <= stop; n++)
+				walltopb[n] = (centeryfrac >> 4) - topb_start + (n - start) * topb_step;	
 		}
 
 		if (rw_backfz1 > rw_frontfz1 || rw_backfz2 > rw_frontfz2)
 		{
 			// [SL] 2012-01-31 - Calculate back side floor height values
-			fixed_t bottomb_start = ((rw_backfz1 - viewz) >> 4) * FIXED2FLOAT(ds_p->scale1);
-			fixed_t bottomb_stop = ((rw_backfz2 - viewz) >> 4) * FIXED2FLOAT(ds_p->scale2);
+			fixed_t bottomb_start = ((rw_backfz1 - viewz) >> 4) * fscale1; 
+			fixed_t bottomb_stop  = ((rw_backfz2 - viewz) >> 4) * fscale2;
+			fixed_t bottomb_step  = 0;
+ 
 			if (stop > start)
-			{
-				fixed_t bottomb_step = (bottomb_start - bottomb_stop) / (stop - start);
-				for (int n = start; n <= stop; n++)
-					wallbottomb[n] = (centeryfrac >> 4) - bottomb_start + (n - start) * bottomb_step;	
-			}
-			else
-				wallbottomb[start] = (centeryfrac >> 4) - bottomb_start;
+				bottomb_step = (bottomb_start - bottomb_stop) / (stop - start);
+
+			for (int n = start; n <= stop; n++)
+				wallbottomb[n] = (centeryfrac >> 4) - bottomb_start + (n - start) * bottomb_step;	
 		}
 	}
 	

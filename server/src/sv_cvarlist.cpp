@@ -185,6 +185,12 @@ CVAR (sv_vote_countabs, "1", "Count absent voters as 'no' if the vote timer runs
 // A percentage of players needed to pass a vote.
 CVAR (sv_vote_majority, "0.5", "Ratio of yes votes needed for vote to pass.",
 	  CVARTYPE_FLOAT, CVAR_SERVERARCHIVE | CVAR_NOENABLEDISABLE)
+// Spectators are allowed to vote.
+CVAR (sv_vote_speccall, "1", "Spectators are allowed to callvote.",
+	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
+// Spectators are allowed to vote.
+CVAR (sv_vote_specvote, "1", "Spectators are allowed to vote.",
+	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
 // Number of seconds that a countdown lasts.
 CVAR (sv_vote_timelimit, "30", "Amount of time a vote takes in seconds.",
 	  CVARTYPE_INT, CVAR_SERVERARCHIVE | CVAR_NOENABLEDISABLE)
@@ -217,6 +223,14 @@ CVAR (sv_callvote_scorelimit, "0", "Clients can vote a new scorelimit.",
 	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
 CVAR (sv_callvote_timelimit, "0", "Clients can vote a new timelimit.",
 	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
+
+// Warmup mode
+CVAR (sv_warmup, "0", "Enable a 'warmup mode' before the match starts.",
+      CVARTYPE_BOOL, CVAR_SERVERARCHIVE | CVAR_LATCH)
+CVAR (sv_warmup_autostart, "1.0", "Ratio of players needed for warmup to automatically end.",
+      CVARTYPE_FLOAT, CVAR_SERVERARCHIVE | CVAR_LATCH | CVAR_NOENABLEDISABLE)
+CVAR (sv_warmup_countdown, "5", "Number of seconds the countdown should wait before the game starts.",
+      CVARTYPE_BYTE, CVAR_SERVERARCHIVE | CVAR_LATCH | CVAR_NOENABLEDISABLE)
 
 // Experimental settings (all categories)
 // =======================================

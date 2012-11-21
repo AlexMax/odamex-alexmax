@@ -62,6 +62,7 @@
 #include "p_mobj.h"
 #include "p_pspr.h"
 #include "d_netcmd.h"
+#include "g_warmup.h"
 
 #include <string>
 #include <vector>
@@ -2145,7 +2146,11 @@ void CL_SpawnPlayer()
 		p->mo->health = 0;
 	}
 
-	G_PlayerReborn (*p);
+	G_PlayerReborn(*p);
+	// [AM] If we're "reborn" as a spectator, don't touch the keepinventory
+	//      flag, but otherwise turn it off.
+	if (!p->spectator)
+		p->keepinventory = false;
 
 	mobj = new AActor (x, y, z, MT_PLAYER);
 	
@@ -2223,18 +2228,18 @@ void CL_PlayerInfo(void)
 {
 	player_t *p = &consoleplayer();
 
-	for(size_t j = 0; j < NUMWEAPONS; j++)
+	for (size_t j = 0; j < NUMWEAPONS; j++)
 		p->weaponowned[j] = MSG_ReadBool();
 
-	for(size_t j = 0; j < NUMAMMO; j++)
+	for (size_t j = 0; j < NUMAMMO; j++)
 	{
-		p->maxammo[j] = MSG_ReadShort ();
-		p->ammo[j] = MSG_ReadShort ();
+		p->maxammo[j] = MSG_ReadShort();
+		p->ammo[j] = MSG_ReadShort();
 	}
 
-	p->health = MSG_ReadByte ();
-	p->armorpoints = MSG_ReadByte ();
-	p->armortype = MSG_ReadByte ();
+	p->health = MSG_ReadByte();
+	p->armorpoints = MSG_ReadByte();
+	p->armortype = MSG_ReadByte();
 
 	weapontype_t newweapon = static_cast<weapontype_t>(MSG_ReadByte());
 	if (newweapon >= NUMWEAPONS)	// bad weapon number, choose something else
@@ -2242,8 +2247,11 @@ void CL_PlayerInfo(void)
 
 	if (newweapon != p->readyweapon)
 		p->pendingweapon = newweapon;
-	
+
 	p->backpack = MSG_ReadBool();
+
+	// [AM] Determine if we should be keeping our inventory on next spawn.
+	p->keepinventory = MSG_ReadBool();
 }
 
 //
@@ -2888,6 +2896,9 @@ void CL_GetServerSettings(void)
     
 	// Nes - update the skies in case sv_freelook is changed.
 	R_InitSkyMap ();
+
+	// [AM] - Adhere to sv_allowwidescreen setting.
+	setmodeneeded = true;
 }
 
 //
@@ -3079,6 +3090,34 @@ void CL_ConsolePlayer(void)
 	digest = MSG_ReadString();
 }
 
+void CL_LoadWad(void)
+{
+	bool missingfiles = false;
+	std::vector<std::string> wadfilenames, wadhashes, patchfilenames, patchhashes;
+
+	int wadcount = MSG_ReadByte();
+	while (wadcount--)
+	{
+		wadfilenames.push_back(MSG_ReadString());
+		wadhashes.push_back(MSG_ReadString());
+	}
+
+	int patchcount = MSG_ReadByte();
+	while (patchcount--)
+	{
+		patchfilenames.push_back(MSG_ReadString());
+		patchhashes.push_back(MSG_ReadString());
+	}
+
+	// Load the specified WAD and DEH files
+	std::vector<size_t> missing_files = 
+			D_DoomWadReboot(wadfilenames, patchfilenames, wadhashes);
+
+	// Reconnect to start download any missing files
+	if (!missing_files.empty())
+		CL_Reconnect();
+}
+
 void CL_LoadMap(void)
 {
 	const char *mapname = MSG_ReadString ();
@@ -3201,6 +3240,12 @@ void CL_ReadyState() {
 	player.ready = MSG_ReadBool();
 }
 
+// Set local warmup state.
+void CL_WarmupState()
+{
+	warmup.set_client_status(static_cast<Warmup::status_t>(MSG_ReadByte()));
+}
+
 // client source (once)
 typedef void (*client_callback)();
 typedef std::map<svc_t, client_callback> cmdmap;
@@ -3211,7 +3256,8 @@ cmdmap cmds;
 //
 void CL_InitCommands(void)
 {
-	cmds[svc_abort]			= &CL_EndGame;
+	cmds[svc_abort]				= &CL_EndGame;
+	cmds[svc_loadwad]			= &CL_LoadWad;
 	cmds[svc_loadmap]			= &CL_LoadMap;
 	cmds[svc_playerinfo]		= &CL_PlayerInfo;
 	cmds[svc_consoleplayer]		= &CL_ConsolePlayer;
@@ -3282,6 +3328,7 @@ void CL_InitCommands(void)
 	
 	cmds[svc_spectate]   		= &CL_Spectate;
 	cmds[svc_readystate]		= &CL_ReadyState;
+	cmds[svc_warmupstate]		= &CL_WarmupState;
 
 	cmds[svc_touchspecial]      = &CL_TouchSpecialThing;
 

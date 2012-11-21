@@ -55,10 +55,13 @@ extern bool r_fakingunderwater;
 
 EXTERN_CVAR (r_viewsize)
 EXTERN_CVAR (r_widescreen)
+EXTERN_CVAR (sv_allowwidescreen)
 
 static float	LastFOV = 0.0f;
 fixed_t			FocalLengthX;
 fixed_t			FocalLengthY;
+double			focratio;
+double			ifocratio;
 int 			viewangleoffset = 0;
 
 // increment every time a check is made
@@ -547,6 +550,9 @@ void R_InitTextureMapping (void)
 	FocalLengthX = FixedDiv (centerxfrac, hitan);
 	FocalLengthY = FixedDiv (FixedMul (centerxfrac, yaspectmul), hitan);
 
+	focratio = double(FocalLengthY) / double(FocalLengthX);
+	ifocratio = double(FocalLengthX) / double(FocalLengthY);
+
 	for (i = 0; i < FINEANGLES/2; i++)
 	{
 		fixed_t tangent = finetangent[i];
@@ -607,7 +613,7 @@ void R_SetFOV(float fov, bool force = false)
 	LastFOV = fov;
 	FieldOfView = static_cast<int>(fov * static_cast<float>(FINEANGLES) / 360.0f);
 	float am = (static_cast<float>(screen->width) / screen->height) / (4.0f / 3.0f);
-	if (r_widescreen.asInt() == 3 && am > 1.0f)
+	if (R_GetWidescreen() >= WIDE_TRUE && am > 1.0f)
 	{
 		// [AM] The FOV is corrected to fit the wider screen.
 		float radfov = fov * PI / 180.0f;
@@ -633,6 +639,19 @@ void R_SetFOV(float fov, bool force = false)
 float R_GetFOV (void)
 {
 	return LastFOV;
+}
+
+// [AM] Always grab the correct widescreen setting based on a
+//      combination of r_widescreen and serverside forcing.
+int R_GetWidescreen()
+{
+	if ((r_widescreen.asInt() < WIDE_TRUE) || !multiplayer ||
+	    (multiplayer && sv_allowwidescreen))
+	{
+		return r_widescreen.asInt();
+	}
+
+	return r_widescreen.asInt() - WIDE_TRUE;
 }
 
 //
@@ -732,11 +751,6 @@ CVAR_FUNC_IMPL (r_widescreen)
 		Printf(PRINT_HIGH, "Invalid widescreen setting.\n");
 		var.RestoreDefault();
 	}
-	else if (var.asInt() == 1)
-	{
-		Printf(PRINT_HIGH, "Not implemented.\n");
-		var.RestoreDefault();
-	}
 	setmodeneeded = true;
 }
 
@@ -810,7 +824,7 @@ void R_ExecuteSetViewSize (void)
 	virtwidth = screen->width >> detailxshift;
 	virtheight = screen->height >> detailyshift;
 
-	if (r_widescreen.asInt() >= 2)
+	if (R_GetWidescreen() != WIDE_STRETCH)
 		yaspectmul = 78643; // [AM] Force correct aspect ratio
 	else
 		yaspectmul = (fixed_t)(65536.0f*(320.0f*(float)virtheight/(200.0f*(float)virtwidth)));
@@ -833,7 +847,8 @@ void R_ExecuteSetViewSize (void)
 	R_InitTextureMapping ();
 
 	// psprite scales
-	if (r_widescreen.asInt() >= 2) {
+	if (R_GetWidescreen() != WIDE_STRETCH)
+	{
 		// [AM] Using centerxfrac will make our sprite too fat, so we
 		//      generate a corrected 4:3 screen width based on our
 		//      height, then generate the x-scale based on that.
@@ -844,7 +859,9 @@ void R_ExecuteSetViewSize (void)
 		else
 			crvwidth = cswidth;
 		pspritexscale = (((crvwidth >> detailxshift) / 2) << FRACBITS) / 160;
-	} else {
+	}
+	else
+	{
 		pspritexscale = centerxfrac / 160;
 	}
 	pspriteyscale = FixedMul(pspritexscale, yaspectmul);

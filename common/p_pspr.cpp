@@ -35,6 +35,8 @@
 #include "p_local.h"
 #include "s_sound.h"
 
+#include "g_warmup.h"
+
 // State.
 #include "doomstat.h"
 #include "p_pspr.h"
@@ -506,7 +508,8 @@ void A_WeaponReady(AActor *mo)
 
 	// check for fire
 	//	the missile launcher and bfg do not auto fire
-	if (player->cmd.ucmd.buttons & BT_ATTACK)
+	// [AM] Allow warmup to disallow weapon firing.
+	if (player->cmd.ucmd.buttons & BT_ATTACK && warmup.checkfireweapon())
 	{
 		if ( !player->attackdown
 			 || (player->readyweapon != wp_missile
@@ -536,7 +539,8 @@ void A_ReFire
 
 	// check for fire
 	//	(if a weaponchange is pending, let it go through instead)
-	if ( (player->cmd.ucmd.buttons & BT_ATTACK)
+	// [AM] Allow warmup to disallow weapon refiring.
+	if ( (player->cmd.ucmd.buttons & BT_ATTACK && warmup.checkfireweapon())
 		 && player->pendingweapon == wp_nochange
 		 && player->health)
 	{
@@ -1113,12 +1117,6 @@ void A_BFGSpray (AActor *mo)
 	if (!mo->target)
 		return;
 
-	// [SL] 2011-07-12 - Move players and sectors back to their positions when
-	// this player hit the fire button clientside.
-	player_t *player = mo->target->player;	// player who fired BFG
-	if (player)
-		Unlag::getInstance().reconcile(player->id);
-
 	// offset angles from its attack angle
 	for (i=0 ; i<40 ; i++)
 	{
@@ -1132,14 +1130,6 @@ void A_BFGSpray (AActor *mo)
 			continue;
 
 		fixed_t xoffs = 0, yoffs = 0, zoffs = 0;
-		// [SL] 2011-07-12 - In unlagged games, spawn BFG tracers at the 
-		// opponent's current position, not at their reconciled position
-		if (player && linetarget->player)
-		{
-			Unlag::getInstance().getReconciliationOffset(   player->id,
-															linetarget->player->id,
-															xoffs, yoffs, zoffs);
-		}
 
 		new AActor (linetarget->x + xoffs,
 					linetarget->y + yoffs,
@@ -1152,11 +1142,6 @@ void A_BFGSpray (AActor *mo)
 
 		P_DamageMobj (linetarget, mo->target,mo->target, damage, MOD_BFG_SPLASH);
 	}
-
-	// [SL] 2011-07-12 - Restore players and sectors to their current position
-	// according to the server.
-	if (player)
-		Unlag::getInstance().restore(player->id);
 }
 
 

@@ -72,6 +72,8 @@ size_t			numlumps;
 
 void**			lumpcache;
 
+static unsigned	stdisk_lumpnum;
+
 #define MAX_HASHES 10
 
 typedef struct
@@ -93,7 +95,8 @@ void W_VC6Init(void)
 
 		// DOOM2
 		doomwadnames[1].name = "DOOM2.WAD";
-		doomwadnames[1].hash[0] = "25E1459CA71D321525F84628F45CA8CD";
+		doomwadnames[1].hash[0] = "25E1459CA71D321525F84628F45CA8CD",
+		doomwadnames[1].hash[1] = "C3BEA40570C23E511A7ED3EBCD9865F7";
 
 		// PLUTONIA
 		doomwadnames[2].name = "PLUTONIA.WAD";
@@ -106,11 +109,12 @@ void W_VC6Init(void)
 		// DOOMU
 		doomwadnames[4].name = "DOOMU.WAD";
 		doomwadnames[4].hash[0] = "C4FE9FD920207691A9F493668E0A2083";
-			    
+
 		// DOOM
 		doomwadnames[5].name = "DOOM.WAD";
 		doomwadnames[5].hash[0] = "C4FE9FD920207691A9F493668E0A2083";
 		doomwadnames[5].hash[1] = "1CD63C5DDFF1BF8CE844237F580E9CF3";
+		doomwadnames[5].hash[2] = "FB35C4A5A9FD49EC29AB6E900572C524"; // BFG Edition
 
 		// DOOM SHAREWARE
 		doomwadnames[6].name = "DOOM1.WAD";
@@ -118,15 +122,15 @@ void W_VC6Init(void)
 
 		// FREEDOOM
 		doomwadnames[7].name = "FREEDOOM.WAD";
-		
+
 		// FREEDM
 		doomwadnames[8].name = "FREEDM.WAD";
-				
+
 		// CHEX
 		doomwadnames[9].name = "CHEX.WAD";
 		doomwadnames[9].hash[0] = "25485721882b050afa96a56e5758dd52";
 
-		
+
 		WasVC6Inited = true;
 	}
 }
@@ -142,10 +146,10 @@ static const gamewadinfo_t doomwadnames[] =
     { "PLUTONIA.WAD", { "75C8CF89566741FA9D22447604053BD7" } },
     { "TNT.WAD", { "4E158D9953C79CCF97BD0663244CC6B6" } },
     { "DOOMU.WAD", { "C4FE9FD920207691A9F493668E0A2083" } },
-    { "DOOM.WAD", { "C4FE9FD920207691A9F493668E0A2083", "1CD63C5DDFF1BF8CE844237F580E9CF3" } },
+    { "DOOM.WAD", { "C4FE9FD920207691A9F493668E0A2083", "1CD63C5DDFF1BF8CE844237F580E9CF3","FB35C4A5A9FD49EC29AB6E900572C524" } },
     { "DOOM1.WAD", { "F0CEFCA49926D00903CF57551D901ABE" } },
     { "FREEDOOM.WAD", { "" } },
-    { "FREEDM.WAD", { "" } },    
+    { "FREEDM.WAD", { "" } },
     { "CHEX.WAD", { "25485721882b050afa96a56e5758dd52" } },
     { "", { "" } }
 };
@@ -567,6 +571,8 @@ std::vector<std::string> W_InitMultipleFiles (std::vector<std::string> &filename
 
 	memset (lumpcache,0, size);
 
+	stdisk_lumpnum = W_GetNumForName("STDISK");
+
 	return hashes;
 }
 
@@ -668,7 +674,8 @@ W_ReadLump
 
 	l = lumpinfo + lump;
 
-    I_BeginRead();
+	if (lump != stdisk_lumpnum)
+    	I_BeginRead();
 
 	fseek (l->handle, l->position, SEEK_SET);
 	c = fread (dest, l->size, 1, l->handle);
@@ -676,7 +683,8 @@ W_ReadLump
 	if (feof(l->handle))
 		I_Error ("W_ReadLump: only read %i of %i on lump %i", c, l->size, lump);
 
-    I_EndRead();
+	if (lump != stdisk_lumpnum)
+    	I_EndRead();
 }
 
 //
@@ -771,26 +779,64 @@ W_CacheLumpName
 	return W_CacheLumpNum (W_GetNumForName(name), tag);
 }
 
+size_t R_CalculateNewPatchSize(patch_t *patch, size_t length);
+void R_ConvertPatch(patch_t *rawpatch, patch_t *newpatch);
+
 //
 // W_CachePatch
 //
-patch_t* W_CachePatch
-( unsigned	lump,
- int		tag )
+// [SL] Reads and caches a patch from disk. This takes care of converting the
+// patch from the standard Doom format of posts with 1-byte lengths and offsets
+// to a new format for posts that uses 2-byte lengths and offsets.
+//
+patch_t* W_CachePatch(unsigned lumpnum, int tag)
 {
-	patch_t *patch = (patch_t *)W_CacheLumpNum (lump, tag);
+	if (lumpnum >= numlumps)
+		I_Error ("W_CachePatch: %u >= numlumps", lumpnum);
+
+	if (!lumpcache[lumpnum])
+	{
+		// temporary storage of the raw patch in the old format
+		byte *rawlumpdata = new byte[W_LumpLength(lumpnum)];
+
+		W_ReadLump(lumpnum, rawlumpdata);
+		patch_t *rawpatch = (patch_t*)(rawlumpdata);
+
+		size_t newlumplen = R_CalculateNewPatchSize(rawpatch, W_LumpLength(lumpnum));
+
+		if (newlumplen > 0)
+		{
+			// valid patch
+			byte *ptr = (byte *)Z_Malloc(newlumplen + 1, tag, &lumpcache[lumpnum]);
+			patch_t *newpatch = (patch_t*)lumpcache[lumpnum];
+
+			R_ConvertPatch(newpatch, rawpatch);
+			ptr[newlumplen] = 0;
+		}
+		else
+		{
+			// invalid patch - just create a header with width = 0, height = 0
+			Z_Malloc(sizeof(patch_t) + 1, tag, &lumpcache[lumpnum]);
+			memset(lumpcache[lumpnum], 0, sizeof(patch_t) + 1);
+		}
+
+		delete [] rawlumpdata;
+	}
+	else
+	{
+		Z_ChangeTag(lumpcache[lumpnum], tag);
+	}
 
 	// denis - todo - would be good to check whether the patch violates W_LumpLength here
 	// denis - todo - would be good to check for width/height == 0 here, and maybe replace those with a valid patch
 
-	return patch;
+	return (patch_t*)lumpcache[lumpnum];
 }
 
-patch_t* W_CachePatch
-( const char* name,
- int		tag )
+patch_t* W_CachePatch(const char* name, int tag)
 {
-	return W_CachePatch(W_GetNumForName(name), tag); // denis - todo - would be good to replace non-existant patches with a default '404' patch
+	return W_CachePatch(W_GetNumForName(name), tag);
+	// denis - todo - would be good to replace non-existant patches with a default '404' patch
 }
 
 //

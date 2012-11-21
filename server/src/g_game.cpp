@@ -73,6 +73,7 @@ void	G_DoWorldDone (void);
 void	G_DoSaveGame (void);
 
 EXTERN_CVAR (sv_timelimit)
+EXTERN_CVAR (sv_keepkeys)
 EXTERN_CVAR (co_nosilentspawns)
 
 gameaction_t	gameaction;
@@ -445,6 +446,12 @@ void G_Ticker (void)
 		case ga_loadlevel:
 			G_DoLoadLevel (-1);
 			break;
+		case ga_fullresetlevel:
+			G_DoResetLevel(true);
+			break;
+		case ga_resetlevel:
+			G_DoResetLevel(false);
+			break;
 		case ga_newgame:
 			G_DoNewGame ();
 			break;
@@ -542,32 +549,40 @@ void G_PlayerFinishLevel (player_t &player)
 void G_PlayerReborn (player_t &p) // [Toke - todo] clean this function
 {
 	size_t i;
-	for (i = 0; i < NUMAMMO; i++)
+	if (!p.keepinventory)
 	{
-		p.maxammo[i] = maxammo[i];
-		p.ammo[i] = 0;
+		for (i = 0; i < NUMAMMO; i++)
+		{
+			p.maxammo[i] = maxammo[i];
+			p.ammo[i] = 0;
+		}
+		for (i = 0; i < NUMWEAPONS; i++)
+			p.weaponowned[i] = false;
+
+		p.backpack = false;
+		p.health = deh.StartHealth;		// [RH] Used to be MAXHEALTH
+		p.armortype = 0;
+		p.armorpoints = 0;
+		p.readyweapon = p.pendingweapon = wp_pistol;
+		p.weaponowned[wp_fist] = true;
+		p.weaponowned[wp_pistol] = true;
+		p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
 	}
-	for (i = 0; i < NUMWEAPONS; i++)
-		p.weaponowned[i] = false;
-	for (i = 0; i < NUMCARDS; i++)
-		p.cards[i] = false;
+
+	if (!sv_keepkeys)
+	{
+		for (i = 0; i < NUMCARDS; i++)
+			p.cards[i] = false;
+	}
+
 	for (i = 0; i < NUMPOWERS; i++)
 		p.powers[i] = false;
 	for (i = 0; i < NUMFLAGS; i++)
 		p.flags[i] = false;
-	p.backpack = false;
 
 	p.usedown = p.attackdown = true;	// don't do anything immediately
 	p.playerstate = PST_LIVE;
-	p.health = deh.StartHealth;		// [RH] Used to be MAXHEALTH
-	p.armortype = 0;
-	p.armorpoints = 0;
-	p.readyweapon = p.pendingweapon = wp_pistol;
-	p.weaponowned[wp_fist] = true;
-	p.weaponowned[wp_pistol] = true;
-	p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
-
-	p.death_time = 0; 
+	p.death_time = 0;
 	p.tic = 0;
 }
 
@@ -757,7 +772,44 @@ static mapthing2_t *SelectRandomDeathmatchSpot (player_t &player, int selections
 	return &deathmatchstarts[i];
 }
 
-void G_TeamSpawnPlayer (player_t &player) // [Toke - CTF - starts] Modified this function to accept teamplay starts
+// [Toke] Randomly selects a team spawn point
+// [AM] Moved out of CTF gametype and cleaned up.
+static mapthing2_t *SelectRandomTeamSpot(player_t &player, int selections)
+{
+	size_t i;
+
+	switch (player.userinfo.team)
+	{
+	case TEAM_BLUE:
+		for (size_t j = 0; j < MaxBlueTeamStarts; ++j)
+		{
+			i = M_Random() % selections;
+			if (G_CheckSpot(player, &blueteamstarts[i]))
+			{
+				return &blueteamstarts[i];
+			}
+		}
+		return &blueteamstarts[i];
+	case TEAM_RED:
+		for (size_t j = 0; j < MaxRedTeamStarts; ++j)
+		{
+			i = M_Random() % selections;
+			if (G_CheckSpot(player, &redteamstarts[i]))
+			{
+				return &redteamstarts[i];
+			}
+		}
+		return &redteamstarts[i];
+	default:
+		// This team doesn't have a dedicated spawn point.  Fallthrough
+		// to using a deathmatch spawn point.
+		break;
+	}
+
+	return SelectRandomDeathmatchSpot(player, selections);
+}
+
+void G_TeamSpawnPlayer(player_t &player) // [Toke - CTF - starts] Modified this function to accept teamplay starts
 {
 	int selections;
 	mapthing2_t *spot = NULL;
@@ -775,14 +827,14 @@ void G_TeamSpawnPlayer (player_t &player) // [Toke - CTF - starts] Modified this
 	{
 		selections = deathmatch_p - deathmatchstarts;
 
-		if(selections)
+		if (selections)
 		{
-			spot = SelectRandomDeathmatchSpot (player, selections);
+			spot = SelectRandomDeathmatchSpot(player, selections);
 		}
 	}
 	else
 	{
-		spot = CTF_SelectTeamPlaySpot (player, selections);  // [Toke - Teams]
+		spot = SelectRandomTeamSpot(player, selections);  // [Toke - Teams]
 	}
 
 	if (selections < 1)
@@ -978,42 +1030,6 @@ BOOL G_CheckDemoStatus (void)
 	return false;
 }
 
-EXTERN_CVAR (sv_fraglimit)
-EXTERN_CVAR (sv_allowexit)
-EXTERN_CVAR (sv_fragexitswitch)
-
-BOOL CheckIfExitIsGood (AActor *self)
-{
-	if (self == NULL)
-		return false;
-
-	// [Toke - dmflags] Old location of DF_NO_EXIT
-    // [ML] 04/4/06: Check for sv_fragexitswitch - seems a bit hacky
-
-    unsigned int i;
-
-    for(i = 0; i < players.size(); i++)
-        if(players[i].fragcount >= sv_fraglimit)
-            break;
-
-    if (sv_gametype != GM_COOP && self)
-    {
-        if (!sv_allowexit && sv_fragexitswitch && i == players.size())
-            return false;
-
-        if (!sv_allowexit && !sv_fragexitswitch)
-            return false;
-    }
-
-	if (self->player)
-		Printf (PRINT_HIGH, "%s exited the level.\n", self->player->userinfo.netname);
-
-    return true;
-}
-
 
 VERSION_CONTROL (g_game_cpp, "$Id$")
-
-
-
 

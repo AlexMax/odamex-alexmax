@@ -88,6 +88,7 @@ enum GameMode_t
   // DOOM 2 german edition not handled
   retail,		// DOOM 1 retail, E4, M36
   retail_chex,	// Chex Quest
+  commercial_bfg,
   undetermined	// Well, no IWAD found.
 
 };
@@ -111,6 +112,9 @@ enum GameMission_t
 // The maximum number of players, multiplayer/networking.
 #define MAXPLAYERS				255
 #define MAXPLAYERS_VANILLA		4
+
+// Margin of error used when calculating percentages against player numbers.
+#define MPEPSILON				(float)1 / (MAXPLAYERS * 2)
 
 // State updates, number of tics / second.
 #define TICRATE 		35

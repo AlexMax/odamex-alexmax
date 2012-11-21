@@ -22,6 +22,7 @@
 
 #include "cmdlib.h"
 #include "d_player.h"
+#include "g_warmup.h"
 #include "sv_main.h"
 #include "sv_maplist.h"
 #include "sv_pickup.h"
@@ -40,8 +41,10 @@ EXTERN_CVAR(sv_fraglimit)
 EXTERN_CVAR(sv_scorelimit)
 EXTERN_CVAR(sv_timelimit)
 
-EXTERN_CVAR(sv_vote_majority)
 EXTERN_CVAR(sv_vote_countabs)
+EXTERN_CVAR(sv_vote_majority)
+EXTERN_CVAR(sv_vote_speccall)
+EXTERN_CVAR(sv_vote_specvote)
 EXTERN_CVAR(sv_vote_timelimit)
 EXTERN_CVAR(sv_vote_timeout)
 
@@ -60,11 +63,6 @@ EXTERN_CVAR(sv_callvote_timelimit)
 
 // Vote class goes here
 Vote *vote = 0;
-
-// The margin of error used for calculating how many votes are needed to pass
-// or fail a vote.  This is accurate to float precision.  A more general case
-// that survives Wolfram Alpha scrutiny would be nice.
-const float vote_epsilon = (float)1 / (MAXPLAYERS * 2);
 
 //////// VOTE SUBCLASSES ////////
 
@@ -432,7 +430,10 @@ public:
 		return true;
 	}
 	bool exec(void) {
-		G_RestartMap();
+		// When in warmup mode, we would rather not catch players off guard.
+		warmup.reset();
+
+		G_DeferedFullReset();
 		return true;
 	}
 };
@@ -619,7 +620,7 @@ size_t Vote::calc_yes(const bool noabs) {
 
 	float f_calc = size * sv_vote_majority;
 	size_t i_calc = (int)floor(f_calc + 0.5f);
-	if (f_calc > i_calc - vote_epsilon && f_calc < i_calc + vote_epsilon) {
+	if (f_calc > i_calc - MPEPSILON && f_calc < i_calc + MPEPSILON) {
 		return i_calc + 1;
 	}
 	return (int)ceil(f_calc);
@@ -649,7 +650,7 @@ size_t Vote::count_no(void) {
 size_t Vote::calc_no(void) {
 	float f_calc = this->tally.size() * (1.0f - sv_vote_majority);
 	size_t i_calc = (int)floor(f_calc + 0.5f);
-	if (f_calc > i_calc - vote_epsilon && f_calc < i_calc + vote_epsilon) {
+	if (f_calc > i_calc - MPEPSILON && f_calc < i_calc + MPEPSILON) {
 		return i_calc;
 	}
 	return (int)ceil(f_calc);
@@ -672,6 +673,12 @@ void Vote::ev_disconnect(player_t &player) {
 bool Vote::init(const std::vector<std::string> &args, const player_t &player) {
 	// First we need to run our vote-specific checks.
 	if (!this->setup(args, player)) {
+		return false;
+	}
+
+	// Make sure a spectating player can call the vote
+	if (!sv_vote_speccall && player.spectator) {
+		this->error = "Spectators cannot call votes on this server.";
 		return false;
 	}
 
@@ -705,6 +712,10 @@ bool Vote::init(const std::vector<std::string> &args, const player_t &player) {
 	// Give everybody an "undecided" vote except the current player.
 	for (std::vector<player_t>::size_type i = 0;i != players.size();i++) {
 		if (!players[i].ingame()) {
+			continue;
+		}
+
+		if (!sv_vote_specvote && players[i].spectator) {
 			continue;
 		}
 
@@ -799,7 +810,11 @@ bool Vote::vote(player_t &player, bool ballot) {
 
 	// Does the user actually have an entry in the tally?
 	if (this->tally.find(player.id) == this->tally.end()) {
-		SV_PlayerPrintf(PRINT_HIGH, player.id, "You can't vote on something that was called before you joined the server.\n");
+		if (!sv_vote_specvote && player.spectator) {
+			SV_PlayerPrintf(PRINT_HIGH, player.id, "Spectators can't vote on this server.\n");
+		} else {
+			SV_PlayerPrintf(PRINT_HIGH, player.id, "You can't vote on something that was called before you joined the server.\n");
+		}
 		return false;
 	}
 

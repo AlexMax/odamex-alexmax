@@ -65,6 +65,7 @@
 #include "v_video.h"
 #include "w_wad.h"
 #include "z_zone.h"
+#include "g_warmup.h"
 
 
 // FIXME: Remove this as soon as the JoinString is gone from G_ChangeMap()
@@ -83,7 +84,6 @@ EXTERN_CVAR (sv_nextmap)
 EXTERN_CVAR (sv_loopepisode)
 EXTERN_CVAR (sv_intermissionlimit)
 
-
 extern int timingdemo;
 
 extern int mapchange;
@@ -97,6 +97,9 @@ int ACS_WorldVars[NUM_WORLDVARS];
 
 // ACS variables with global scope
 int ACS_GlobalVars[NUM_GLOBALVARS];
+
+// [AM] Stores the reset snapshot
+FLZOMemFile	*reset_snapshot = NULL;
 
 BOOL firstmapinit = true; // Nes - Avoid drawing same init text during every rebirth in single-player servers.
 
@@ -125,8 +128,15 @@ void G_DeferedInitNew (char *mapname)
 	sv_nextmap.ForceSet(d_mapname);
 }
 
+void G_DeferedFullReset()
+{
+	gameaction = ga_fullresetlevel;
+}
 
-
+void G_DeferedReset()
+{
+	gameaction = ga_resetlevel;
+}
 
 const char* GetBase(const char* in)
 {
@@ -235,6 +245,8 @@ BEGIN_COMMAND (wad) // denis - changes wads
 		D_DoomWadReboot(wads, patches);
 		unnatural_level_progression = true;
 		G_DeferedInitNew(startmap);
+
+		SV_SendLoadWad(wads, patches);
 	}
 }
 END_COMMAND (wad)
@@ -356,7 +368,6 @@ BEGIN_COMMAND (restart) {
 
 void SV_ClientFullUpdate(player_t &pl);
 void SV_CheckTeam(player_t &pl);
-void G_DoReborn(player_t &playernum);
 
 //
 // G_DoNewGame
@@ -433,27 +444,26 @@ void G_InitNew (const char *mapname)
 
 	cvar_t::UnlatchCVars ();
 
-	if(old_gametype != sv_gametype || sv_gametype != GM_COOP) {
+	if (old_gametype != sv_gametype || sv_gametype != GM_COOP)
 		unnatural_level_progression = true;
 
-		// Nes - Force all players to be spectators when the sv_gametype is not now or previously co-op.
-		for (i = 0; i < players.size(); i++) {
-			// [SL] 2011-07-30 - Don't force downloading players to become spectators
-			// it stops their downloading
-			if (!players[i].ingame())
-				continue;
+	// [AM] Force all players to be spectators online.
+	for (i = 0; i < players.size(); i++) {
+		// [SL] 2011-07-30 - Don't force downloading players to become spectators
+		// it stops their downloading
+		if (!players[i].ingame())
+			continue;
 
-			for (size_t j = 0; j < players.size(); j++) {
-				if (!players[j].ingame())
-					continue;
-				MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
-				MSG_WriteByte (&(players[j].client.reliablebuf), players[i].id);
-				MSG_WriteByte (&(players[j].client.reliablebuf), true);
-			}
-			players[i].spectator = true;
-			players[i].playerstate = PST_LIVE;
-			players[i].joinafterspectatortime = -(TICRATE*5);
+		for (size_t j = 0; j < players.size(); j++) {
+			if (!players[j].ingame())
+				continue;
+			MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
+			MSG_WriteByte (&(players[j].client.reliablebuf), players[i].id);
+			MSG_WriteByte (&(players[j].client.reliablebuf), true);
 		}
+		players[i].spectator = true;
+		players[i].playerstate = PST_LIVE;
+		players[i].joinafterspectatortime = -(TICRATE*5);
 	}
 
 	// [SL] 2011-09-01 - Change gamestate here so SV_ServerSettingChange will
@@ -523,7 +533,10 @@ void G_InitNew (const char *mapname)
 
 			// denis - dead players should have their stuff looted, otherwise they'd take their ammo into their afterlife!
 			if(players[i].playerstate == PST_DEAD)
+			{
+				players[i].keepinventory = false;
 				G_PlayerReborn(players[i]);
+			}
 
 			players[i].playerstate = PST_ENTER; // [BC]
 
@@ -611,6 +624,108 @@ void G_DoCompleted (void)
 			G_PlayerFinishLevel(players[i]);
 }
 
+extern void G_SerializeLevel(FArchive &arc, bool hubLoad, bool noStorePlayers);
+
+// [AM] - Save the state of the level that can be reset to
+void G_DoSaveResetState()
+{
+	if (reset_snapshot != NULL)
+	{
+		// An existing reset snapshot exists.  Kill it and replace it with
+		// a new one.
+		delete reset_snapshot;
+	}
+	reset_snapshot = new FLZOMemFile;
+	reset_snapshot->Open();
+	FArchive arc(*reset_snapshot);
+	G_SerializeLevel(arc, false, true);
+	arc << level.time;
+}
+
+// [AM] - Reset the state of the level.  Second parameter is true if you want
+//        to zero-out gamestate as well (i.e. resetting scores, RNG, etc.).
+void G_DoResetLevel(bool full_reset)
+{
+	gameaction = ga_nothing;
+	if (reset_snapshot == NULL)
+	{
+		// No saved state to reload to
+		DPrintf("G_DoResetLevel: No saved state to reload.");
+		return;
+	}
+
+	// Clear CTF state.  Last time I tried commonizing this, I started
+	// getting garbage on the screen upon connecting to a server.
+	std::vector<player_t>::iterator it;
+	if (sv_gametype == GM_CTF)
+	{
+		for (size_t i = 0;i < NUMFLAGS;i++)
+		{
+			for (it = players.begin();it != players.end();++it)
+			{
+				it->flags[i] = false;
+			}
+			CTFdata[i].flagger = 0;
+			CTFdata[i].state = flag_home;
+		}
+	}
+
+	// Unserialize saved snapshot
+	reset_snapshot->Reopen();
+	FArchive arc(*reset_snapshot);
+	G_SerializeLevel(arc, false, true);
+	int level_time;
+	arc >> level_time;
+	reset_snapshot->Seek(0, FFile::ESeekSet);
+	// Clear the item respawn queue, otherwise all those actors we just
+	// destroyed and replaced with the serialized items will start respawning.
+	iquehead = iquetail = 0;
+	// Potentially clear out gamestate as well.
+	if (full_reset)
+	{
+		// Set time to the initial tic
+		level.time = level_time;
+		// Clear global goals.
+		for (size_t i = 0; i < NUMTEAMS; i++)
+			TEAMpoints[i] = 0;
+		// Clear player scores.
+		for (it = players.begin();it != players.end();++it)
+		{
+			it->fragcount = 0;
+			it->itemcount = 0;
+			it->secretcount = 0;
+			it->deathcount = 0;
+			it->killcount = 0;
+			it->points = 0;
+			it->ready = false;
+		}
+		// For predictable first spawns.
+		M_ClearRandom();
+	}
+	// Send information about the newly reset map.
+	for (it = players.begin();it != players.end();++it)
+	{
+		// Player needs to actually be ingame
+		if (!it->ingame())
+			continue;
+
+		SV_ClientFullUpdate(*it);
+	}
+	// Force every ingame player to be reborn.
+	for (it = players.begin();it != players.end();++it)
+	{
+		// Spectators aren't reborn.
+		if (!it->ingame() || it->spectator)
+			continue;
+
+		// Destroy the attached mobj, otherwise we leave a ghost.
+		it->mo->Destroy();
+
+		// Set the respawning machinery in motion
+		it->playerstate = full_reset ? PST_ENTER : PST_REBORN;
+	}
+}
+
 //
 // G_DoLoadLevel
 //
@@ -674,6 +789,8 @@ void G_DoLoadLevel (int position)
 		players[i].deathcount = 0; // [Toke - Scores - deaths]
 		players[i].killcount = 0; // [deathz0r] Coop kills
 		players[i].points = 0;
+		players[i].ready = false;
+		players[i].timeout_ready = 0;
 	}
 
 	// [deathz0r] It's a smart idea to reset the team points
@@ -761,8 +878,14 @@ void G_DoLoadLevel (int position)
 	}
 
 	level.starttime = I_GetTime ();
-	G_UnSnapshotLevel (!savegamerestore);	// [RH] Restore the state of the level.
-	P_DoDeferedScripts ();	// [RH] Do script actions that were triggered on another map.
+	// [RH] Restore the state of the level.
+	G_UnSnapshotLevel (!savegamerestore);
+	// [RH] Do script actions that were triggered on another map.
+	P_DoDeferedScripts ();
+	// [AM] Save the state of the level on the first tic.
+	G_DoSaveResetState();
+	// [AM] Handle warmup init.
+	warmup.reset();
 	//	C_FlushDisplay ();
 }
 
