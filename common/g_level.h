@@ -88,7 +88,9 @@ class ShapeLocation {
 private:
 	std::string location;
 public:
-	virtual bool inside(fixed_t x, fixed_t y, fixed_t z) const;
+	ShapeLocation(const char* clocation) : location(clocation) { }
+	virtual ~ShapeLocation() { }
+	virtual bool inside(fixed_t x, fixed_t y, fixed_t z) const = 0;
 	const std::string* get_location() const
 	{
 		return &(this->location);
@@ -103,24 +105,36 @@ private:
 	fixed_t y2;
 public:
 	RectLocation(fixed_t cx1, fixed_t cy1, fixed_t cx2, fixed_t cy2, const char* clocation) :
-		x1(cx1), y1(cy1), x2(cx2), y2(cy2), location(clocation) { }
+		ShapeLocation(clocation), x1(cx1), y1(cy1), x2(cx2), y2(cy2) { }
 	bool inside(fixed_t x, fixed_t y, fixed_t z) const;
 };
 
-typedef std::vector<ShapeLocation> ShapeLocations;
+typedef std::vector<ShapeLocation*> ShapeLocations;
 
 class MapLocations {
 private:
 	PointLocations pointlocations;
 	ShapeLocations shapelocations;
 public:
+	~MapLocations()
+	{
+		while (!shapelocations.empty())
+		{
+			delete shapelocations.back();
+			shapelocations.pop_back();
+		}
+	}
 	void add(const PointLocation& point)
 	{
 		pointlocations.push_back(point);
 	}
-	void add(const ShapeLocation& shape)
+	void add(ShapeLocation* shape)
 	{
 		shapelocations.push_back(shape);
+	}
+	bool empty()
+	{
+		return pointlocations.empty() && shapelocations.empty();
 	}
 	const std::string* get_location(fixed_t x, fixed_t y, fixed_t z);
 };

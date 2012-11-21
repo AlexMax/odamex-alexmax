@@ -1217,7 +1217,7 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 		teamcount -= 1;
 
 	int maxwidth;
-	if (level.info->locations == NULL)
+	if (level.info->locations == NULL || level.info->locations->empty())
 		maxwidth = V_StringWidth("MMMMMMMMMMMMMMM MMM 000/000");
 	else
 		maxwidth = V_StringWidth("MMMMMMMMMMMMMMM MMM 000/000 MMMMMMMMMMMMMMM");
@@ -1299,9 +1299,10 @@ void EATeamPlayerInfo(int x, int y, const float scale,
 			else if (x_origin == hud::X_RIGHT)
 			{
 				// Draw from right
-				int offset = V_StringWidth("M") * 15;
-				if (level.info->locations != NULL)
+				int offset = 0;
+				if (level.info->locations != NULL && !level.info->locations->empty())
 				{
+					offset = V_StringWidth("M") * 15;
 					const std::string* location = level.info->locations->get_location(player->mo->x, player->mo->y, player->mo->z);
 					hud::DrawText(x + offset, y, scale, x_align, y_align, hud::X_LEFT, y_origin,
 					              location->c_str(), CR_GREY, force_opaque);

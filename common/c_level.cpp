@@ -91,8 +91,8 @@ const std::string* MapLocations::get_location(fixed_t x, fixed_t y, fixed_t z)
 	// [AM] Look for the first shapelike entry that matches.
 	for (ShapeLocations::const_iterator it = shapelocations.begin();it != shapelocations.end();++it)
 	{
-		if (it->inside(x, y, 0))
-			return it->get_location();
+		if ((*it)->inside(x, y, 0))
+			return (*it)->get_location();
 	}
 
 	lowestdist = 0;
@@ -595,7 +595,7 @@ void G_ParseLocInfo()
 				SC_MustGetString();
 				location = sc_String;
 
-				current_mapinfo->locations->add(RectLocation(x1, y1, x2, y2, location));
+				current_mapinfo->locations->add(new RectLocation(x1, y1, x2, y2, location));
 				break;
 
 				default:
