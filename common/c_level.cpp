@@ -73,7 +73,10 @@ BOOL HexenHack;
 
 bool RectLocation::inside(fixed_t x, fixed_t y, fixed_t z) const
 {
-	return true;
+	return x >= MIN(this->x1, this->x2) &&
+	       x <= MAX(this->x1, this->x2) &&
+	       y >= MIN(this->y1, this->y2) &&
+	       y <= MAX(this->y1, this->y2);
 }
 
 fixed_t PointLocation::distance(fixed_t x, fixed_t y, fixed_t z) const
