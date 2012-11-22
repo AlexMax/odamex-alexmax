@@ -528,18 +528,23 @@ static void ParseMapInfoLower (MapInfoHandler *handlers,
 
 // [AM] Parse LOCINFO lumps for locations in a map
 //      The format of LOCINFO is quite simple.  A line can either be a map
-//      line or a point line.
-//      - A map line consists of "map <maplump>" and simply starts the location
-//        definition for a particular map.  All locations that follow a map
-//        line are applied to that map.
-//      - A point line consists of "point <x> <y> <z> <location name>".  The x, y
-//        and z are integers that make up a point on the map, and the location
-//        name is the name of the location at that point.
+//      definition, a location primitive, or a comment.
+//      - A map definition consists of "map <maplump>" and simply acts as a
+//        header.  All locations that follow the map definition apply to that
+//        map until the next map definition.
+//      - There are several types of location primitives:
+//          point <x> <y> <z> <location name>
+//          circle <x> <y> <radius> <location name>
+//          rect <x1> <y1> <x2> <y2> <location name>
+//      - A 3D cube and generic 2D "shape" primitive are both planned.
 //      In order to determine which location to display for a player, Odamex
-//      will calculate the closest point to the player.  The location name can
-//      be as long as a string can in theory, but practically the HUD will
-//      probably truncate them to some reasonable length.  Perhaps in the future
-//      there can be some other primitives, like "rect" or "shape".
+//      will first check to see if you are located inside any location that has
+//      a volume.  The primitives are checked in order, and the first 'hit'
+//      wins.  2D primitives that you do not specify any z value for (such as
+//      rect) have infinite height.  If no primitives with volume are matched,
+//      then all 'point' primitives are checked for distance, and the closest
+//      point wins.  If no volume locations are matched and there are no point
+//      primitives at all, no location is returned.
 void G_ParseLocInfo()
 {
 	int lump, lastlump = 0;
