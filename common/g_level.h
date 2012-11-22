@@ -85,7 +85,7 @@ public:
 typedef std::vector<PointLocation> PointLocations;
 
 class ShapeLocation {
-private:
+protected:
 	std::string location;
 public:
 	ShapeLocation(const char* clocation) : location(clocation) { }
@@ -95,6 +95,17 @@ public:
 	{
 		return &(this->location);
 	}
+};
+
+class CircleLocation : public ShapeLocation {
+private:
+	fixed_t x;
+	fixed_t y;
+	fixed_t rad;
+public:
+	CircleLocation(fixed_t cx, fixed_t cy, fixed_t crad, const char* clocation) :
+		ShapeLocation(clocation), x(cx), y(cy), rad(crad) { }
+	bool inside(fixed_t x, fixed_t y, fixed_t z) const;
 };
 
 class RectLocation : public ShapeLocation {

@@ -71,6 +71,11 @@ size_t numwadclusterinfos = 0;
 
 BOOL HexenHack;
 
+bool CircleLocation::inside(fixed_t x, fixed_t y, fixed_t rad) const
+{
+	return this->rad >= P_AproxDistance(this->x - x, this->y - y);
+}
+
 bool RectLocation::inside(fixed_t x, fixed_t y, fixed_t z) const
 {
 	return x >= MIN(this->x1, this->x2) &&
@@ -266,6 +271,7 @@ static const char* LocInfo[] =
 {
 	"map",
 	"point",
+	"circle",
 	"rect",
 	NULL
 };
@@ -274,6 +280,7 @@ enum
 {
 	LOC_MAP,
 	LOC_POINT,
+	LOC_CIRCLE,
 	LOC_RECT
 };
 
@@ -546,7 +553,7 @@ void G_ParseLocInfo()
 
 		while (SC_GetString())
 		{
-			int x, x1, x2, y, y1, y2, z;
+			int x, x1, x2, y, y1, y2, z, rad;
 			char* location;
 
 			switch (SC_MustMatchString(LocInfo))
@@ -578,6 +585,25 @@ void G_ParseLocInfo()
 				location = sc_String;
 
 				current_mapinfo->locations->add(PointLocation(x, y, z, location));
+				break;
+
+				case LOC_CIRCLE:
+				// Add a circle location
+				if (strlen(current_map) == 0) {
+					SC_ScriptError("'point' outside of 'map' context", NULL);
+					break;
+				}
+
+				SC_MustGetNumber();
+				x = sc_Number << FRACBITS;
+				SC_MustGetNumber();
+				y = sc_Number << FRACBITS;
+				SC_MustGetNumber();
+				rad = sc_Number << FRACBITS;
+				SC_MustGetString();
+				location = sc_String;
+
+				current_mapinfo->locations->add(new CircleLocation(x, y, rad, location));
 				break;
 
 				case LOC_RECT:
