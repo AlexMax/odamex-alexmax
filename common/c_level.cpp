@@ -526,25 +526,94 @@ static void ParseMapInfoLower (MapInfoHandler *handlers,
 		clusterinfo->flags = flags;
 }
 
-// [AM] Parse LOCINFO lumps for locations in a map
-//      The format of LOCINFO is quite simple.  A line can either be a map
-//      definition, a location primitive, or a comment.
-//      - A map definition consists of "map <maplump>" and simply acts as a
-//        header.  All locations that follow the map definition apply to that
-//        map until the next map definition.
-//      - There are several types of location primitives:
-//          point <x> <y> <z> <location name>
-//          circle <x> <y> <radius> <location name>
-//          rect <x1> <y1> <x2> <y2> <location name>
-//      - A 3D cube and generic 2D "shape" primitive are both planned.
-//      In order to determine which location to display for a player, Odamex
-//      will first check to see if you are located inside any location that has
-//      a volume.  The primitives are checked in order, and the first 'hit'
-//      wins.  2D primitives that you do not specify any z value for (such as
-//      rect) have infinite height.  If no primitives with volume are matched,
-//      then all 'point' primitives are checked for distance, and the closest
-//      point wins.  If no volume locations are matched and there are no point
-//      primitives at all, no location is returned.
+// [AM] Parse the parameters associated with each type of location
+bool ParseLocationParams(MapLocations* locations, int loctype, const std::string& location)
+{
+	int p1, p2, p3, p4;
+
+	switch (loctype)
+	{
+		case LOC_POINT: // x, y, z
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'x' from 'point'");
+			return false;
+		}
+		p1 = sc_Number << FRACBITS;
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'y' from 'point'");
+			return false;
+		}
+		p2 = sc_Number << FRACBITS;
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'z' from 'point'");
+			return false;
+		}
+		p3 = sc_Number << FRACBITS;
+		locations->add(PointLocation(p1, p2, p3, location));
+		return true;
+
+		case LOC_RECT: // x1, y1, x2, y2
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'x1' from 'rect'");
+			return false;
+		}
+		p1 = sc_Number << FRACBITS;
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'y1' from 'rect'");
+			return false;
+		}
+		p2 = sc_Number << FRACBITS;
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'x2' from 'rect'");
+			return false;
+		}
+		p3 = sc_Number << FRACBITS;
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'x2' from 'rect'");
+			return false;
+		}
+		p4 = sc_Number << FRACBITS;
+		locations->add(new RectLocation(p1, p2, p3, p4, location));
+		return true;
+
+		case LOC_CIRCLE: // x, y, radius
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'x' from 'circle'.");
+			return false;
+		}
+		p1 = sc_Number << FRACBITS;
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'y' from 'circle'.");
+			return false;
+		}
+		p2 = sc_Number << FRACBITS;
+		if (!SC_MustGetNumberOnLine())
+		{
+			SC_ScriptError("Missing 'radius' from 'circle'.");
+			return false;
+		}
+		p3 = sc_Number << FRACBITS;
+		locations->add(new CircleLocation(p1, p2, p3, location));
+		return true;
+
+		default:
+		SC_ScriptError("Invalid location type.");
+		return false;
+	}
+}
+
+// [AM] Parse LOCINFO lumps for locations in a map.  See:
+//      http://odamex.net/wiki/LOCINFO for a primer on the format, which
+//      should be considered definitive.
 void G_ParseLocInfo()
 {
 	int lump, lastlump = 0;
@@ -558,84 +627,65 @@ void G_ParseLocInfo()
 
 		while (SC_GetString())
 		{
-			int x, x1, x2, y, y1, y2, z, rad;
-			char* location;
+			std::string location;
 
-			switch (SC_MustMatchString(LocInfo))
+			int loctype = SC_MustMatchString(LocInfo);
+			switch (loctype)
 			{
 				case LOC_MAP:
 				// Switch to a new map context.
-				SC_MustGetString();
+				if (!SC_MustGetStringOnLine())
+				{
+					SC_ScriptError("Map does not exist.");
+					break;
+				}
 				uppercopy(current_map, sc_String);
 				current_mapinfo = FindLevelInfo(current_map);
-				// TODO: Handle unloaded current_mapinfo
+				if (current_mapinfo == NULL)
+				{
+					SC_ScriptError("Map lump \"%s\" does not exist.", current_map);
+					break;
+				}
 				if (current_mapinfo->locations == NULL)
 					current_mapinfo->locations = new MapLocations;
 				break;
 
 				case LOC_POINT:
-				// Add a point location
-				if (strlen(current_map) == 0) {
-					SC_ScriptError("'point' outside of 'map' context", NULL);
-					break;
-				}
-
-				SC_MustGetNumber();
-				x = sc_Number << FRACBITS;
-				SC_MustGetNumber();
-				y = sc_Number << FRACBITS;
-				SC_MustGetNumber();
-				z = sc_Number << FRACBITS;
-				SC_MustGetString();
-				location = sc_String;
-
-				current_mapinfo->locations->add(PointLocation(x, y, z, location));
-				break;
-
-				case LOC_CIRCLE:
-				// Add a circle location
-				if (strlen(current_map) == 0) {
-					SC_ScriptError("'point' outside of 'map' context", NULL);
-					break;
-				}
-
-				SC_MustGetNumber();
-				x = sc_Number << FRACBITS;
-				SC_MustGetNumber();
-				y = sc_Number << FRACBITS;
-				SC_MustGetNumber();
-				rad = sc_Number << FRACBITS;
-				SC_MustGetString();
-				location = sc_String;
-
-				current_mapinfo->locations->add(new CircleLocation(x, y, rad, location));
-				break;
-
 				case LOC_RECT:
-				// Add a rectangle location
-				if (strlen(current_map) == 0) {
-					SC_ScriptError("'rect' outside of 'map' context", NULL);
+				case LOC_CIRCLE:
+				// Add a location
+				if (current_mapinfo == NULL)
+					break;
+				if (current_mapinfo->locations == NULL)
+					break;
+				if (strlen(current_map) == 0)
+				{
+					SC_ScriptError("location outside of 'map' context", NULL);
+					break;
+				}
+				if (!SC_MustGetStringOnLine())
+				{
+					SC_ScriptError("location is missing a location name", NULL);
 					break;
 				}
 
-				SC_MustGetNumber();
-				x1 = sc_Number << FRACBITS;
-				SC_MustGetNumber();
-				y1 = sc_Number << FRACBITS;
-				SC_MustGetNumber();
-				x2 = sc_Number << FRACBITS;
-				SC_MustGetNumber();
-				y2 = sc_Number << FRACBITS;
-				SC_MustGetString();
 				location = sc_String;
-
-				current_mapinfo->locations->add(new RectLocation(x1, y1, x2, y2, location));
+				ParseLocationParams(current_mapinfo->locations, loctype, location);
 				break;
 
 				default:
-				// Do nothing.
+				// Unrecognized command.
 				break;
 			}
+
+			// We should have gone through all the tokens on the line by now.
+			while (SC_GetString() && !sc_Crossed)
+			{
+				SC_ScriptError("Unrecognized token", NULL);
+			}
+
+			if (sc_Crossed)
+				SC_UnGet();
 		}
 	}
 }

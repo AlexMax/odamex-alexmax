@@ -351,6 +351,21 @@ void SC_MustGetString (void)
 	}
 }
 
+BOOL SC_MustGetStringOnLine()
+{
+	if (SC_GetString() == false)
+	{
+		SC_ScriptError("Missing string (unexpected end of file).");
+		return false;
+	}
+	else if (sc_Crossed == true)
+	{
+		SC_ScriptError("Missing string (unexpected end of line).");
+		SC_UnGet();
+		return false;
+	}
+	return true;
+}
 
 //
 // SC_MustGetStringName
@@ -387,10 +402,7 @@ BOOL SC_GetNumber (void)
 			sc_Number = strtol (sc_String, &stopper, 0);
 			if (*stopper != 0)
 			{
-				//I_Error ("SC_GetNumber: Bad numeric constant \"%s\".\n"
-				//	"Script %s, Line %d\n", sc_String, ScriptName.c_str(), sc_Line);
-				Printf (PRINT_HIGH,"SC_GetNumber: Bad numeric constant \"%s\".\n"
-					"Script %s, Line %d\n", sc_String, ScriptName.c_str(), sc_Line);
+				SC_ScriptError("Bad numeric constant \"%s\".", sc_String);
 			}
 		}
 		sc_Float = (float)sc_Number;
@@ -414,6 +426,21 @@ void SC_MustGetNumber (void)
 	}
 }
 
+BOOL SC_MustGetNumberOnLine()
+{
+	if (SC_GetNumber() == false)
+	{
+		SC_ScriptError("Missing integer (unexpected end of file).");
+		return false;
+	}
+	else if (sc_Crossed == true)
+	{
+		SC_UnGet();
+		SC_ScriptError("Missing integer (unexpected end of line).");
+		return false;
+	}
+	return true;
+}
 
 //
 // SC_GetFloat
@@ -554,26 +581,18 @@ BOOL SC_Compare (const char *text)
 //
 // SC_ScriptError
 //
-void SC_ScriptError (const char *message, const char **args)
+int STACK_ARGS SC_ScriptError(const char* format, ...)
 {
-	//char composed[2048];
-	if (message == NULL)
-		message = "Bad syntax.";
+	char composed[2048];
+	if (format == NULL)
+		format = "Bad syntax.";
 
-/*#if !defined(__GNUC__) && !defined(_MSC_VER)
 	va_list arglist;
-	va_start (arglist, *args);
-	vsprintf (composed, message, arglist);
-	va_end (arglist);
-#else
-	vsprintf (composed, message, args);
-#endif*/
+	va_start(arglist, format);
+	vsprintf(composed, format, arglist);
+	va_end(arglist);
 
-    Printf(PRINT_HIGH,"Script error, \"%s\" line %d: %s\n", ScriptName.c_str(),
-		sc_Line, message);
-
-	//I_Error ("Script error, \"%s\" line %d: %s\n", ScriptName.c_str(),
-	//	sc_Line, message);
+	return Printf(PRINT_HIGH, "Script error, \"%s\" line %d: %s\n", ScriptName.c_str(), sc_Line, composed);
 }
 
 

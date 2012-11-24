@@ -73,7 +73,7 @@ private:
 	fixed_t z;
 	std::string location;
 public:
-	PointLocation(fixed_t cx, fixed_t cy, fixed_t cz, const char* clocation) :
+	PointLocation(fixed_t cx, fixed_t cy, fixed_t cz, const std::string& clocation) :
 		x(cx), y(cy), z(cz), location(clocation) { }
 	fixed_t distance(fixed_t x, fixed_t y, fixed_t z) const;
 	const std::string* get_location() const
@@ -88,7 +88,7 @@ class ShapeLocation {
 protected:
 	std::string location;
 public:
-	ShapeLocation(const char* clocation) : location(clocation) { }
+	ShapeLocation(const std::string& clocation) : location(clocation) { }
 	virtual ~ShapeLocation() { }
 	virtual bool inside(fixed_t x, fixed_t y, fixed_t z) const = 0;
 	const std::string* get_location() const
@@ -103,7 +103,7 @@ private:
 	fixed_t y;
 	fixed_t rad;
 public:
-	CircleLocation(fixed_t cx, fixed_t cy, fixed_t crad, const char* clocation) :
+	CircleLocation(fixed_t cx, fixed_t cy, fixed_t crad, const std::string& clocation) :
 		ShapeLocation(clocation), x(cx), y(cy), rad(crad) { }
 	bool inside(fixed_t x, fixed_t y, fixed_t z) const;
 };
@@ -115,7 +115,7 @@ private:
 	fixed_t x2;
 	fixed_t y2;
 public:
-	RectLocation(fixed_t cx1, fixed_t cy1, fixed_t cx2, fixed_t cy2, const char* clocation) :
+	RectLocation(fixed_t cx1, fixed_t cy1, fixed_t cx2, fixed_t cy2, const std::string& clocation) :
 		ShapeLocation(clocation), x1(cx1), y1(cy1), x2(cx2), y2(cy2) { }
 	bool inside(fixed_t x, fixed_t y, fixed_t z) const;
 };
