@@ -1215,6 +1215,8 @@ bool SV_IsTeammate(player_t &a, player_t &b)
 	else return false;
 }
 
+void SV_SendPlayerInfo(player_t &player, player_t &oplayer);
+
 //
 // [denis] SV_AwarenessUpdate
 //
@@ -2887,6 +2889,25 @@ void SV_UpdateMonsters(player_t &pl)
 	}
 }
 
+// Keep tabs on player information for teaminfo board
+void SV_UpdatePlayerInfo(player_t &player)
+{
+	// Update every half-second
+	if (!P_AtInterval(TICRATE / 5))
+		return;
+
+	for (size_t i = 0;i < players.size();i++)
+	{
+		// This function does not handle self-updates
+		if (player.id == players[i].id)
+			continue;
+
+		// Only send information if player is on team or a spectator.
+		if (player.spectator || SV_IsTeammate(player, players[i]))
+			SV_SendPlayerInfo(player, players[i]);
+	}
+}
+
 //
 // SV_ActorTarget
 //
@@ -3214,6 +3235,8 @@ void SV_WriteCommands(void)
 		SV_UpdateMissiles(players[i]);
 
 		SV_UpdateMonsters(players[i]);
+
+		SV_UpdatePlayerInfo(players[i]);
 
 		SV_SendPingRequest(cl);     // request ping reply
 		SV_UpdatePing(cl);          // client returns it
@@ -3931,8 +3954,6 @@ void SV_WantWad(player_t &player)
 // SV_ParseCommands
 //
 
-void SV_SendPlayerInfo(player_t &player);
-
 void SV_ParseCommands(player_t &player)
 {
 	 while(validplayer(player))
@@ -3954,7 +3975,7 @@ void SV_ParseCommands(player_t &player)
 			break;
 
 		case clc_getplayerinfo:
-			SV_SendPlayerInfo (player);
+			SV_SendPlayerInfo(player, player);
 			break;
 
 		case clc_say:
@@ -4853,28 +4874,29 @@ void SV_ExplodeMissile(AActor *mo)
 
 // SV_SendPlayerInfo
 //
-// Sends a player their current weapon, ammo, health, and armor
-void SV_SendPlayerInfo(player_t &player)
+// Sends a player detailed information about another player's loadout.
+void SV_SendPlayerInfo(player_t &player, player_t &oplayer)
 {
 	client_t *cl = &player.client;
 
 	MSG_WriteMarker(&cl->reliablebuf, svc_playerinfo);
+	MSG_WriteByte(&cl->reliablebuf, oplayer.id);
 
 	for (int i = 0; i < NUMWEAPONS; i++)
-		MSG_WriteBool(&cl->reliablebuf, player.weaponowned[i]);
+		MSG_WriteBool(&cl->reliablebuf, oplayer.weaponowned[i]);
 
 	for (int i = 0; i < NUMAMMO; i++)
 	{
-		MSG_WriteShort(&cl->reliablebuf, player.maxammo[i]);
-		MSG_WriteShort(&cl->reliablebuf, player.ammo[i]);
+		MSG_WriteShort(&cl->reliablebuf, oplayer.maxammo[i]);
+		MSG_WriteShort(&cl->reliablebuf, oplayer.ammo[i]);
 	}
 
-	MSG_WriteByte(&cl->reliablebuf, player.health);
-	MSG_WriteByte(&cl->reliablebuf, player.armorpoints);
-	MSG_WriteByte(&cl->reliablebuf, player.armortype);
-	MSG_WriteByte(&cl->reliablebuf, player.readyweapon);
-	MSG_WriteBool(&cl->reliablebuf, player.backpack);
-	MSG_WriteBool(&cl->reliablebuf, player.keepinventory);
+	MSG_WriteByte(&cl->reliablebuf, oplayer.health);
+	MSG_WriteByte(&cl->reliablebuf, oplayer.armorpoints);
+	MSG_WriteByte(&cl->reliablebuf, oplayer.armortype);
+	MSG_WriteByte(&cl->reliablebuf, oplayer.readyweapon);
+	MSG_WriteBool(&cl->reliablebuf, oplayer.backpack);
+	MSG_WriteBool(&cl->reliablebuf, oplayer.keepinventory);
 }
 
 // Optionally preserve a player's loadout from level to level.
@@ -4888,7 +4910,7 @@ void SV_PreservePlayer(player_t &player)
 	if (sv_gametype == GM_COOP && !unnatural_level_progression)
 		player.keepinventory = true;
 
-	SV_SendPlayerInfo(player);
+	SV_SendPlayerInfo(player, player);
 }
 
 VERSION_CONTROL (sv_main_cpp, "$Id$")

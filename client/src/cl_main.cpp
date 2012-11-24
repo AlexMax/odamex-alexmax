@@ -2222,36 +2222,44 @@ void CL_SpawnPlayer()
 
 //
 // CL_PlayerInfo
-// denis - your personal arsenal, as supplied by the server
+// denis - somebody's personal arsenal, as supplied by the server.
 //
-void CL_PlayerInfo(void)
+void CL_PlayerInfo()
 {
-	player_t *p = &consoleplayer();
+	player_t &p = CL_FindPlayer(MSG_ReadByte());
 
 	for (size_t j = 0; j < NUMWEAPONS; j++)
-		p->weaponowned[j] = MSG_ReadBool();
+		p.weaponowned[j] = MSG_ReadBool();
 
 	for (size_t j = 0; j < NUMAMMO; j++)
 	{
-		p->maxammo[j] = MSG_ReadShort();
-		p->ammo[j] = MSG_ReadShort();
+		p.maxammo[j] = MSG_ReadShort();
+		p.ammo[j] = MSG_ReadShort();
 	}
 
-	p->health = MSG_ReadByte();
-	p->armorpoints = MSG_ReadByte();
-	p->armortype = MSG_ReadByte();
+	p.health = MSG_ReadByte();
+	p.armorpoints = MSG_ReadByte();
+	p.armortype = MSG_ReadByte();
 
 	weapontype_t newweapon = static_cast<weapontype_t>(MSG_ReadByte());
 	if (newweapon >= NUMWEAPONS)	// bad weapon number, choose something else
 		newweapon = wp_fist;
 
-	if (newweapon != p->readyweapon)
-		p->pendingweapon = newweapon;
+	// [AM] If the weapon doesn't match up for our own player or the one we are
+	//      spectating, smoothly switch to the correct one.  Otherwise, just
+	//      force it.
+	if (p.id == consoleplayer().id || p.id == displayplayer().id)
+	{
+		if (newweapon != p.readyweapon)
+			p.pendingweapon = newweapon;
+	}
+	else
+		p.readyweapon = newweapon;
 
-	p->backpack = MSG_ReadBool();
+	p.backpack = MSG_ReadBool();
 
 	// [AM] Determine if we should be keeping our inventory on next spawn.
-	p->keepinventory = MSG_ReadBool();
+	p.keepinventory = MSG_ReadBool();
 }
 
 //
