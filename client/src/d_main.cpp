@@ -1345,11 +1345,18 @@ std::vector<size_t> D_DoomWadReboot(
 	if (wadlevelinfos)
     {
 		for (i = 0; i < numwadlevelinfos; i++)
+		{
 			if (wadlevelinfos[i].snapshot)
 			{
 				delete wadlevelinfos[i].snapshot;
 				wadlevelinfos[i].snapshot = NULL;
 			}
+			if (wadlevelinfos[i].locations)
+			{
+				delete wadlevelinfos[i].locations;
+				wadlevelinfos[i].locations = NULL;
+			}
+		}
         memset(wadlevelinfos,0,sizeof(wadlevelinfos));
         numwadlevelinfos = 0;
     }

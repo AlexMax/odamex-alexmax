@@ -18,7 +18,9 @@
 // GNU General Public License for more details.
 //
 // DESCRIPTION:
-//	Common level routines
+//   Common level routines.
+//   [AM] Mapinfo and Clusterinfo are _really_ error prone to work with
+//        and long overdue for turning into classes.
 //
 //-----------------------------------------------------------------------------
 
