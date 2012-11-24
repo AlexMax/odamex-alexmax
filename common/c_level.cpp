@@ -629,6 +629,7 @@ void G_ParseLocInfo()
 		{
 			std::string location;
 
+			// TODO: Add a SC_MustMatchString variant with no Syntax Error.
 			int loctype = SC_MustMatchString(LocInfo);
 			switch (loctype)
 			{
@@ -660,12 +661,12 @@ void G_ParseLocInfo()
 					break;
 				if (strlen(current_map) == 0)
 				{
-					SC_ScriptError("location outside of 'map' context", NULL);
+					SC_ScriptError("Location \"%s\" is outside of \"map\" context.", LocInfo[loctype]);
 					break;
 				}
 				if (!SC_MustGetStringOnLine())
 				{
-					SC_ScriptError("location is missing a location name", NULL);
+					SC_ScriptError("Missing location name in \"%s\".", LocInfo[loctype]);
 					break;
 				}
 
@@ -674,17 +675,17 @@ void G_ParseLocInfo()
 				break;
 
 				default:
-				// Unrecognized command.
+				// Unrecognized command.  Silently ignore.
 				break;
 			}
 
 			// We should have gone through all the tokens on the line by now.
-			while (SC_GetString() && !sc_Crossed)
-			{
-				SC_ScriptError("Unrecognized token", NULL);
-			}
+			// Any extra parameters should be ignored.
+			while (SC_GetString() && !sc_Crossed) { }
 
-			if (sc_Crossed)
+			// If we're not at the end of the file, we're going to want to
+			// parse the next command.
+			if (sc_Crossed && !sc_End)
 				SC_UnGet();
 		}
 	}
