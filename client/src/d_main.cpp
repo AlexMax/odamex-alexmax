@@ -92,6 +92,7 @@
 #include "stats.h"
 #include "p_ctf.h"
 #include "cl_main.h"
+#include "gui_main.h"
 
 #ifdef GEKKO
 #include "i_wii.h"
@@ -908,6 +909,9 @@ void D_DoomMain (void)
 	const char *sdlv = getenv("SDL_VIDEODRIVER");
 	Printf (PRINT_HIGH, "Using %s video driver.\n",sdlv);
 #endif
+
+	Printf (PRINT_HIGH, "GUI::Init:: Init user interface.\n");
+	GUI::Init();
 
 	Printf (PRINT_HIGH, "M_Init: Init miscellaneous info.\n");
 	M_Init ();

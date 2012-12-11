@@ -71,6 +71,24 @@ if(APPLE)
     ${AUDIOUNIT_LIBRARY})
 endif()
 
+# AGAR
+set(AGAR_DIR "C:/Users/AlexMax/Documents/Libraries/mingw/agar-1.4.1-nofreetype_nothreads_nosdl")
+include_directories("${AGAR_DIR}/include/agar/")
+set(AGAR_LIBRARY "${AGAR_DIR}/lib/libag_gui.a;${AGAR_DIR}/lib/libag_core.a")
+
+# FreeType
+find_package(Freetype)
+
+set(FREETYPE_DIR $ENV{FREETYPE_DIR} CACHE PATH
+  "Path to FreeType base directory.  Only necessary if you get errors about FreeType not being found, or if you want to use a different installation of FreeType.")
+set(ENV{FREETYPE_DIR} ${FREETYPE_DIR})
+find_package(Freetype)
+if(FREETYPE_FOUND)
+  include_directories(${FREETYPE_INCLUDE_DIRS})
+else()
+  message(WARNING "FreeType not found, client target not generated.")
+endif()
+
 # Client target
 if(SDL_FOUND AND SDLMIXER_FOUND)
   add_executable(odamex MACOSX_BUNDLE WIN32
@@ -78,12 +96,14 @@ if(SDL_FOUND AND SDLMIXER_FOUND)
     ${TEXTSCREEN_SOURCES} ${TEXTSCREEN_HEADERS}
     ${CLIENT_SOURCES} ${CLIENT_HEADERS} ${CLIENT_WIN32_RESOURCES}
     ${CLIENT_MAC_OBJC_SOURCES})
+  target_link_libraries(odamex ${AGAR_LIBRARY})
   target_link_libraries(odamex ${SDL_LIBRARY} ${SDLMIXER_LIBRARY})
+  target_link_libraries(odamex ${FREETYPE_LIBRARIES})
   if(PORTMIDI_FOUND)
     target_link_libraries(odamex ${PORTMIDI_LIBRARIES})
   endif()
   if(WIN32)
-    target_link_libraries(odamex winmm wsock32 Shlwapi)
+    target_link_libraries(odamex winmm wsock32 Shlwapi opengl32)
   elseif(APPLE)
     target_link_libraries(odamex ${APPLE_FRAMEWORKS})
   elseif(SOLARIS)
