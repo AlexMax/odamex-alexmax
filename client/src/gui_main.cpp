@@ -24,20 +24,44 @@
 #include <agar/gui.h>
 
 #include "gui_main.h"
+#include "gui_driver.h"
 #include "i_system.h"
-#include "v_video.h"
+#include "i_video.h"
 
 void GUI::Init()
-{
+{	// Start the AGAR core
 	if (AG_InitCore("Odamex", 0) == -1)
-		I_FatalError("AG_InitCore() error: %s", AG_GetError());
+		I_FatalError("GUI::Init(): AG_InitCore error \"%s\".", AG_GetError());
 
-	if (AG_InitGraphics("wgl") == -1)
-		I_FatalError("AG_InitGraphics() error: %s", AG_GetError());
+	// Start the AGAR GUI
+	AG_InitGUIGlobals();
+	AG_DriverClass* dc = reinterpret_cast<AG_DriverClass*>(&agDriverDCanvas);
+	AG_RegisterClass(dc);
+	AG_Driver* drv = AG_DriverOpen(dc);
 
-	AG_Window* win = AG_WindowNew(0);
+	if (drv == NULL)
+	{
+		AG_DestroyGUIGlobals();
+		I_FatalError("GUI::Init(): AG_DriverOpen could not open DCanvas driver.");
+	}
+
+	if (AG_InitGUI(0) == -1)
+	{
+		AG_DriverClose(drv);
+		AG_DestroyGUIGlobals();
+		I_FatalError("GUI::Init(): AG_InitGUI error \"%s\".", AG_GetError());
+	}
+
+	// Attach the DCanvas to the driver
+	AGDRIVER_SW_CLASS(drv)->openVideoContext(drv, screen, 0);
+
+	// Set AGAR globals
+	agDriverOps = dc;
+	agDriverSw = AGDRIVER_SW(drv);
+
+/*		AG_Window* win = AG_WindowNew(0);
 	AG_WindowSetMinSize(win, 320, 200);
 	AG_HSVPal* hsv = AG_HSVPalNew(win, AG_HSVPAL_EXPAND);
 	AG_WindowShow(win);
-	AG_EventLoop();
+	AG_EventLoop();*/
 }

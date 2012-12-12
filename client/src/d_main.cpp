@@ -910,7 +910,7 @@ void D_DoomMain (void)
 	Printf (PRINT_HIGH, "Using %s video driver.\n",sdlv);
 #endif
 
-	Printf (PRINT_HIGH, "GUI::Init:: Init user interface.\n");
+	Printf (PRINT_HIGH, "GUI::Init: Init user interface.\n");
 	GUI::Init();
 
 	Printf (PRINT_HIGH, "M_Init: Init miscellaneous info.\n");
