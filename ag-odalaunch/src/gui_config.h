@@ -29,11 +29,11 @@
 #define _GUI_CONFIG_H
 
 /**
- * agOdalaunch namespace.
- *
- * All code for the ag-odalaunch launcher is contained within the agOdalaunch
- * namespace.
- */
+agOdalaunch namespace.
+
+All code for the ag-odalaunch launcher is contained within the agOdalaunch
+namespace.
+*/
 namespace agOdalaunch {
 
 #ifdef _WIN32
@@ -52,6 +52,15 @@ by the Agar library.
 class GuiConfig
 {
 public:
+	/**
+	Load the configuration.
+
+	Requests that Agar load the configuration settings.
+
+	@return True if an error occurred, False if successful.
+	*/
+	static bool Load();
+
 	/**
 	Save the configuration.
 

@@ -52,7 +52,7 @@ CVAR (sv_waddownload,	"0", "Allow downloading of WAD files from this server",
       CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERINFO)
 // Enables WAD file download cap
 CVAR (sv_waddownloadcap, "200", "Cap wad file downloading to a specific rate",
-      CVARTYPE_INT, CVAR_ARCHIVE | CVAR_SERVERINFO)
+      CVARTYPE_INT, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
 // Reset the current map when the last player leaves
 CVAR (sv_emptyreset,   "0", "Reloads the current map when all players leave",
       CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERINFO)
@@ -61,7 +61,7 @@ CVAR (sv_globalspectatorchat, "1", "Players can see spectator chat",
       CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERINFO)
 // Maximum corpses that can appear on a map
 CVAR (sv_maxcorpses, "200", "Maximum corpses to appear on map",
-      CVARTYPE_WORD, CVAR_ARCHIVE | CVAR_SERVERINFO)
+      CVARTYPE_WORD, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
 // Unused (tracks number of connected players for scripting)
 CVAR (sv_clientcount,	"0", "Don't use",
       CVARTYPE_BYTE, CVAR_NOSET | CVAR_NOENABLEDISABLE)
@@ -168,6 +168,14 @@ CVAR (ctf_flagtimeout, "10",  "Time for a dropped flag to be returned automatica
 CVAR (sv_ticbuffer, "1", "Buffer controller input from players experiencing sudden latency spikes for smoother movement",
 	  CVARTYPE_INT, CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
 
+// Ban settings
+// ============
+
+CVAR (sv_banfile, "banlist.json", "Default file to save and load the banlist.",
+      CVARTYPE_STRING, CVAR_SERVERARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR (sv_banfile_reload, "0", "Number of seconds to wait between automatically loading the banlist.",
+      CVARTYPE_INT, CVAR_SERVERARCHIVE | CVAR_NOENABLEDISABLE)
+
 // Vote settings
 // =============
 
@@ -177,6 +185,12 @@ CVAR (sv_vote_countabs, "1", "Count absent voters as 'no' if the vote timer runs
 // A percentage of players needed to pass a vote.
 CVAR (sv_vote_majority, "0.5", "Ratio of yes votes needed for vote to pass.",
 	  CVARTYPE_FLOAT, CVAR_SERVERARCHIVE | CVAR_NOENABLEDISABLE)
+// Spectators are allowed to vote.
+CVAR (sv_vote_speccall, "1", "Spectators are allowed to callvote.",
+	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
+// Spectators are allowed to vote.
+CVAR (sv_vote_specvote, "1", "Spectators are allowed to vote.",
+	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
 // Number of seconds that a countdown lasts.
 CVAR (sv_vote_timelimit, "30", "Amount of time a vote takes in seconds.",
 	  CVARTYPE_INT, CVAR_SERVERARCHIVE | CVAR_NOENABLEDISABLE)
@@ -190,6 +204,8 @@ CVAR (sv_callvote_coinflip, "0", "Clients can flip a coin.",
 CVAR (sv_callvote_kick, "0", "Clients can votekick other players.",
 	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
 CVAR (sv_callvote_forcespec, "0", "Clients can vote to force a player to spectate.",
+	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
+CVAR (sv_callvote_forcestart, "0", "Clients can vote to force the match to start.",
 	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
 CVAR (sv_callvote_map, "0", "Clients can vote to switch to a specific map from the server's maplist.",
 	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
@@ -209,6 +225,14 @@ CVAR (sv_callvote_scorelimit, "0", "Clients can vote a new scorelimit.",
 	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
 CVAR (sv_callvote_timelimit, "0", "Clients can vote a new timelimit.",
 	  CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
+
+// Warmup mode
+CVAR (sv_warmup, "0", "Enable a 'warmup mode' before the match starts.",
+      CVARTYPE_BOOL, CVAR_SERVERARCHIVE | CVAR_LATCH)
+CVAR (sv_warmup_autostart, "1.0", "Ratio of players needed for warmup to automatically end.",
+      CVARTYPE_FLOAT, CVAR_SERVERARCHIVE | CVAR_LATCH | CVAR_NOENABLEDISABLE)
+CVAR (sv_warmup_countdown, "5", "Number of seconds the countdown should wait before the game starts.",
+      CVARTYPE_BYTE, CVAR_SERVERARCHIVE | CVAR_LATCH | CVAR_NOENABLEDISABLE)
 
 // Experimental settings (all categories)
 // =======================================

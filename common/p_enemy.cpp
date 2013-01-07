@@ -194,17 +194,10 @@ BOOL P_CheckMeleeRange (AActor *actor)
 		if (pl->z + pl->height < actor->z)
 			return false;
 	}
-		
-    if (HasBehavior)
-    {
-        if (!P_CheckSight2(actor, pl))
-            return false;
-    }
-	else
-	{
-        if (!P_CheckSight (actor, pl))
-            return false;	    
-	}
+	
+	if (!P_CheckSight(actor, pl))
+		return false;
+
 	return true;
 }
 
@@ -215,16 +208,8 @@ BOOL P_CheckMissileRange (AActor *actor)
 {
 	fixed_t dist;
     
-    if (HasBehavior)
-    {
-        if (!P_CheckSight2 (actor, actor->target, false))
-            return false;
-    }
-    else
-    {
-        if (!P_CheckSight (actor, actor->target))
-            return false;
-    }
+	if (!P_CheckSight (actor, actor->target))
+		return false;
 
 	if (actor->flags & MF_JUSTHIT)
 	{
@@ -286,8 +271,7 @@ BOOL P_CheckMissileRange (AActor *actor)
 // Move in the current direction,
 // returns false if the move is blocked.
 //
-extern	line_t	**spechit;
-extern	int 	numspechit;
+extern	std::vector<line_t*> spechit;
 
 BOOL P_Move (AActor *actor)
 {
@@ -367,14 +351,16 @@ BOOL P_Move (AActor *actor)
 			return true;
 		}
 
-		if (!numspechit)
+		if (spechit.empty())
 			return false;
 
 		actor->movedir = DI_NODIR;
 		good = false;
-		while (numspechit--)
+		while (!spechit.empty())
 		{
-			line_t *ld = spechit[numspechit];
+			line_t *ld = spechit.back();
+			spechit.pop_back();
+
 			// if the special is not a door
 			// that can be opened,
 			// return false
@@ -620,8 +606,7 @@ BOOL P_LookForPlayers (AActor *actor, BOOL allaround)
 
 		if (sightcheckfailed[actor->lastlook])
 			continue;
-		else if((HasBehavior && !P_CheckSight2 (actor, player->mo))
-                || (!HasBehavior && !P_CheckSight (actor, player->mo)))
+		else if (!P_CheckSight(actor, player->mo))
 		{
 			sightcheckfailed[actor->lastlook] = true;
 			continue;			// out of sight
@@ -727,8 +712,7 @@ void A_Look (AActor *actor)
 
 		if (actor->flags & MF_AMBUSH)
 		{
-			if ((HasBehavior && P_CheckSight2 (actor, actor->target)) 
-                || (!HasBehavior && P_CheckSight (actor, actor->target)))
+			if (P_CheckSight(actor, actor->target))
 				goto seeyou;
 		}
 		else
@@ -769,7 +753,7 @@ void A_Look (AActor *actor)
 	}
 
 	if (actor->target)
-		P_SetMobjState (actor, actor->info->seestate);
+		P_SetMobjState (actor, actor->info->seestate, true);
 }
 #include "vectors.h"
 
@@ -825,7 +809,7 @@ void A_Chase (AActor *actor)
 		
 		if (!actor->target)
 		{
-			P_SetMobjState (actor, actor->info->spawnstate); // denis - todo - this sometimes leads to a stack overflow due to infinite recursion: A_Chase->SetMobjState->A_Look->SetMobjState
+			P_SetMobjState (actor, actor->info->spawnstate, true); // denis - todo - this sometimes leads to a stack overflow due to infinite recursion: A_Chase->SetMobjState->A_Look->SetMobjState
 			return;
 		}
 	}
@@ -853,7 +837,7 @@ void A_Chase (AActor *actor)
 				actor->goal = AActor::AActorPtr();
 				
 			actor->target = AActor::AActorPtr();
-			P_SetMobjState (actor, actor->info->spawnstate);
+			P_SetMobjState (actor, actor->info->spawnstate, true);
 			return;
 		}
 		goto nomissile;
@@ -865,7 +849,7 @@ void A_Chase (AActor *actor)
 		if (actor->info->attacksound)
 			S_Sound (actor, CHAN_WEAPON, actor->info->attacksound, 1, ATTN_NORM);
 
-		P_SetMobjState (actor, actor->info->meleestate);
+		P_SetMobjState (actor, actor->info->meleestate, true);
 		return;
 	}
 
@@ -881,7 +865,7 @@ void A_Chase (AActor *actor)
 		if (!P_CheckMissileRange (actor))
 			goto nomissile;
 
-		P_SetMobjState (actor, actor->info->missilestate);
+		P_SetMobjState (actor, actor->info->missilestate, true);
 		actor->flags |= MF_JUSTATTACKED;
 		return;
 	}
@@ -891,8 +875,7 @@ void A_Chase (AActor *actor)
 	// possibly choose another target
 	if (multiplayer
 		&& !actor->threshold
-		&& ((HasBehavior && !P_CheckSight2 (actor, actor->target)) 
-            || (!HasBehavior && !P_CheckSight (actor, actor->target))))
+		&& !P_CheckSight(actor, actor->target))
 	{
 		if (P_LookForPlayers(actor,true))
 			return; 	// got a new target
@@ -1041,11 +1024,10 @@ void A_CPosRefire (AActor *actor)
 
 	if (!actor->target
 		|| actor->target->health <= 0
-		|| (HasBehavior && !P_CheckSight2 (actor, actor->target))
-        || (!HasBehavior && !P_CheckSight (actor, actor->target))
+		|| !P_CheckSight(actor, actor->target)
         )
 	{
-		P_SetMobjState (actor, actor->info->seestate);
+		P_SetMobjState (actor, actor->info->seestate, true);
 	}
 }
 
@@ -1060,11 +1042,10 @@ void A_SpidRefire (AActor *actor)
 
 	if (!actor->target
 		|| actor->target->health <= 0
-		|| (HasBehavior && !P_CheckSight2 (actor, actor->target))		
-		|| (!HasBehavior && !P_CheckSight (actor, actor->target))
+		|| !P_CheckSight(actor, actor->target)
         )
 	{
-		P_SetMobjState (actor, actor->info->seestate);
+		P_SetMobjState (actor, actor->info->seestate, true);
 	}
 }
 
@@ -1392,11 +1373,11 @@ void A_VileChase (AActor *actor)
 					A_FaceTarget (actor);
 					actor->target = temp;
 
-					P_SetMobjState (actor, S_VILE_HEAL1);
+					P_SetMobjState (actor, S_VILE_HEAL1, true);
 					S_Sound (corpsehit, CHAN_BODY, "vile/raise", 1, ATTN_IDLE);
 					info = corpsehit->info;
 
-					P_SetMobjState (corpsehit,info->raisestate);
+					P_SetMobjState (corpsehit,info->raisestate, true);
 
 					// [Nes] - Classic demo compatability: Ghost monster bug.
 					if ((demoplayback || demorecording) && democlassic) {
@@ -1458,8 +1439,7 @@ void A_Fire (AActor *actor)
 		return;
 
 	// don't move it if the vile lost sight
-	if ((HasBehavior && !P_CheckSight2 (actor->target, dest))
-        || (!HasBehavior && !P_CheckSight (actor->target, dest)) )
+	if (!P_CheckSight(actor->target, dest))
 		return;
 
 	an = dest->angle >> ANGLETOFINESHIFT;
@@ -1510,8 +1490,7 @@ void A_VileAttack (AActor *actor)
 
 	A_FaceTarget (actor);
 
-	if ((HasBehavior && !P_CheckSight2 (actor, actor->target))
-      || (!HasBehavior && !P_CheckSight (actor, actor->target)) )
+	if (!P_CheckSight(actor, actor->target))
 		return;
 
 	S_Sound (actor, CHAN_WEAPON, "vile/stop", 1, ATTN_NORM);
@@ -2000,7 +1979,7 @@ void A_BrainScream (AActor *mo)
 		th = new AActor (x,y,z, MT_ROCKET);
 		th->momz = P_Random (mo) << 9;
 
-		P_SetMobjState (th, S_BRAINEXPLODE1);
+		P_SetMobjState (th, S_BRAINEXPLODE1, true);
 
 		th->tics -= P_Random (mo) & 7;
 		if (th->tics < 1)
@@ -2023,7 +2002,7 @@ void A_BrainExplode (AActor *mo)
 	AActor *th = new AActor (x,y,z, MT_ROCKET);
 	th->momz = P_Random (mo) << 9;
 
-	P_SetMobjState (th, S_BRAINEXPLODE1);
+	P_SetMobjState (th, S_BRAINEXPLODE1, true);
 
 	th->tics -= P_Random (mo) & 7;
 	if (th->tics < 1)
@@ -2134,7 +2113,7 @@ void A_SpawnFly (AActor *mo)
 
 	newmobj = new AActor (targ->x, targ->y, targ->z, type);
 	if (P_LookForPlayers (newmobj, true))
-		P_SetMobjState (newmobj, newmobj->info->seestate);
+		P_SetMobjState (newmobj, newmobj->info->seestate, true);
 
 	// telefrag anything in this spot
 	P_TeleportMove (newmobj, newmobj->x, newmobj->y, newmobj->z, true);

@@ -21,11 +21,6 @@
 //
 //-----------------------------------------------------------------------------
 
-#if _MSC_VER == 1200
-// MSVC6, disable broken warnings about truncated stl lines
-#pragma warning(disable:4786)
-#endif
-
 #include <string>
 #include <vector>
 #include <fstream>
@@ -230,26 +225,31 @@ void C_DoCommand (const char *cmd)
 				if (argc >= 2)
 				{
 					c = Commands().find("set");
-
-					if(c != Commands().end())
+					if (c != Commands().end())
 					{
 						com = c->second;
-
 						com->argc = argc + 1;
 						com->argv = argv - 1;	// Hack
 						com->m_Instigator = consoleplayer().mo;
-						com->Run ();
+						com->Run();
 					}
-					else Printf (PRINT_HIGH, "set command not found\n");
+					else
+						Printf(PRINT_HIGH, "set command not found\n");
 				}
-                // [Russell] - Don't make the user feel inadequate, tell
-                // them its either enabled, disabled or its other value
-                else if (var->cstring()[0] == '1' && !(var->m_Flags & CVAR_NOENABLEDISABLE))
-                    Printf (PRINT_HIGH, "\"%s\" is enabled.\n", var->name());
-                else if (var->cstring()[0] == '0' && !(var->m_Flags & CVAR_NOENABLEDISABLE))
-                    Printf (PRINT_HIGH, "\"%s\" is disabled.\n", var->name());
-                else
-                    Printf (PRINT_HIGH, "\"%s\" is \"%s\"\n", var->name(), var->cstring());
+				else
+				{
+					c = Commands().find("get");
+					if (c != Commands().end())
+					{
+						com = c->second;
+						com->argc = argc + 1;
+						com->argv = argv - 1;	// Hack
+						com->m_Instigator = consoleplayer().mo;
+						com->Run();
+					}
+					else
+						Printf(PRINT_HIGH, "get command not found\n");
+				}
 			}
 			else
 			{
@@ -663,7 +663,7 @@ void DConsoleAlias::Run()
             }
         }
 
-        AddCommandString (m_CommandParam.c_str());
+        AddCommandString (m_CommandParam);
 
 		state_lock = false;
 	}

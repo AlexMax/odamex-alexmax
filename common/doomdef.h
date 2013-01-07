@@ -29,11 +29,6 @@
 #include <stdio.h>
 #include <string.h>
 
-// GhostlyDeath -- Can't stand the warnings
-#if _MSC_VER == 1200
-#pragma warning(disable:4786)
-#endif
-
 // GhostlyDeath -- MSVC++ 8+, remove "deprecated" warnings
 #if _MSC_VER >= 1400
 #pragma warning(disable : 4996)
@@ -88,6 +83,7 @@ enum GameMode_t
   // DOOM 2 german edition not handled
   retail,		// DOOM 1 retail, E4, M36
   retail_chex,	// Chex Quest
+  commercial_bfg,
   undetermined	// Well, no IWAD found.
 
 };
@@ -111,6 +107,9 @@ enum GameMission_t
 // The maximum number of players, multiplayer/networking.
 #define MAXPLAYERS				255
 #define MAXPLAYERS_VANILLA		4
+
+// Margin of error used when calculating percentages against player numbers.
+#define MPEPSILON				(float)1 / (MAXPLAYERS * 2)
 
 // State updates, number of tics / second.
 #define TICRATE 		35
@@ -231,10 +230,18 @@ enum weapontype_t
 };
 
 // The default preference ordering when the player runs out of one type of ammo
-const weapontype_t default_weaponprefs[NUMWEAPONS] =
+// Vanilla Doom compatible
+const byte default_weaponprefs[NUMWEAPONS] =
 {
-	wp_plasma, wp_supershotgun, wp_chaingun, wp_shotgun, wp_pistol,
-	wp_chainsaw, wp_bfg, wp_missile, wp_fist
+	0,		// wp_fist
+	4,		// wp_pistol
+	5,		// wp_shotgun
+	6,		// wp_chaingun
+	1,		// wp_missile
+	8,		// wp_plasma
+	2,		// wp_bfg
+	3,		// wp_chainsaw
+	7		// wp_supershotgun
 };
 
 inline FArchive &operator<< (FArchive &arc, weapontype_t i)

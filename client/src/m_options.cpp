@@ -99,6 +99,7 @@ EXTERN_CVAR (language)
 // [Ralphis - Menu] Compatibility Menu
 EXTERN_CVAR (co_level8soundfeature)
 EXTERN_CVAR (hud_targetnames)
+EXTERN_CVAR (hud_gamemsgtype)
 EXTERN_CVAR (hud_scale)
 EXTERN_CVAR (hud_scalescoreboard)
 EXTERN_CVAR (hud_timer)
@@ -156,18 +157,19 @@ EXTERN_CVAR (cl_updaterate)
 EXTERN_CVAR (cl_interp)
 EXTERN_CVAR (cl_predictpickup)
 EXTERN_CVAR (cl_predictsectors)
+EXTERN_CVAR (cl_predictweapons)
 
 // Weapon Preferences
 EXTERN_CVAR (cl_switchweapon)
-EXTERN_CVAR (cl_weaponpref1)
-EXTERN_CVAR (cl_weaponpref2)
-EXTERN_CVAR (cl_weaponpref3)
-EXTERN_CVAR (cl_weaponpref4)
-EXTERN_CVAR (cl_weaponpref5)
-EXTERN_CVAR (cl_weaponpref6)
-EXTERN_CVAR (cl_weaponpref7)
-EXTERN_CVAR (cl_weaponpref8)
-EXTERN_CVAR (cl_weaponpref9)
+EXTERN_CVAR (cl_weaponpref_fst)
+EXTERN_CVAR (cl_weaponpref_csw)
+EXTERN_CVAR (cl_weaponpref_pis)
+EXTERN_CVAR (cl_weaponpref_sg)
+EXTERN_CVAR (cl_weaponpref_ssg)
+EXTERN_CVAR (cl_weaponpref_cg)
+EXTERN_CVAR (cl_weaponpref_rl)
+EXTERN_CVAR (cl_weaponpref_pls)
+EXTERN_CVAR (cl_weaponpref_bfg)
 
 void M_ChangeMessages(void);
 void M_SizeDisplay(float diff);
@@ -636,6 +638,7 @@ static menuitem_t NetworkItems[] = {
 	{ discrete,		"Adjust weapons for lag",		{&cl_unlag},		{2.0},		{0.0},		{0.0},		{OnOff} },
 	{ discrete,		"Predict weapon pickups",		{&cl_predictpickup},{2.0},		{0.0},		{0.0},		{OnOff} },
 	{ discrete,		"Predict sectors",				{&cl_predictsectors},{2.0},		{0.0},		{0.0},		{OnOff} },
+	{ discrete,		"Predict weapon effects",		{&cl_predictweapons},{2.0},		{0.0},		{0.0},		{OnOff} },
 };
 
 menu_t NetworkMenu = {
@@ -664,84 +667,21 @@ static value_t WeapSwitch[] = {
 
 extern const char *weaponnames[];
 
-static const cvar_t* weaponcvars[] = {
-	&cl_weaponpref1, &cl_weaponpref2, &cl_weaponpref3, &cl_weaponpref4, &cl_weaponpref5,
-	&cl_weaponpref6, &cl_weaponpref7, &cl_weaponpref8, &cl_weaponpref9 };
-
-static value_t WeapChoice1[NUMWEAPONS];
-static value_t WeapChoice2[NUMWEAPONS-1];
-static value_t WeapChoice3[NUMWEAPONS-2];
-static value_t WeapChoice4[NUMWEAPONS-3];
-static value_t WeapChoice5[NUMWEAPONS-4];
-static value_t WeapChoice6[NUMWEAPONS-5];
-static value_t WeapChoice7[NUMWEAPONS-6];
-static value_t WeapChoice8[NUMWEAPONS-7];
-static value_t WeapChoice9[NUMWEAPONS-8];
-
-static value_t *WeapChoices[] = {
-	WeapChoice1, WeapChoice2, WeapChoice3, WeapChoice4, WeapChoice5,
-	WeapChoice6, WeapChoice7, WeapChoice8, WeapChoice9 };
-
 static menuitem_t WeaponItems[] = {
-	{ redtext,		" ",							{NULL},				{0.0},		{0.0},		{0.0},		{NULL} },	
-	{ bricktext,	"Configure Weapon Preferences",	{NULL},				{0.0},		{0.0},		{0.0},		{NULL} },
-	{ discrete,		"Switch on pickup",				{&cl_switchweapon},	{3.0},		{0.0},		{0.0},		{WeapSwitch} },
-	{ redtext,		" ",							{NULL},				{0.0},		{0.0},		{0.0},		{NULL} },	
-	{ bricktext,	"Weapon Preference Order",		{NULL},				{0.0},		{0.0},		{0.0},		{NULL} },
-	{ discrete,		"Preference #1",				{&cl_weaponpref1},	{9.0},		{0.0},		{0.0},		{WeapChoice1} },
-	{ discrete,		"Preference #2",				{&cl_weaponpref2},	{8.0},		{0.0},		{0.0},		{WeapChoice2} },
-	{ discrete,		"Preference #3",				{&cl_weaponpref3},	{7.0},		{0.0},		{0.0},		{WeapChoice3} },
-	{ discrete,		"Preference #4",				{&cl_weaponpref4},	{6.0},		{0.0},		{0.0},		{WeapChoice4} },
-	{ discrete,		"Preference #5",				{&cl_weaponpref5},	{5.0},		{0.0},		{0.0},		{WeapChoice5} },
-	{ discrete,		"Preference #6",				{&cl_weaponpref6},	{4.0},		{0.0},		{0.0},		{WeapChoice6} },
-	{ discrete,		"Preference #7",				{&cl_weaponpref7},	{3.0},		{0.0},		{0.0},		{WeapChoice7} },
-	{ discrete,		"Preference #8",				{&cl_weaponpref8},	{2.0},		{0.0},		{0.0},		{WeapChoice8} },
-	{ discrete,		"Preference #9",				{&cl_weaponpref9},	{1.0},		{0.0},		{0.0},		{WeapChoice9} }
+	{ redtext,		" ",							{NULL},					{0.0},	{0.0},		{0.0},		{NULL} },	
+	{ bricktext,	"Configure Weapon Preferences",	{NULL},					{0.0},	{0.0},		{0.0},		{NULL} },
+	{ discrete,		"Switch on pickup",				{&cl_switchweapon},		{3.0},	{0.0},		{0.0},		{WeapSwitch} },
+	{ redtext,		" ",							{NULL},					{0.0},	{0.0},		{0.0},		{NULL} },	
+	{ slider,		weaponnames[0],					{&cl_weaponpref_fst},	{0.0},	{8.0},		{1.0},		{NULL} },
+	{ slider,		weaponnames[7],					{&cl_weaponpref_csw},	{0.0},	{8.0},		{1.0},		{NULL} },
+	{ slider,		weaponnames[1],					{&cl_weaponpref_pis},	{0.0},	{8.0},		{1.0},		{NULL} },
+	{ slider,		weaponnames[2],					{&cl_weaponpref_sg},	{0.0},	{8.0},		{1.0},		{NULL} },
+	{ slider,		weaponnames[8],					{&cl_weaponpref_ssg},	{0.0},	{8.0},		{1.0},		{NULL} },
+	{ slider,		weaponnames[3],					{&cl_weaponpref_cg},	{0.0},	{8.0},		{1.0},		{NULL} },
+	{ slider,		weaponnames[4],					{&cl_weaponpref_rl},	{0.0},	{8.0},		{1.0},		{NULL} },
+	{ slider,		weaponnames[5],					{&cl_weaponpref_pls},	{0.0},	{8.0},		{1.0},		{NULL} },
+	{ slider,		weaponnames[6],					{&cl_weaponpref_bfg},	{0.0},	{8.0},		{1.0},		{NULL} }
 };
-
-//
-// M_UpdateWeaponOptions()
-//
-// Chooses the possible options for each of the weapon preference slots.
-// Slot 1 allows 9 possible choices, Slot 2 allows 8 choices with the choice
-// in Slot 1 excluded, and Slot 3 allows 7 choices with the choices in Slots 1
-// and Slot 2 excluded, etc.
-//
-static void M_UpdateWeaponOptions()
-{
-	weapontype_t pool[NUMWEAPONS] = {
-		wp_fist, wp_chainsaw, wp_pistol, wp_shotgun, wp_supershotgun,
-		wp_chaingun, wp_missile, wp_plasma, wp_bfg };
-
-	for (int slot = 0; slot < NUMWEAPONS; slot++)
-	{
-		value_t *cur_weapchoice = WeapChoices[slot];
-
-		// Compile the possible weapon options for the slot
-		for (int i = 0; i < NUMWEAPONS - slot; i++)
-		{
-			int weapon_num = pool[slot + i];
-			cur_weapchoice[i].value = float(weapon_num);
-			cur_weapchoice[i].name = weaponnames[weapon_num];
-		}
-
-		weapontype_t slotweapon =
-			static_cast<weapontype_t>(weaponcvars[slot]->asInt());
-
-		// Move the slot's weapon to the front of the remaining pool
-		for (int poolcur = slot + 1; poolcur < NUMWEAPONS; poolcur++)
-		{
-			if (pool[poolcur] == slotweapon)
-			{
-				// move the weapons over to make room at the front of the pool
-				for (int j = poolcur; j > slot; j--)
-					pool[j] = pool[j-1];
-				pool[slot] = slotweapon;
-				break;
-			}
-		}
-	}
-}
 
 menu_t WeaponMenu = {
 	"M_WEAPON",
@@ -751,7 +691,7 @@ menu_t WeaponMenu = {
 	WeaponItems,
 	0,
 	0,
-	&M_UpdateWeaponOptions
+	NULL
 };
 
 
@@ -772,6 +712,7 @@ EXTERN_CVAR (am_showsecrets)
 EXTERN_CVAR (am_showtime)
 EXTERN_CVAR (am_classicmapstring)
 EXTERN_CVAR (am_usecustomcolors)
+EXTERN_CVAR (r_widescreen)
 EXTERN_CVAR (st_scale)
 EXTERN_CVAR (r_stretchsky)
 EXTERN_CVAR (r_skypalette)
@@ -854,7 +795,7 @@ static menuitem_t VideoItems[] = {
 	{ more,		"Automap",				    {NULL},					{0.0}, {0.0},	{0.0},  {(value_t *)StartAutomapMenu} },
 	{ redtext,	" ",					    {NULL},					{0.0}, {0.0},	{0.0},  {NULL} },
 	{ slider,	"Screen size",			    {&screenblocks},	   	{3.0}, {12.0},	{1.0},  {NULL} },
-	{ slider,	"Brightness",			    {&gammalevel},			{1.0}, {5.0},	{1.0},  {NULL} },
+	{ slider,	"Brightness",			    {&gammalevel},			{1.0}, {9.0},	{1.0},  {NULL} },
 	{ slider,	"Red Pain Intensity",		{&r_painintensity},		{0.0}, {1.0},	{0.1},  {NULL} },	
 	{ slider,	"Movement bobbing",			{&cl_movebob},			{0.0}, {1.0},	{0.1},	{NULL} },
 	{ redtext,	" ",					    {NULL},					{0.0}, {0.0},	{0.0},  {NULL} },	
@@ -939,6 +880,7 @@ static menuitem_t MessagesItems[] = {
 	{ discrete, "Minimum message level", {&msglevel},		   	{3.0}, {0.0},   {0.0}, {MessageLevels} },
 	{ slider,	"Scale message text",    {&hud_scaletext},		{1.0}, {4.0}, 	{1.0}, {NULL} },	
     { discrete,	"Show player target names",	{&hud_targetnames},	{2.0}, {0.0},   {0.0},	{OnOff} },
+	{ discrete ,"Game Message Type",    {&hud_gamemsgtype},		{3.0}, {0.0},   {0.0}, {VoxType} },
 	{ discrete, "Reveal Secrets",       {&hud_revealsecrets},	{2.0}, {0.0},   {0.0}, {OnOff} },
 	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
 	{ bricktext, "Message Colors",		{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
@@ -1042,15 +984,23 @@ static value_t DetailModes[] = {
 	{ 3.0, "Double Horiz & Vert" }
 };
 
+static value_t Widescreen[] =
+{
+	{ 0.0, "Stretch" },
+	{ 1.0, "Zoom" },
+	{ 2.0, "Wide or Stretch" },
+	{ 3.0, "Wide or Zoom" }
+};
 
 static menuitem_t ModesItems[] = {
-	{ discrete, "Screen mode",			{&DummyDepthCvar},		{0.0}, {0.0},	{0.0}, {Depths} },
+//	{ discrete, "Screen mode",			{&DummyDepthCvar},		{0.0}, {0.0},	{0.0}, {Depths} },
 	{ discrete,	"Detail Mode",			{&r_detail},			{4.0}, {0.0},	{0.0}, {DetailModes} },
 #ifdef _XBOX
 	{ slider, "Overscan",				{&vid_overscan},		{0.84375}, {1.0}, {0.03125}, {NULL} },
 #else
 	{ discrete, "Fullscreen",			{&vid_fullscreen},		{2.0}, {0.0},	{0.0}, {YesNo} },
 #endif
+	{ discrete,	"Widescreen",			{&r_widescreen},		{4.0}, {0.0},	{0.0},  {Widescreen}} ,
 	{ redtext,	" ",					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
 	{ screenres, NULL,					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
 	{ screenres, NULL,					{NULL},					{0.0}, {0.0},	{0.0}, {NULL} },
@@ -2029,17 +1979,14 @@ static void UpdateStuff (void)
 void Reset2Defaults (void)
 {
 	AddCommandString ("unbindall; binddefaults");
-	cvar_t::C_SetCVarsToDefaults ();
+	cvar_t::C_SetCVarsToDefaults(CVAR_ARCHIVE | CVAR_CLIENTARCHIVE);
 	UpdateStuff();
 }
 
 void Reset2Saved (void)
 {
-	std::string cmd = "exec \"";
-	cmd += GetConfigPath();
-	cmd += "\"";
-
-	AddCommandString (cmd.c_str());
+	std::string cmd = "exec " + C_QuoteString(M_GetConfigPath());
+	AddCommandString(cmd);
 	UpdateStuff();
 }
 

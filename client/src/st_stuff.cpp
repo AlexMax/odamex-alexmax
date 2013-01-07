@@ -82,13 +82,22 @@ CVAR_FUNC_IMPL (r_painintensity)
 		var.Set (1.f);
 }
 
+extern int SquareWidth;
+
 void ST_AdjustStatusBarScale(bool scale)
 {
 	if (scale)
 	{
-		// Stretch status bar to fill width of screen
-		ST_WIDTH = screen->width;
-   		ST_HEIGHT = (32 * screen->height) / 200;
+		// Scale status bar height to screen.
+		ST_HEIGHT = (32 * screen->height) / 200;
+		// [AM] Scale status bar width according to height, unless there isn't
+		//      enough room for it.  Fixes widescreen status bar scaling.
+		// [ML] A couple of minor changes for true 4:3 correctness...
+		ST_WIDTH = ST_HEIGHT*10;
+		if (!screen->isProtectedRes())
+        {
+            ST_WIDTH = SquareWidth;
+        }
 	}
 	else
 	{
@@ -686,7 +695,7 @@ bool ST_Responder (event_t *ev)
             if (CheckCheatmode ())
                 return false;
 
-            if (gamemode != commercial)
+            if (gamemode != commercial && gamemode != commercial_bfg)
                 return false;
 
             AddCommandString("noclip");
@@ -747,9 +756,6 @@ bool ST_Responder (event_t *ev)
         // 'clev' change-level cheat
         else if (cht_CheckCheat(&cheat_clev, (char)ev->data2))
         {
-            if (CheckCheatmode ())
-                return false;
-
             char buf[16];
 			//char *bb;
 
@@ -827,7 +833,7 @@ END_COMMAND (notarget)
 
 BEGIN_COMMAND (fly)
 {
-	if (CheckCheatmode ())
+	if (!consoleplayer().spectator && CheckCheatmode ())
 		return;
 
 	consoleplayer().cheats ^= CF_FLY;
@@ -837,8 +843,11 @@ BEGIN_COMMAND (fly)
     else
         Printf(PRINT_HIGH, "Fly mode off\n");
 
-	MSG_WriteMarker(&net_buffer, clc_cheat);
-	MSG_WriteByte(&net_buffer, consoleplayer().cheats);
+	if (!consoleplayer().spectator)
+	{
+		MSG_WriteMarker(&net_buffer, clc_cheat);
+		MSG_WriteByte(&net_buffer, consoleplayer().cheats);
+	}
 }
 END_COMMAND (fly)
 

@@ -32,6 +32,7 @@
 class player_s;
 typedef player_s player_t;
 
+static const short CENTERVIEW = -32768;
 //
 // NetCommand
 //
@@ -162,6 +163,8 @@ private:
 	byte		mImpulse;
 	short		mDeltaYaw;
 	short		mDeltaPitch;
+
+	int getSerializedFields();
 
 	void updateFields(int flag, int value)
 	{

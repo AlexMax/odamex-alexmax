@@ -89,6 +89,9 @@ int ACS_WorldVars[NUM_WORLDVARS];
 // ACS variables with global scope
 int ACS_GlobalVars[NUM_GLOBALVARS];
 
+// [AM] Stores the reset snapshot
+FLZOMemFile	*reset_snapshot = NULL;
+
 extern bool r_underwater;
 BOOL savegamerestore;
 
@@ -114,8 +117,6 @@ void G_DeferedInitNew (char *mapname)
 
 BEGIN_COMMAND (wad) // denis - changes wads
 {
-	std::vector<std::string> wads, patch_files, hashes;
-
 	// [Russell] print out some useful info
 	if (argc == 1)
 	{
@@ -136,31 +137,8 @@ BEGIN_COMMAND (wad) // denis - changes wads
 
 	C_HideConsole();
 
-    // add our iwad if it is one
-    // [ML] 7/26/2010: otherwise reload the currently-loaded iwad
-    if (W_IsIWAD(argv[1]))
-        wads.push_back(argv[1]);
-    else
-        wads.push_back(wadfiles[1].c_str());
-
-    // check whether they are wads or patch files
-	for (QWORD i = 1; i < argc; i++)
-	{
-		std::string ext;
-
-		if (M_ExtractFileExtension(argv[i], ext))
-		{
-		    // don't allow subsequent iwads to be loaded
-		    if ((ext == "wad") && !W_IsIWAD(argv[i]))
-                wads.push_back(argv[i]);
-            else if (ext == "deh" || ext == "bex")
-                patch_files.push_back(argv[i]);
-		}
-	}
-
-    hashes.resize(wads.size());
-
-	D_DoomWadReboot(wads, patch_files, hashes);
+	std::string str = JoinStrings(VectorArgs(argc, argv), " ");
+	G_LoadWad(str);
 
 	D_StartTitle ();
 	CL_QuitNetGame();
@@ -220,7 +198,7 @@ void G_InitNew (const char *mapname)
 	// [RH] Mark all levels as not visited
 	if (!savegamerestore)
 	{
-		for (i = 0; i < numwadlevelinfos; i++)
+		for (i = 0; i < wadlevelinfos.size(); i++)
 			wadlevelinfos[i].flags &= ~LEVEL_VISITED;
 
 		for (i = 0; LevelInfos[i].mapname[0]; i++)
@@ -348,7 +326,7 @@ void G_ExitLevel (int position, int drawscores)
 void G_SecretExitLevel (int position, int drawscores)
 {
 	// IF NO WOLF3D LEVELS, NO SECRET EXIT!
-	if ( (gamemode == commercial)
+	if ( (gameinfo.flags & GI_MAPxx)
 		 && (W_CheckNumForName("map31")<0))
 		secretexit = false;
 	else
@@ -535,6 +513,11 @@ void G_DoLoadLevel (int position)
 	{
 		if (players[i].ingame() && players[i].playerstate == PST_DEAD)
 			players[i].playerstate = PST_REBORN;
+
+		// [AM] If sv_keepkeys is on, players might still be carrying keys, so
+		//      make sure they're gone.
+		for (size_t j = 0; j < NUMCARDS; j++)
+			players[i].cards[j] = false;
 
 		players[i].fragcount = 0;
 		players[i].itemcount = 0;

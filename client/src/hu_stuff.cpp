@@ -43,6 +43,7 @@
 #include "i_video.h"
 #include "i_input.h"
 #include "cl_netgraph.h"
+#include "hu_mousegraph.h"
 
 #include "hu_drawers.h"
 #include "hu_elements.h"
@@ -69,6 +70,7 @@ EXTERN_CVAR (sv_fraglimit)
 EXTERN_CVAR (sv_timelimit)
 EXTERN_CVAR (sv_scorelimit)
 EXTERN_CVAR (cl_netgraph)
+EXTERN_CVAR (hud_mousegraph)
 
 int V_TextScaleXAmount();
 int V_TextScaleYAmount();
@@ -195,6 +197,7 @@ BOOL HU_Responder (event_t *ev)
 				ShoveChatStr (chat_macros[ev->data2 - '0']->cstring(), headsupactive - 1);
 
 			I_ResumeMouse();
+			I_DisableKeyRepeat();
 			headsupactive = 0;
 			return true;
 		}
@@ -203,12 +206,14 @@ BOOL HU_Responder (event_t *ev)
 	{
 		ShoveChatStr (input_text, headsupactive - 1);
         I_ResumeMouse();
+		I_DisableKeyRepeat();
 		headsupactive = 0;
 		return true;
 	}
 	else if (ev->data1 == KEY_ESCAPE || ev->data1 == KEY_JOY2)
 	{
         I_ResumeMouse();
+		I_DisableKeyRepeat();
 		headsupactive = 0;
 		return true;
 	}
@@ -338,6 +343,9 @@ void HU_Drawer (void)
 
 	if (cl_netgraph)
 		netgraph.draw();
+
+	if (hud_mousegraph)
+		mousegraph.draw(hud_mousegraph);
 }
 
 static void ShoveChatStr (std::string str, byte who)
@@ -361,6 +369,7 @@ BEGIN_COMMAND (messagemode)
 
 	headsupactive = 1;
 	C_HideConsole ();
+	I_EnableKeyRepeat();
     I_PauseMouse();
 	input_text = "";
 }
@@ -383,6 +392,7 @@ BEGIN_COMMAND (messagemode2)
 
 	headsupactive = 2;
 	C_HideConsole ();
+	I_EnableKeyRepeat();
 	I_PauseMouse();
 	input_text = "";
 }

@@ -37,12 +37,11 @@
 #include "r_things.h"
 #include "v_video.h"
 
-byte dc_temp[1536*4]; // denis - todo - security, overflow
+byte dc_temp[MAXHEIGHT * 4]; // denis - todo - security, overflow
 unsigned int dc_tspans[4][256];
 unsigned int *dc_ctspan[4];
 unsigned int *horizspan[4];
 
-#ifndef USEASM
 // Copies one span at hx to the screen at sx.
 void rt_copy1col_c (int hx, int sx, int yl, int yh)
 {
@@ -266,7 +265,6 @@ void rt_map4cols_c (int sx, int yl, int yh)
 		dest += pitch*2;
 	} while (--count);
 }
-#endif	/* !USEASM */
 
 // Translates one span at hx to the screen at sx.
 void rt_tlate1col (int hx, int sx, int yl, int yh)
@@ -1029,17 +1027,17 @@ void R_FillColumnHorizP (void)
 
 // Same as R_DrawMaskedColumn() except that it always uses
 // R_DrawColumnHoriz().
-void R_DrawMaskedColumnHoriz (column_t *column)
+void R_DrawMaskedColumnHoriz (tallpost_t *post)
 {
 	dc_texturefrac = 0;
 
-	while (column->topdelta != 0xff) 
+	while (!post->end())
 	{
 		// calculate unclipped screen coordinates for post
-		int topscreen = sprtopscreen + spryscale * column->topdelta - 1;
+		int topscreen = sprtopscreen + spryscale * post->topdelta - 1;
 
 		dc_yl = (topscreen + FRACUNIT) >> FRACBITS;
-		dc_yh = (topscreen + spryscale * column->length) >> FRACBITS;
+		dc_yh = (topscreen + spryscale * post->length) >> FRACBITS;
 				
 		if (dc_yh >= mfloorclip[dc_x])
 			dc_yh = mfloorclip[dc_x] - 1;
@@ -1054,10 +1052,11 @@ void R_DrawMaskedColumnHoriz (column_t *column)
 
 		if (dc_yl <= dc_yh)
 		{
-			dc_source = (byte *)column + 3;
+			dc_source = post->data();
 			hcolfunc_pre (); 
 		}
-		column = (column_t *)((byte *)column + column->length + 4);
+
+		post = post->next();
 	}
 }
 

@@ -45,6 +45,7 @@
 #include "g_level.h"
 #include "p_tick.h"
 #include "p_local.h"
+#include "p_inter.h"
 #include "sv_main.h"
 #include "sv_sqp.h"
 #include "sv_sqpold.h"
@@ -62,6 +63,9 @@
 #include "p_unlag.h"
 #include "sv_vote.h"
 #include "sv_maplist.h"
+#include "g_warmup.h"
+#include "sv_banlist.h"
+#include "d_main.h"
 
 #include <algorithm>
 #include <sstream>
@@ -88,20 +92,7 @@ extern int mapchange;
 
 bool step_mode = false;
 
-#define IPADDRSIZE 4	// GhostlyDeath -- Someone might want to do IPv6 junk
-
 std::queue<byte> free_player_ids;
-
-typedef struct
-{
-	short ip[IPADDRSIZE];
-	std::string Reason;
-} BanEntry_t;
-
-const short RANGEBAN = -1;	// ban everyone! =)
-
-std::vector<BanEntry_t> BanList;		// People who are banned
-std::vector<BanEntry_t> WhiteList;		// people who are [accidently] banned but can get inside
 
 // General server settings
 EXTERN_CVAR(sv_motd)
@@ -116,6 +107,7 @@ EXTERN_CVAR(sv_globalspectatorchat)
 EXTERN_CVAR(sv_allowtargetnames)
 EXTERN_CVAR(sv_flooddelay)
 EXTERN_CVAR(sv_ticbuffer)
+EXTERN_CVAR(sv_warmup)
 
 void SexMessage (const char *from, char *to, int gender,
 	const char *victim, const char *killer);
@@ -273,7 +265,7 @@ void SV_SetClientRate(client_t &client, int rate)
 	else if (rate > sv_maxrate)
 		rate = sv_maxrate;
 
-	client.rate = rate;	
+	client.rate = rate;
 }
 
 EXTERN_CVAR (sv_waddownloadcap)
@@ -315,13 +307,10 @@ void SV_UpdateConsolePlayer(player_t &player);
 void SV_CheckTeam (player_t & playernum);
 team_t SV_GoodTeam (void);
 
-void SV_SendServerSettings (client_t *cl);
+void SV_SendServerSettings (player_t &pl);
 void SV_ServerSettingChange (void);
 
 // some doom functions
-void P_KillMobj (AActor *source, AActor *target, AActor *inflictor, bool joinkill);
-bool P_CheckSightEdges (const AActor* t1, const AActor* t2, float radius_boost = 0.0);
-bool P_CheckSightEdges2 (const AActor* t1, const AActor* t2, float radius_boost = 0.0);
 size_t P_NumPlayersOnTeam(team_t team);
 
 void SV_WinCheck (void);
@@ -407,180 +396,6 @@ void SV_KickPlayer(player_t &player, const std::string &reason) {
 	SV_DropClient(player);
 }
 
-//
-// Nes - IP Lists: bans(BanList), exceptions(WhiteList)
-//
-void SV_BanStringify(std::string *ToStr = NULL, short *ip = NULL)
-{
-	if (!ToStr || !ip)
-		return;
-
-	for (int i = 0; i < IPADDRSIZE; i++)
-	{
-		if (ip[i] == RANGEBAN)
-			*ToStr += '*';
-		else
-		{
-			char bleh[5];
-			sprintf(bleh, "%i", ip[i]);
-			*ToStr += bleh;
-		}
-
-		if (i < (IPADDRSIZE - 1))
-			*ToStr += '.';
-	}
-}
-
-// Nes - Make IP for the temporary BanEntry.
-void SV_IPListMakeIP (BanEntry_t *tBan, std::string IPtoBan)
-{
-	std::string Oct;//, Oct2, Oct3, Oct4;
-
-	// There is garbage in IPtoBan
-	IPtoBan = IPtoBan.substr(0, IPtoBan.find(' '));
-
-	for (int i = 0; i < IPADDRSIZE; i++)
-	{
-		int loc = 0;
-		char *seek;
-
-		Oct = IPtoBan.substr(0, Oct.find("."));
-		IPtoBan = IPtoBan.substr(IPtoBan.find(".") + 1);
-
-		seek = const_cast<char*>(Oct.c_str());
-
-		while (*seek)
-		{
-			if (*seek == '.')
-				break;
-			loc++;
-			seek++;
-		}
-
-		Oct = Oct.substr(0, loc);
-
-		if ((*(Oct.c_str()) == '*') || (*(Oct.c_str()) == 0))
-			(*tBan).ip[i] = RANGEBAN;
-		else
-			(*tBan).ip[i] = atoi(Oct.c_str());
-	}
-}
-
-// Nes - Add IP to a certain IP list.
-void SV_IPListAdd (std::vector<BanEntry_t> *list, std::string listname, std::string IPtoBan, std::string reason)
-{
-	BanEntry_t tBan;	// GhostlyDeath -- Temporary Ban Holder
-	std::string IP;
-
-	SV_IPListMakeIP(&tBan, IPtoBan);
-
-	for (size_t i = 0; i < (*list).size(); i++)
-	{
-		bool match = false;
-
-		for (int j = 0; j < IPADDRSIZE; j++)
-			if (((tBan.ip[j] == (*list)[i].ip[j]) || ((*list)[i].ip[j] == RANGEBAN)) &&
-				(((j > 0 && match) || (j == 0 && !match))))
-				match = true;
-			else
-			{
-				match = false;
-				break;
-			}
-
-		if (match)
-		{
-			SV_BanStringify(&IP, tBan.ip);
-			Printf(PRINT_HIGH, "%s on %s already exists!\n", listname.c_str(), IP.c_str());
-			return;
-		}
-	}
-
-	tBan.Reason = reason;
-
-	(*list).push_back(tBan);
-	SV_BanStringify(&IP, tBan.ip);
-	Printf(PRINT_HIGH, "%s on %s added.\n", listname.c_str(), IP.c_str());
-}
-
-// Nes - Delete IP from a certain IP list.
-void SV_IPListDelete (std::vector<BanEntry_t> *list, std::string listname, std::string IPtoBan)
-{
-	if (!(*list).size())
-		Printf(PRINT_HIGH, "%s list is empty.\n", listname.c_str());
-	else {
-		BanEntry_t tBan;	// GhostlyDeath -- Temporary Ban Holder
-		std::string IP;
-		int RemovalCount = 0;
-		size_t i;
-
-		SV_IPListMakeIP(&tBan, IPtoBan);
-
-		for (i = 0; i < (*list).size(); i++)
-		{
-			bool match = false;
-
-			for (int j = 0; j < IPADDRSIZE; j++)
-				if (tBan.ip[j] == (*list)[i].ip[j])
-					match = true;
-				else
-				{
-					match = false;
-					break;
-				}
-
-			if (match)
-			{
-				(*list)[i].ip[0] = 32000;
-				RemovalCount++;
-			}
-		}
-
-		i = 0;
-
-		while (i < (*list).size())
-		{
-			if ((*list)[i].ip[0] == 32000)
-				(*list).erase((*list).begin() + i);
-			else
-				i++;
-		}
-
-		if (RemovalCount == 0)
-			Printf(PRINT_HIGH, "%s entry not found.\n", listname.c_str());
-		else
-			Printf(PRINT_HIGH, "%i %ss removed.\n", RemovalCount, listname.c_str());
-	}
-}
-
-// Nes - List a certain IP list.
-void SV_IPListDisplay (std::vector<BanEntry_t> *list, std::string listname)
-{
-	if (!(*list).size())
-		Printf(PRINT_HIGH, "%s list is empty.\n", listname.c_str());
-	else {
-		for (size_t i = 0; i < (*list).size(); i++)
-		{
-			std::string IP;
-			SV_BanStringify(&IP, (*list)[i].ip);
-			Printf(PRINT_HIGH, "%s #%i: %s (Reason: %s)\n", listname.c_str(), i + 1, IP.c_str(), (*list)[i].Reason.c_str());
-		}
-
-		Printf(PRINT_HIGH, "%s list has %i entries.\n", listname.c_str(), (*list).size());
-	}
-}
-
-// Nes - Clears a certain IP list.
-void SV_IPListClear (std::vector<BanEntry_t> *list, std::string listname)
-{
-	if (!(*list).size())
-		Printf(PRINT_HIGH, "%s list is already empty!\n", listname.c_str());
-	else {
-		Printf(PRINT_HIGH, "All %i %ss removed.\n", (*list).size(), listname.c_str());
-		(*list).clear();
-	}
-}
-
 BEGIN_COMMAND (stepmode)
 {
     if (step_mode)
@@ -591,136 +406,6 @@ BEGIN_COMMAND (stepmode)
     return;
 }
 END_COMMAND (stepmode)
-
-BEGIN_COMMAND(addban)
-{
-	std::string reason;
-
-	if (argc < 2)
-		return;
-
-	if (argc >= 3)
-		reason = C_ArgCombine(argc - 2, (const char **)(argv + 2));
-	else
-		reason = "none given";
-
-	std::string IPtoBan = C_ArgCombine(argc - 1, (const char **)(argv + 1));
-	SV_IPListAdd (&BanList, "Ban", IPtoBan, reason);
-}
-END_COMMAND(addban)
-
-BEGIN_COMMAND(delban)
-{
-	if (argc < 2)
-		return;
-
-	std::string IPtoBan = C_ArgCombine(argc - 1, (const char **)(argv + 1));
-	SV_IPListDelete (&BanList, "Ban", IPtoBan);
-}
-END_COMMAND(delban)
-
-BEGIN_COMMAND(banlist)
-{
-	SV_IPListDisplay (&BanList, "Ban");
-}
-END_COMMAND(banlist)
-
-BEGIN_COMMAND(clearbans)
-{
-	SV_IPListClear (&BanList, "Ban");
-}
-END_COMMAND(clearbans)
-
-BEGIN_COMMAND(addexception)
-{
-	std::string reason;
-
-	if (argc < 2)
-		return;
-
-	if (argc >= 3)
-		reason = C_ArgCombine(argc - 2, (const char **)(argv + 2));
-	else
-		reason = "none given";
-
-	std::string IPtoBan = C_ArgCombine(argc - 1, (const char **)(argv + 1));
-	SV_IPListAdd (&WhiteList, "Exception", IPtoBan, reason);
-}
-END_COMMAND(addexception)
-
-BEGIN_COMMAND(delexception)
-{
-	if (argc < 2)
-		return;
-
-	std::string IPtoBan = C_ArgCombine(argc - 1, (const char **)(argv + 1));
-	SV_IPListDelete (&WhiteList, "Exception", IPtoBan);
-}
-END_COMMAND(delexception)
-
-BEGIN_COMMAND(exceptionlist)
-{
-	SV_IPListDisplay (&WhiteList, "Exception");
-}
-END_COMMAND(exceptionlist)
-
-BEGIN_COMMAND(clearexceptions)
-{
-	SV_IPListClear (&WhiteList, "Exception");
-}
-END_COMMAND(clearexceptions)
-
-// Nes - Same as kick, only add ban.
-BEGIN_COMMAND(kickban)
-{
-	if (argc < 2)
-		return;
-
-	player_t &player = idplayer(atoi(argv[1]));
-	std::string command, tempipstring;
-	short tempip[IPADDRSIZE];
-
-	// Check for validity...
-	if(!validplayer(player))
-	{
-		Printf(PRINT_HIGH, "bad client number: %d\n", atoi(argv[1]));
-		return;
-	}
-
-	if(!player.ingame())
-	{
-		Printf(PRINT_HIGH, "client %d not in game\n", atoi(argv[1]));
-		return;
-	}
-
-	// Generate IP for the ban...
-	for (int i = 0; i < IPADDRSIZE; i++)
-		tempip[i] = (short)player.client.address.ip[i];
-
-	SV_BanStringify(&tempipstring, tempip);
-
-	// The kick...
-	if (argc > 2)
-	{
-		std::string reason = C_ArgCombine(argc - 2, (const char **)(argv + 2));
-		SV_BroadcastPrintf(PRINT_HIGH, "%s was kickbanned from the server! (Reason: %s)\n", player.userinfo.netname, reason.c_str());
-	}
-	else
-		SV_BroadcastPrintf(PRINT_HIGH, "%s was kickbanned from the server!\n", player.userinfo.netname);
-
-	player.client.displaydisconnect = false;
-	SV_DropClient(player);
-
-	// ... and the ban!
-	command = "addban ";
-	command += tempipstring;
-	if (argc > 2) {
-		command += " ";
-		command += C_ArgCombine(argc - 2, (const char **)(argv + 2));
-	}
-	AddCommandString(command);
-}
-END_COMMAND(kickban)
 
 BEGIN_COMMAND (say)
 {
@@ -875,7 +560,7 @@ void SV_CheckTimeouts (void)
 void SV_RemoveDisconnectedPlayer(player_t &player)
 {
     int player_id = player.id;
-	
+
 	if (!validplayer(player))
 		return;
 
@@ -1244,15 +929,19 @@ void SV_SetupUserInfo (player_t &player)
 
 	int				aimdist = MSG_ReadLong();
 	bool			unlag = MSG_ReadBool();
+	bool			predict_weapons = MSG_ReadBool();
 	byte			update_rate = MSG_ReadByte();
 	weaponswitch_t	switchweapon = static_cast<weaponswitch_t>(MSG_ReadByte());
 
-	weapontype_t	weapon_prefs[NUMWEAPONS];
+	byte			weapon_prefs[NUMWEAPONS];
 	for (size_t i = 0; i < NUMWEAPONS; i++)
 	{
-		weapon_prefs[i] = static_cast<weapontype_t>(MSG_ReadByte());
-		if (weapon_prefs[i] < 0 || weapon_prefs[i] >= NUMWEAPONS)
-			weapon_prefs[i] = wp_fist;
+		// sanitize the weapon preference input
+		byte preflevel = MSG_ReadByte();
+		if (preflevel >= NUMWEAPONS)
+			preflevel = NUMWEAPONS - 1;
+
+		weapon_prefs[i] = preflevel;
 	}
 
 	// ensure sane values for userinfo
@@ -1274,11 +963,12 @@ void SV_SetupUserInfo (player_t &player)
 
 	// [SL] 2011-12-02 - Players can update these parameters whenever they like
 	player.userinfo.unlag			= unlag;
+	player.userinfo.predict_weapons	= predict_weapons;
 	player.userinfo.update_rate		= update_rate;
 	player.userinfo.aimdist			= aimdist;
 	player.userinfo.switchweapon	= switchweapon;
 	memcpy(player.userinfo.weapon_prefs, weapon_prefs, sizeof(weapon_prefs));
-	
+
 	// [SL] 2011-12-02 - Prevent players from spamming certain userinfo updates
 	if (player.userinfo.next_change_time > gametic)
 	{
@@ -1292,7 +982,7 @@ void SV_SetupUserInfo (player_t &player)
 	player.userinfo.team			= new_team;
 	player.userinfo.color			= color;
 	player.prefcolor				= color;
-	
+
 	// sanitize the client's name
 	new_netname = TrimString(new_netname);
 	if (new_netname.empty())
@@ -1314,7 +1004,7 @@ void SV_SetupUserInfo (player_t &player)
 			default:			gendermessage = "its";  break;
 		}
 
-		SV_BroadcastPrintf (PRINT_HIGH, "%s changed %s name to %s.\n", 
+		SV_BroadcastPrintf (PRINT_HIGH, "%s changed %s name to %s.\n",
             old_netname.c_str(), gendermessage.c_str(), player.userinfo.netname);
 	}
 
@@ -1361,11 +1051,11 @@ EXTERN_CVAR (sv_teamsinplay)
 //
 void SV_CheckTeam (player_t &player)
 {
-	if (sv_gametype == GM_CTF && 
+	if (sv_gametype == GM_CTF &&
 			(player.userinfo.team < 0 || player.userinfo.team >= NUMTEAMS))
 		SV_ForceSetTeam (player, SV_GoodTeam ());
 
-	if (sv_gametype != GM_CTF && 
+	if (sv_gametype != GM_CTF &&
 			(player.userinfo.team < 0 || player.userinfo.team >= sv_teamsinplay))
 		SV_ForceSetTeam (player, SV_GoodTeam ());
 }
@@ -1555,12 +1245,12 @@ bool SV_AwarenessUpdate(player_t &player, AActor *mo)
 	else if (	player.mo && mo->player && sv_antiwallhack &&
 				player.spectator)	// GhostlyDeath -- Spectators MUST see players to F12 properly
 		ok = true;
-	else if(player.mo && mo->player && sv_antiwallhack &&
-         ((HasBehavior && P_CheckSightEdges2(player.mo, mo, 5)) || (!HasBehavior && P_CheckSightEdges(player.mo, mo, 5)))/*player.awaresector[sectors - mo->subsector->sector]*/)
+	else if (player.mo && mo->player && sv_antiwallhack &&
+         P_CheckSightEdges(player.mo, mo, 5) /*player.awaresector[sectors - mo->subsector->sector]*/)
 		ok = true;
 
 	bool previously_ok = mo->players_aware.get(player.id);
-	
+
 	client_t *cl = &player.client;
 
 	if(!ok && previously_ok)
@@ -1705,11 +1395,11 @@ void SV_DestroyFinishedMovingSectors()
 {
 	std::list<movingsector_t>::iterator itr;
 	itr = movingsectors.begin();
-	
+
 	while (itr != movingsectors.end())
 	{
 		sector_t *sector = itr->sector;
-		
+
 		if (P_MovingCeilingCompleted(sector))
 		{
 			itr->moving_ceiling = false;
@@ -1735,7 +1425,7 @@ void SV_DestroyFinishedMovingSectors()
 //
 // SV_SendMovingSectorUpdate
 //
-// 
+//
 void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 {
 	if (!sector || !validplayer(player))
@@ -1744,9 +1434,9 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 	int sectornum = sector - sectors;
 	if (sectornum < 0 || sectornum >= numsectors)
 		return;
-		
+
 	buf_t *netbuf = &(player.client.netbuf);
-    
+
 	// Determine which moving planes are in this sector
 	movertype_t floor_mover = SEC_INVALID, ceiling_mover = SEC_INVALID;
 
@@ -1775,7 +1465,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	// Create bitfield to denote moving planes in this sector
 	byte movers = byte(ceiling_mover) | (byte(floor_mover) << 4);
-				
+
 	MSG_WriteMarker(netbuf, svc_movingsector);
 	MSG_WriteShort(netbuf, sectornum);
 	MSG_WriteShort(netbuf, P_CeilingHeight(sector) >> FRACBITS);
@@ -1784,7 +1474,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (ceiling_mover == SEC_ELEVATOR)
 	{
-		DElevator *Elevator = (DElevator *)sector->ceilingdata;
+		DElevator *Elevator = static_cast<DElevator *>(sector->ceilingdata);
 
         MSG_WriteByte(netbuf, Elevator->m_Type);
         MSG_WriteByte(netbuf, Elevator->m_Status);
@@ -1793,10 +1483,10 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
         MSG_WriteShort(netbuf, Elevator->m_CeilingDestHeight >> FRACBITS);
         MSG_WriteShort(netbuf, Elevator->m_Speed >> FRACBITS);
 	}
-	
+
 	if (ceiling_mover == SEC_PILLAR)
 	{
-		DPillar *Pillar = (DPillar *)sector->ceilingdata;
+		DPillar *Pillar = static_cast<DPillar *>(sector->ceilingdata);
 
         MSG_WriteByte(netbuf, Pillar->m_Type);
         MSG_WriteByte(netbuf, Pillar->m_Status);
@@ -1809,8 +1499,8 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (ceiling_mover == SEC_CEILING)
 	{
-		DCeiling *Ceiling = (DCeiling *)sector->ceilingdata;
-		
+		DCeiling *Ceiling = static_cast<DCeiling *>(sector->ceilingdata);
+
         MSG_WriteByte(netbuf, Ceiling->m_Type);
         MSG_WriteShort(netbuf, Ceiling->m_BottomHeight >> FRACBITS);
         MSG_WriteShort(netbuf, Ceiling->m_TopHeight >> FRACBITS);
@@ -1828,7 +1518,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (ceiling_mover == SEC_DOOR)
 	{
-		DDoor *Door = (DDoor *)sector->ceilingdata;
+		DDoor *Door = static_cast<DDoor *>(sector->ceilingdata);
 
         MSG_WriteByte(netbuf, Door->m_Type);
         MSG_WriteShort(netbuf, Door->m_TopHeight >> FRACBITS);
@@ -1842,7 +1532,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (floor_mover == SEC_FLOOR)
 	{
-		DFloor *Floor = (DFloor *)sector->floordata;
+		DFloor *Floor = static_cast<DFloor *>(sector->floordata);
 
         MSG_WriteByte(netbuf, Floor->m_Type);
         MSG_WriteByte(netbuf, Floor->m_Status);
@@ -1865,7 +1555,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
 
 	if (floor_mover == SEC_PLAT)
 	{
-		DPlat *Plat = (DPlat *)sector->floordata;
+		DPlat *Plat = static_cast<DPlat *>(sector->floordata);
 
         MSG_WriteShort(netbuf, Plat->m_Speed >> FRACBITS);
         MSG_WriteShort(netbuf, Plat->m_Low >> FRACBITS);
@@ -1880,7 +1570,7 @@ void SV_SendMovingSectorUpdate(player_t &player, sector_t *sector)
         MSG_WriteShort(netbuf, Plat->m_Height >> FRACBITS);
         MSG_WriteShort(netbuf, Plat->m_Lip >> FRACBITS);
 	}
-}	
+}
 
 //
 // SV_UpdateMovingSectors
@@ -1892,7 +1582,7 @@ void SV_UpdateMovingSectors(player_t &player)
 	for (itr = movingsectors.begin(); itr != movingsectors.end(); ++itr)
 	{
 		sector_t *sector = itr->sector;
-		
+
 		SV_SendMovingSectorUpdate(player, sector);
 	}
 }
@@ -1903,7 +1593,7 @@ void SV_UpdateMovingSectors(player_t &player)
 // Sends gametic to synchronize with the client
 //
 // [SL] 2011-05-11 - Instead of sending the whole gametic (4 bytes),
-// send only the least significant byte to save bandwidth. 
+// send only the least significant byte to save bandwidth.
 void SV_SendGametic(client_t* cl)
 {
 	MSG_WriteMarker	(&cl->netbuf, svc_svgametic);
@@ -1935,7 +1625,10 @@ void SV_ClientFullUpdate (player_t &pl)
 				return;
 	}
 
-	// update frags/points/spectate/ready
+	// update warmup state
+	SV_SendWarmupState(pl, warmup.get_status(), warmup.get_countdown());
+
+	// update frags/points/.tate/ready
 	for (i = 0; i < players.size(); i++)
 	{
 		if (!players[i].ingame())
@@ -2002,26 +1695,34 @@ void SV_ClientFullUpdate (player_t &pl)
 //	Sends server setting info
 //
 
-void SV_SendServerSettings (client_t *cl)
+void SV_SendPackets(void);
+
+void SV_SendServerSettings (player_t &pl)
 {
 	// GhostlyDeath <June 19, 2008> -- Loop through all CVARs and send the CVAR_SERVERINFO stuff only
 	cvar_t *var = GetFirstCvar();
 
-	MSG_WriteMarker(&cl->reliablebuf, svc_serversettings);
+    client_t *cl = &pl.client;
 
 	while (var)
 	{
 		if (var->flags() & CVAR_SERVERINFO)
 		{
-			MSG_WriteByte(&cl->reliablebuf, 1);
+            if ((cl->reliablebuf.cursize + 1 + 1 + (strlen(var->name()) + 1) + (strlen(var->cstring()) + 1) + 1) >= 512)
+                SV_SendPacket(pl);
+
+            MSG_WriteMarker(&cl->reliablebuf, svc_serversettings);
+
+            MSG_WriteByte(&cl->reliablebuf, 1); // TODO: REMOVE IN 0.7
+
 			MSG_WriteString(&cl->reliablebuf, var->name());
 			MSG_WriteString(&cl->reliablebuf, var->cstring());
+
+            MSG_WriteByte(&cl->reliablebuf, 2); // TODO: REMOVE IN 0.7
 		}
 
 		var = var->GetNext();
 	}
-
-	MSG_WriteByte(&cl->reliablebuf, 2);
 }
 
 //
@@ -2035,114 +1736,7 @@ void SV_ServerSettingChange (void)
 		return;
 
 	for (size_t i = 0; i < players.size(); i++)
-		SV_SendServerSettings (&clients[i]);
-}
-
-//
-//  SV_BanCheck
-//
-//  Checks a connecting player against a banlist
-//
-bool SV_BanCheck (client_t *cl, int n)
-{
-	for (size_t i = 0; i < BanList.size(); i++)
-	{
-		bool match = false;
-		bool exception = false;
-
-		for (int j = 0; j < IPADDRSIZE; j++)
-		{
-			if (((cl->address.ip[j] == BanList[i].ip[j]) || (BanList[i].ip[j] == RANGEBAN)) &&
-				(((j > 0 && match) || (j == 0 && !match))))
-				match = true;
-			else
-			{
-				match = false;
-				break;
-			}
-		}
-
-		// Now see if there is an exception on our ban...
-		if (WhiteList.empty() == false)
-		{
-			for (size_t k = 0; k < WhiteList.size(); k++)
-			{
-				exception = false;
-
-				for (int j = 0; j < IPADDRSIZE; j++)
-				{
-					if (((cl->address.ip[j] == WhiteList[k].ip[j]) || (WhiteList[k].ip[j] == RANGEBAN)) &&
-						(((j > 0 && exception) || (j == 0 && !exception))))
-						exception = true;
-					else
-					{
-						exception = false;
-						break;
-					}
-				}
-
-				if (exception)
-					break;	// we already know they are allowed in
-			}
-		}
-
-		if (match && !exception)
-		{
-			std::string BanStr;
-			BanStr += "\nYou are banned! (reason: ";
-			//if (*(BanList[i].Reason.c_str()))
-				BanStr += BanList[i].Reason;
-			//else
-			//	BanStr += "none given";
-			BanStr += ")\n";
-
-			MSG_WriteMarker   (&cl->reliablebuf, svc_print);
-			MSG_WriteByte   (&cl->reliablebuf, PRINT_HIGH);
-			MSG_WriteString (&cl->reliablebuf, BanStr.c_str());
-
-			// GhostlyDeath -- Do we include the e-mail or no?
-			if (*(sv_email.cstring()) == 0)
-			{
-				MSG_WriteMarker(&cl->reliablebuf, svc_print);
-				MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
-				MSG_WriteString(&cl->reliablebuf, "If you feel there has been an error, contact the server host. (No e-mail given)\n");
-			}
-			else
-			{
-				std::string ErrorStr;
-				ErrorStr += "If you feel there has been an error, contact the server host at ";
-				ErrorStr += sv_email.cstring();
-				ErrorStr += "\n\n";
-				MSG_WriteMarker(&cl->reliablebuf, svc_print);
-				MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
-				MSG_WriteString(&cl->reliablebuf, ErrorStr.c_str());
-			}
-
-			Printf(PRINT_HIGH, "%s is banned and unable to join! (reason: %s)\n", NET_AdrToString (net_from), BanList[i].Reason.c_str());
-
-			SV_SendPacket (players[n]);
-			cl->displaydisconnect = false;
-			return true;
-		}
-		else if (exception)	// don't bother because they'll be allowed multiple times
-		{
-			std::string BanStr;
-			BanStr += "\nBan Exception (reason: ";
-			//if (*(WhiteList[i].Reason.c_str()))
-				BanStr += WhiteList[i].Reason;
-			//else
-			//	BanStr += "none given";
-			//BanStr += ")\n\n";
-
-			MSG_WriteMarker(&cl->reliablebuf, svc_print);
-			MSG_WriteByte(&cl->reliablebuf, PRINT_HIGH);
-			MSG_WriteString(&cl->reliablebuf, BanStr.c_str());
-
-			return false;
-		}
-	}
-
-	return false;
+		SV_SendServerSettings (players[i]);
 }
 
 // SV_CheckClientVersion
@@ -2394,13 +1988,14 @@ void SV_ConnectClient (void)
 
 	// get client userinfo
 	MSG_ReadByte();  // clc_userinfo
-	SV_SetupUserInfo(players[n]); 
+	SV_SetupUserInfo(players[n]);
 
 	// get rate value
 	SV_SetClientRate(*cl, MSG_ReadLong());
 
 	if (SV_BanCheck(cl, n))
 	{
+		cl->displaydisconnect = false;
 		SV_DropClient(players[n]);
 		return;
 	}
@@ -2428,7 +2023,7 @@ void SV_ConnectClient (void)
     SV_SendPacket(players[n]);
 
 	// [Toke] send server settings
-	SV_SendServerSettings (cl);
+	SV_SendServerSettings (players[n]);
 
 	cl->download.name = "";
 	if(connection_type == 1)
@@ -2471,6 +2066,7 @@ void SV_ConnectClient (void)
 	players[n].fragcount	= 0;
 	players[n].killcount	= 0;
 	players[n].points		= 0;
+	players[n].keepinventory = false;
 
 	if(!step_mode) {
 		players[n].spectator	= true;
@@ -2483,8 +2079,7 @@ void SV_ConnectClient (void)
 	}
 
 	// send a map name
-	MSG_WriteMarker   (&cl->reliablebuf, svc_loadmap);
-	MSG_WriteString (&cl->reliablebuf, level.mapname);
+	SV_SendLoadMap(wadfiles, patchfiles, level.mapname, &players[n]);
 
 	// [SL] 2011-12-07 - Force the player to jump to intermission if not in a level
 	if (gamestate == GS_INTERMISSION)
@@ -2651,6 +2246,41 @@ void SV_ExitLevel()
 	}
 }
 
+//
+// SV_SendLoadMap
+//
+// Sends a message to a player telling them to change to the specified WAD
+// and DEH patch files and load a map.
+//
+void SV_SendLoadMap(const std::vector<std::string> &wadnames,
+					const std::vector<std::string> &patchnames,
+					const std::string &mapname, player_t *player)
+{
+	if (!player)
+		return;
+
+	buf_t *buf = &(player->client.reliablebuf);
+	MSG_WriteMarker(buf, svc_loadmap);
+
+	// send list of wads (skip over wadnames[0] == odamex.wad)	
+	MSG_WriteByte(buf, MIN<size_t>(wadnames.size() - 1, 255));
+	for (size_t i = 1; i < MIN<size_t>(wadnames.size(), 256); i++)
+	{
+		MSG_WriteString(buf, D_CleanseFileName(wadnames[i], "wad").c_str());
+		MSG_WriteString(buf, wadhashes[i].c_str());
+	}
+
+	// send list of DEH/BEX patches
+	MSG_WriteByte(buf, MIN<size_t>(patchnames.size(), 255));
+	for (size_t i = 0; i < MIN<size_t>(patchnames.size(), 255); i++)
+	{
+		MSG_WriteString(buf, D_CleanseFileName(patchnames[i]).c_str());
+		MSG_WriteString(buf, patchhashes[i].c_str());
+	}
+
+	MSG_WriteString(buf, mapname.c_str());
+}
+
 static bool STACK_ARGS compare_player_frags (const player_t *arg1, const player_t *arg2)
 {
 	return arg2->fragcount < arg1->fragcount;
@@ -2719,7 +2349,7 @@ void SV_DrawScores()
 						(int)sortedplayers[i]->client.address.ip[2],
 						(int)sortedplayers[i]->client.address.ip[3]);
 
-                    Printf(PRINT_HIGH, "%-3d %-16s %-15s %-6d N/A  %-5d %-3d", 
+                    Printf(PRINT_HIGH, "%-3d %-16s %-15s %-6d N/A  %-5d %-3d",
 						i+1,
 						ip,
                         sortedplayers[i]->userinfo.netname,
@@ -2776,7 +2406,7 @@ void SV_DrawScores()
 						(int)sortedplayers[i]->client.address.ip[2],
 						(int)sortedplayers[i]->client.address.ip[3]);
 
-					Printf(PRINT_HIGH, "%-3d %-16s %-15s %-5d %-6d %4s %-3d", 
+					Printf(PRINT_HIGH, "%-3d %-16s %-15s %-5d %-6d %4s %-3d",
 						i+1,
 						ip,
 						sortedplayers[i]->userinfo.netname,
@@ -2863,7 +2493,7 @@ void SV_DrawScores()
 					(int)sortedplayers[i]->client.address.ip[2],
 					(int)sortedplayers[i]->client.address.ip[3]);
 
-				Printf(PRINT_HIGH, "%-3d %-16s %-15s %-5d %-6d %4s %-3d", 
+				Printf(PRINT_HIGH, "%-3d %-16s %-15s %-5d %-6d %4s %-3d",
 					i+1,
 					ip,
 					sortedplayers[i]->userinfo.netname,
@@ -2952,6 +2582,20 @@ void STACK_ARGS SV_SpectatorPrintf (int level, const char *fmt, ...)
     }
 }
 
+// Print directly to a specific client.
+void STACK_ARGS SV_ClientPrintf(client_t *cl, int level, const char *fmt, ...) {
+	va_list argptr;
+	char string[2048];
+
+	va_start(argptr, fmt);
+	vsprintf(string, fmt, argptr);
+	va_end(argptr);
+
+	MSG_WriteMarker(&cl->reliablebuf, svc_print);
+	MSG_WriteByte(&cl->reliablebuf, level);
+	MSG_WriteString(&cl->reliablebuf, string);
+}
+
 // Print directly to a specific player.
 void STACK_ARGS SV_PlayerPrintf (int level, int who, const char *fmt, ...) {
 	va_list argptr;
@@ -2985,7 +2629,7 @@ void STACK_ARGS SV_TeamPrintf (int level, int who, const char *fmt, ...)
 		if(!(sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF) || players[i].userinfo.team != idplayer(who).userinfo.team)
 			continue;
 
-		if (players[i].spectator)
+		if (players[i].spectator || players[i].playerstate == PST_DOWNLOAD)
 			continue;
 
 		cl = &clients[i];
@@ -3011,12 +2655,8 @@ void SV_Say(player_t &player)
     // Flood protection
     if (player.LastMessage.Time)
     {
-#if defined(_MSC_VER) && _MSC_VER <= 1200
-		// GhostlyDeath <October 28, 2008> -- VC6 can't cast unsigned __int64 to a double!
-		signed __int64 Difference = (I_GetTime() - player.LastMessage.Time);
-#else
         QWORD Difference = (I_GetTime() - player.LastMessage.Time);
-#endif
+
         float Delay = (float)(sv_flooddelay * TICRATE);
 
         if (Difference <= Delay)
@@ -3141,82 +2781,83 @@ void SV_UpdateMissiles(player_t &pl)
     }
 }
 
-//
-// SV_UpdateMonsters
-// Updates monster position/angle sometimes.
-//
+// Update the given actors state immediately.
+void SV_UpdateMobjState(AActor *mo)
+{
+	for (size_t i = 0;i < players.size();i++)
+	{
+		if (!players[i].ingame())
+			continue;
+
+		if (SV_IsPlayerAllowedToSee(players[i], mo))
+		{
+			client_t *cl = &players[i].client;
+			statenum_t mostate = (statenum_t)(mo->state - states);
+
+			MSG_WriteMarker(&cl->reliablebuf, svc_mobjstate);
+			MSG_WriteShort(&cl->reliablebuf, mo->netid);
+			MSG_WriteShort(&cl->reliablebuf, (short)mostate);
+		}
+	}
+}
+
+// Keep tabs on monster positions and angles.
 void SV_UpdateMonsters(player_t &pl)
 {
-    AActor *mo;
+	AActor *mo;
 
-    TThinkerIterator<AActor> iterator;
-    while ( (mo = iterator.Next() ) )
-    {
-        if (mo->flags & MF_CORPSE)
-			continue;
-	
-        if (!(mo->flags & MF_COUNTKILL ||
-			mo->type == MT_SKULL))
+	TThinkerIterator<AActor> iterator;
+	while ((mo = iterator.Next()))
+	{
+		// Ignore corpses.
+		if (mo->flags & MF_CORPSE)
 			continue;
 
-		// update monster position every 10 tics
-		if ((gametic+mo->netid) % 10)
+		// We don't handle updating non-monsters here.
+		if (!(mo->flags & MF_COUNTKILL || mo->type == MT_SKULL))
 			continue;
 
-		if(SV_IsPlayerAllowedToSee(pl, mo))
+		// update monster position every 7 tics
+		if ((gametic+mo->netid) % 7)
+			continue;
+
+		if (SV_IsPlayerAllowedToSee(pl, mo))
 		{
 			client_t *cl = &pl.client;
 
-            statenum_t mostate = (statenum_t)(mo->state - states);
-            mobjinfo_t moinfo = mobjinfo[mo->type];
-
-			MSG_WriteMarker (&cl->netbuf, svc_movemobj);
-			MSG_WriteShort (&cl->netbuf, mo->netid);
-			MSG_WriteByte (&cl->netbuf, mo->rndindex);
-			MSG_WriteLong (&cl->netbuf, mo->x);
-			MSG_WriteLong (&cl->netbuf, mo->y);
-			MSG_WriteLong (&cl->netbuf, mo->z);
-
-			MSG_WriteMarker (&cl->netbuf, svc_mobjspeedangle);
+			MSG_WriteMarker(&cl->netbuf, svc_movemobj);
 			MSG_WriteShort(&cl->netbuf, mo->netid);
-			MSG_WriteLong (&cl->netbuf, mo->angle);
-			MSG_WriteLong (&cl->netbuf, mo->momx);
-			MSG_WriteLong (&cl->netbuf, mo->momy);
-			MSG_WriteLong (&cl->netbuf, mo->momz);
+			MSG_WriteByte(&cl->netbuf, mo->rndindex);
+			MSG_WriteLong(&cl->netbuf, mo->x);
+			MSG_WriteLong(&cl->netbuf, mo->y);
+			MSG_WriteLong(&cl->netbuf, mo->z);
 
-			MSG_WriteMarker (&cl->netbuf, svc_actor_movedir);
-			MSG_WriteShort (&cl->netbuf, mo->netid);
-			MSG_WriteByte (&cl->netbuf, mo->movedir);
-			MSG_WriteLong (&cl->netbuf, mo->movecount);
+			MSG_WriteMarker(&cl->netbuf, svc_mobjspeedangle);
+			MSG_WriteShort(&cl->netbuf, mo->netid);
+			MSG_WriteLong(&cl->netbuf, mo->angle);
+			MSG_WriteLong(&cl->netbuf, mo->momx);
+			MSG_WriteLong(&cl->netbuf, mo->momy);
+			MSG_WriteLong(&cl->netbuf, mo->momz);
 
-            if (mo->target)
-            {
-                MSG_WriteMarker (&cl->netbuf, svc_actor_target);
-                MSG_WriteShort(&cl->netbuf, mo->netid);
-                MSG_WriteShort (&cl->netbuf, mo->target->netid);
-            }
+			MSG_WriteMarker(&cl->netbuf, svc_actor_movedir);
+			MSG_WriteShort(&cl->netbuf, mo->netid);
+			MSG_WriteByte(&cl->netbuf, mo->movedir);
+			MSG_WriteLong(&cl->netbuf, mo->movecount);
 
-            // This code is designed to send the 'starting' state, not inbetween
-            // ones
-			if ((moinfo.spawnstate == mostate) ||
-                (moinfo.seestate == mostate) ||
-                (moinfo.painstate == mostate) ||
-                (moinfo.meleestate == mostate) ||
-                (moinfo.missilestate == mostate) ||
-                (moinfo.deathstate == mostate) ||
-                (moinfo.xdeathstate == mostate) ||
-                (moinfo.raisestate == mostate))
-            {
-                MSG_WriteMarker (&cl->netbuf, svc_mobjstate);
-                MSG_WriteShort (&cl->netbuf, mo->netid);
-                MSG_WriteShort (&cl->netbuf, (short)mostate);
-            }
+			if (mo->target)
+			{
+				MSG_WriteMarker(&cl->netbuf, svc_actor_target);
+				MSG_WriteShort(&cl->netbuf, mo->netid);
+				MSG_WriteShort(&cl->netbuf, mo->target->netid);
+			}
 
-            if (cl->netbuf.cursize >= 1024)
-                if(!SV_SendPacket(pl))
-                    return;
+			if (cl->netbuf.cursize >= 1024)
+			{
+				if (!SV_SendPacket(pl))
+					return;
+			}
 		}
-    }
+	}
 }
 
 //
@@ -3422,14 +3063,14 @@ void SV_SendPlayerStateUpdate(client_t *client, player_t *player)
 	MSG_WriteShort(buf, player->health);
 	MSG_WriteByte(buf, player->armortype);
 	MSG_WriteShort(buf, player->armorpoints);
-	
+
 	MSG_WriteByte(buf, player->readyweapon);
 
 	for (int i = 0; i < NUMAMMO; i++)
 		MSG_WriteShort(buf, player->ammo[i]);
-	
+
 	for (int i = 0; i < NUMPSPRITES; i++)
-	{	
+	{
 		pspdef_t *psp = &player->psprites[i];
 		if (psp->state)
 			MSG_WriteByte(buf, psp->state - states);
@@ -3463,14 +3104,14 @@ void SV_WriteCommands(void)
 	for (size_t i=0; i < players.size(); i++)
 	{
 		client_t *cl = &clients[i];
-		
+
 		// Don't need to update origin every tic.
 		// The server sends origin and velocity of a
 		// player and the client always knows origin on
 		// on the next tic.
 		// HOWEVER, update as often as the player requests
 		if (P_AtInterval(players[i].userinfo.update_rate))
-		{ 
+		{
 			// [SL] 2011-05-11 - Send the client the server's gametic
 			// this gametic is returned to the server with the client's
 			// next cmd
@@ -3534,7 +3175,7 @@ void SV_WriteCommands(void)
 			}
 		}
 
-		// [SL] Send client info about player he is spying on 
+		// [SL] Send client info about player he is spying on
 		player_t *target = &idplayer(players[i].spying);
 		if (validplayer(*target) && P_CanSpy(players[i], *target))
 			SV_SendPlayerStateUpdate(&players[i].client, target);
@@ -3583,9 +3224,8 @@ int SV_CalculateNumTiccmds(player_t &player)
 	if (!player.mo || player.cmdqueue.empty())
 		return 0;
 
-	static const int minimum_cmds = 1;
 	static const size_t maximum_queue_size = TICRATE / 4;
-	
+
 	if (!sv_ticbuffer || player.spectator || player.playerstate == PST_DEAD)
 	{
 		// Process all queued ticcmds.
@@ -3594,23 +3234,25 @@ int SV_CalculateNumTiccmds(player_t &player)
 	if (player.mo->momx == 0 && player.mo->momy == 0 && player.mo->momz == 0)
 	{
 		// Player is not moving
-		return 2 * minimum_cmds;
+		return 2;
+	}
+	if (player.cmdqueue.size() > 2 && gametic % 2*TICRATE == player.id % 2*TICRATE)
+	{
+		// Process an extra ticcmd once every 2 seconds to reduce the
+		// queue size. Use player id to stagger the timing to prevent everyone
+		// from running an extra ticcmd at the same time.
+		return 2;
 	}
 	if (player.cmdqueue.size() > maximum_queue_size)
 	{
 		// The player experienced a large latency spike so try to catch up by
 		// processing more than one ticcmd at the expense of appearing perfectly
 		//  smooth
-		return 2 * minimum_cmds;
-	}
-	if (P_AtInterval(TICRATE/2) && !P_VisibleToPlayers(player.mo))
-	{
-		// Every half second, run two commands if no one can see this player
-		return 2 * minimum_cmds;
+		return 2;
 	}
 
 	// always run at least 1 ticcmd if possible
-	return minimum_cmds;
+	return 1;
 }
 
 //
@@ -3624,16 +3266,16 @@ int SV_CalculateNumTiccmds(player_t &player)
 void SV_ProcessPlayerCmd(player_t &player)
 {
 	static const int maxcmdmove = 12800;
-	
+
 	if (!validplayer(player) || !player.mo)
 		return;
 
 	#ifdef _TICCMD_QUEUE_DEBUG_
-	DPrintf("Cmd queue size for %s: %d\n", 
+	DPrintf("Cmd queue size for %s: %d\n",
 				player.userinfo.netname, player.cmdqueue.size());
 	#endif	// _TICCMD_QUEUE_DEBUG_
 
-	int num_cmds = SV_CalculateNumTiccmds(player);	
+	int num_cmds = SV_CalculateNumTiccmds(player);
 
 	for (int i = 0; i < num_cmds && !player.cmdqueue.empty(); i++)
 	{
@@ -3655,7 +3297,7 @@ void SV_ProcessPlayerCmd(player_t &player)
 
 		if (!sv_freelook)
 			player.mo->pitch = 0;
-			
+
 		// Apply this ticcmd using the game logic
 		if (!sv_speedhackfix && gamestate == GS_LEVEL)
 		{
@@ -3682,7 +3324,7 @@ void SV_GetPlayerCmd(player_t &player)
 	// The client-tic at the time this message was sent.  The server stores
 	// this and sends it back the next time it tells the client
 	int tic = MSG_ReadLong();
-	
+
 	// Read the last 10 ticcmds from the client and add any new ones
 	// to the cmdqueue
 	for (int i = 9; i >= 0; i--)
@@ -3690,7 +3332,7 @@ void SV_GetPlayerCmd(player_t &player)
 		NetCommand netcmd;
 		netcmd.read(&net_message);
 		netcmd.setTic(tic - i);
-		
+
 		if (netcmd.getTic() > cl->lastclientcmdtic && gamestate == GS_LEVEL)
 		{
 			player.cmdqueue.push(netcmd);
@@ -3704,7 +3346,7 @@ void SV_UpdateConsolePlayer(player_t &player)
 {
 	AActor *mo = player.mo;
 	client_t *cl = &player.client;
-	
+
 	// Send updates about a player's position as often as the player wishes
 	if (!mo || !P_AtInterval(player.userinfo.update_rate))
 		return;
@@ -3875,6 +3517,13 @@ void SV_SetPlayerSpec(player_t &player, bool setting, bool silent) {
 			player.deathcount = 0;
 			player.killcount = 0;
 			SV_UpdateFrags(player);
+
+			// [AM] Set player unready if we're in warmup mode.
+			if (sv_warmup)
+			{
+				SV_SetReady(player, false, true);
+				player.timeout_ready = 0;
+			}
 		}
 	} else if (setting && !player.spectator) {
 		// We want to spectate the player
@@ -3885,6 +3534,14 @@ void SV_SetPlayerSpec(player_t &player, bool setting, bool silent) {
 		}
 
 		player.spectator = true;
+
+		// [AM] Set player unready if we're in warmup mode.
+		if (sv_warmup)
+		{
+			SV_SetReady(player, false, true);
+			player.timeout_ready = 0;
+		}
+
 		player.playerstate = PST_LIVE;
 		player.joinafterspectatortime = level.time;
 
@@ -3898,7 +3555,7 @@ void SV_SetPlayerSpec(player_t &player, bool setting, bool silent) {
 	}
 }
 
-bool CMD_ForcespecCheck(const std::vector<std::string> arguments,
+bool CMD_ForcespecCheck(const std::vector<std::string> &arguments,
 						std::string &error, size_t &pid) {
 	if (arguments.empty()) {
 		error = "need a player id (try 'players').";
@@ -3969,12 +3626,18 @@ void SV_SetReady(player_t &player, bool setting, bool silent)
 	if (player.ready && !setting) {
 		player.ready = false;
 		if (!silent) {
-			SV_PlayerPrintf(PRINT_HIGH, player.id, "You are no longer ready.\n");
+			if (player.spectator)
+				SV_PlayerPrintf(PRINT_HIGH, player.id, "You are no longer willing to play.\n");
+			else
+				SV_PlayerPrintf(PRINT_HIGH, player.id, "You are no longer ready to play.\n");
 		}
 	} else if (!player.ready && setting) {
 		player.ready = true;
 		if (!silent) {
-			SV_PlayerPrintf(PRINT_HIGH, player.id, "You are now ready.\n");
+			if (player.spectator)
+				SV_PlayerPrintf(PRINT_HIGH, player.id, "You are now willing to play.\n");
+			else
+				SV_PlayerPrintf(PRINT_HIGH, player.id, "You are now ready to play.\n");
 		}
 	} else {
 		changed = false;
@@ -3988,6 +3651,8 @@ void SV_SetReady(player_t &player, bool setting, bool silent)
 			MSG_WriteBool(&(players[j].client.reliablebuf), setting);
 		}
 	}
+
+	warmup.readytoggle();
 }
 
 void SV_Ready(player_t &player)
@@ -4000,6 +3665,13 @@ void SV_Ready(player_t &player)
 	if (player.timeout_ready > level.time) {
 		// We must be on a new map.  Reset the timeout.
 		player.timeout_ready = 0;
+	}
+
+	// Check to see if warmup will allow us to toggle our ready state.
+	if (!warmup.checkreadytoggle())
+	{
+		SV_PlayerPrintf(PRINT_HIGH, player.id, "You can't ready in the middle of a match!\n");
+		return;
 	}
 
 	// Check to see if the player's timeout has expired.
@@ -4208,13 +3880,15 @@ void SV_WantWad(player_t &player)
 	std::transform(md5.begin(), md5.end(), md5.begin(), toupper);
 
 	size_t i;
-	for(i = 0; i < wadnames.size(); i++)
+	std::string filename;
+	for (i = 0; i < wadfiles.size(); i++)
 	{
-		if(wadnames[i] == request && (wadhashes[i] == md5 || md5 == ""))
+		filename = D_CleanseFileName(wadfiles[i]);
+		if (filename == request && (md5.empty() || wadhashes[i] == md5))
 			break;
 	}
 
-	if(i == wadnames.size())
+	if (i == wadfiles.size())
 	{
 		MSG_WriteMarker (&cl->reliablebuf, svc_print);
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
@@ -4224,7 +3898,7 @@ void SV_WantWad(player_t &player)
 	}
 
 	// denis - do not download commercial wads
-	if(W_IsIWAD(wadnames[i], wadhashes[i]))
+	if (W_IsIWAD(wadfiles[i], wadhashes[i]))
 	{
 		MSG_WriteMarker (&cl->reliablebuf, svc_print);
 		MSG_WriteByte (&cl->reliablebuf, PRINT_HIGH);
@@ -4234,8 +3908,8 @@ void SV_WantWad(player_t &player)
 		return;
 	}
 
-	if(player.playerstate != PST_DOWNLOAD || cl->download.name != wadfiles[i])
-		Printf(PRINT_HIGH, "> client %d is downloading %s\n", player.id, wadnames[i].c_str());
+	if (player.playerstate != PST_DOWNLOAD || cl->download.name != wadfiles[i])
+		Printf(PRINT_HIGH, "> client %d is downloading %s\n", player.id, filename.c_str());
 
 	cl->download.name = wadfiles[i];
 	cl->download.next_offset = next_offset;
@@ -4336,7 +4010,7 @@ void SV_ParseCommands(player_t &player)
 
 		case clc_kill:
 			if(player.mo &&
-               level.time > player.respawn_time + TICRATE*10 &&
+               level.time > player.death_time + TICRATE*10 &&
                sv_allowcheats)
             {
 				SV_Suicide (player);
@@ -4460,7 +4134,7 @@ void SV_WadDownloads (void)
 			unsigned int read;
 			unsigned int filelen = 0;
 			read = W_ReadChunk(cl->download.name.c_str(), cl->download.next_offset, chunk_size, buff, filelen);
-			
+
 			if (!read)
 				break;
 
@@ -4487,10 +4161,10 @@ void SV_WadDownloads (void)
 
 			cl->download.next_offset += read;
 		} while (
-			(double)(cl->reliable_bps + cl->unreliable_bps) * TICRATE 
-				/ (double)(gametic % TICRATE)	// bps already used 
+			(double)(cl->reliable_bps + cl->unreliable_bps) * TICRATE
+				/ (double)(gametic % TICRATE)	// bps already used
 				+ (double)chunk_size / TICRATE 	// bps this chunk will use
-			< (double)download_rate); 
+			< (double)download_rate);
 	}
 }
 
@@ -4528,7 +4202,11 @@ void SV_TimelimitCheck()
 	if(!sv_timelimit)
 		return;
 
-	level.timeleft = (int)(sv_timelimit * TICRATE * 60) - level.time;	// in tics
+	level.timeleft = (int)(sv_timelimit * TICRATE * 60);
+
+	// Don't substract the proper amount of time unless we're actually ingame.
+	if (warmup.checktimeleftadvance())
+		level.timeleft -= level.time;	// in tics
 
 	// [SL] 2011-10-25 - Send the clients the remaining time (measured in seconds)
 	if (P_AtInterval(1 * TICRATE))		// every second
@@ -4544,7 +4222,7 @@ void SV_TimelimitCheck()
 		return;
 
 	// LEVEL TIMER
-	if (players.size()) {
+	if (!players.empty()) {
 		if (sv_gametype == GM_DM) {
 			player_t *winplayer = &players[0];
 			bool drawgame = false;
@@ -4599,6 +4277,8 @@ void SV_IntermissionTimeCheck()
 //
 void SV_GameTics (void)
 {
+	SV_BanlistTics();
+
 	if (sv_gametype == GM_CTF)
 		CTF_RunTics();
 
@@ -4606,6 +4286,7 @@ void SV_GameTics (void)
 	{
 		case GS_LEVEL:
 			SV_RemoveCorpses();
+			warmup.tic();
 			SV_WinCheck();
 			SV_TimelimitCheck();
 			Vote_Runtic();
@@ -4613,7 +4294,7 @@ void SV_GameTics (void)
 		case GS_INTERMISSION:
 			SV_IntermissionTimeCheck();
 		break;
-		
+
 		default:
 		break;
 	}
@@ -4639,12 +4320,12 @@ void SV_TouchSpecial(AActor *special, player_t *player)
 void SV_PlayerTimes (void)
 {
 	for (size_t i = 0; i < players.size(); i++)
-	{                                  
+	{
 		if (players[i].ingame())
 			players[i].GameTime++;
-	}                          
+	}
 }
-                                                                             
+
 //
 // SV_StepTics
 //
@@ -4665,7 +4346,7 @@ void SV_StepTics (QWORD tics)
 		SV_SendPackets();
 		SV_ClearClientsBPS();
 		SV_CheckTimeouts();
-		
+
 		// Since clients are only sent sector updates every 3rd tic, don't destroy
 		// the finished moving sectors until we've sent the clients the update
 		if (P_AtInterval(3))
@@ -4699,7 +4380,7 @@ void SV_RunTics (void)
 	std::string cmd = I_ConsoleInput();
 	if (cmd.length())
 	{
-		AddCommandString (cmd.c_str());
+		AddCommandString (cmd);
 	}
 
 	if(CON.is_open())
@@ -4708,7 +4389,7 @@ void SV_RunTics (void)
 		if(!CON.eof())
 		{
 			std::getline(CON, cmd);
-			AddCommandString (cmd.c_str());
+			AddCommandString (cmd);
 		}
 	}
 
@@ -4875,11 +4556,11 @@ void ClientObituary (AActor *self, AActor *inflictor, AActor *attacker)
 
 	if (!self || !self->player)
 		return;
-		
-	// Don't print obituaries after the end of a round		
+
+	// Don't print obituaries after the end of a round
 	if (shotclock || gamestate != GS_LEVEL)
 		return;
-		
+
 	gender = self->player->userinfo.gender;
 
 	// Treat voodoo dolls as unknown deaths
@@ -4889,7 +4570,7 @@ void ClientObituary (AActor *self, AActor *inflictor, AActor *attacker)
 	if (sv_gametype == GM_COOP)
 		MeansOfDeath |= MOD_FRIENDLY_FIRE;
 
-	if ((sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF) && 
+	if ((sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF) &&
 		attacker && attacker->player &&
 		self->player->userinfo.team == attacker->player->userinfo.team)
 		MeansOfDeath |= MOD_FRIENDLY_FIRE;
@@ -4993,7 +4674,7 @@ void ClientObituary (AActor *self, AActor *inflictor, AActor *attacker)
 			self = attacker;
 			gender = self->player->userinfo.gender;
 			messagenum = OB_FRIENDLY1 + (rnum & 3);
-		
+
 		} else {
 			switch (mod)
 			{
@@ -5089,9 +4770,19 @@ void SV_SendKillMobj(AActor *source, AActor *target, AActor *inflictor,
 		MSG_WriteMarker(&cl->reliablebuf, svc_movemobj);
 		MSG_WriteShort(&cl->reliablebuf, target->netid);
 		MSG_WriteByte(&cl->reliablebuf, target->rndindex);
-		MSG_WriteLong(&cl->reliablebuf, target->x);
-		MSG_WriteLong(&cl->reliablebuf, target->y);
-		MSG_WriteLong(&cl->reliablebuf, target->z);
+
+		// [SL] 2012-12-26 - Get real position since this actor is at
+		// a reconciled position with sv_unlag 1
+		fixed_t xoffs = 0, yoffs = 0, zoffs = 0;
+		if (target->player)
+		{
+			Unlag::getInstance().getReconciliationOffset(
+					target->player->id, xoffs, yoffs, zoffs);
+		}
+
+		MSG_WriteLong(&cl->reliablebuf, target->x + xoffs);
+		MSG_WriteLong(&cl->reliablebuf, target->y + yoffs);
+		MSG_WriteLong(&cl->reliablebuf, target->z + zoffs);
 
 		MSG_WriteMarker (&cl->reliablebuf, svc_mobjspeedangle);
 		MSG_WriteShort(&cl->reliablebuf, target->netid);
@@ -5129,7 +4820,7 @@ void SV_SendDestroyActor(AActor *mo)
             	// objects, as a flood of destroyed things could easily overflow a
             	// buffer
 				MSG_WriteMarker(&cl->reliablebuf, svc_removemobj);
-				MSG_WriteShort(&cl->reliablebuf, mo->netid);			
+				MSG_WriteShort(&cl->reliablebuf, mo->netid);
 			}
 		}
 	}
@@ -5161,51 +4852,44 @@ void SV_ExplodeMissile(AActor *mo)
 	}
 }
 
-//
 // SV_SendPlayerInfo
 //
 // Sends a player their current weapon, ammo, health, and armor
-//
-
 void SV_SendPlayerInfo(player_t &player)
 {
 	client_t *cl = &player.client;
 
-	MSG_WriteMarker (&cl->reliablebuf, svc_playerinfo);
+	MSG_WriteMarker(&cl->reliablebuf, svc_playerinfo);
 
 	for (int i = 0; i < NUMWEAPONS; i++)
-		MSG_WriteBool (&cl->reliablebuf, player.weaponowned[i]);
+		MSG_WriteBool(&cl->reliablebuf, player.weaponowned[i]);
 
 	for (int i = 0; i < NUMAMMO; i++)
 	{
-		MSG_WriteShort (&cl->reliablebuf, player.maxammo[i]);
-		MSG_WriteShort (&cl->reliablebuf, player.ammo[i]);
+		MSG_WriteShort(&cl->reliablebuf, player.maxammo[i]);
+		MSG_WriteShort(&cl->reliablebuf, player.ammo[i]);
 	}
 
-	MSG_WriteByte (&cl->reliablebuf, player.health);
-	MSG_WriteByte (&cl->reliablebuf, player.armorpoints);
-	MSG_WriteByte (&cl->reliablebuf, player.armortype);
-	MSG_WriteByte (&cl->reliablebuf, player.readyweapon);
-	MSG_WriteByte (&cl->reliablebuf, player.backpack);
+	MSG_WriteByte(&cl->reliablebuf, player.health);
+	MSG_WriteByte(&cl->reliablebuf, player.armorpoints);
+	MSG_WriteByte(&cl->reliablebuf, player.armortype);
+	MSG_WriteByte(&cl->reliablebuf, player.readyweapon);
+	MSG_WriteBool(&cl->reliablebuf, player.backpack);
+	MSG_WriteBool(&cl->reliablebuf, player.keepinventory);
 }
 
-//
-// SV_PreservePlayer
-//
+// Optionally preserve a player's loadout from level to level.
 void SV_PreservePlayer(player_t &player)
 {
-	if (!serverside || sv_gametype != GM_COOP || !validplayer(player) || !player.ingame())
+	if (!validplayer(player))
 		return;
 
-	if(!unnatural_level_progression)
-		player.playerstate = PST_LIVE; // denis - carry weapons and keys over to next level
-
-	G_DoReborn(player);
+	// [AM] Don't allow the player to keep his inventory if we're not
+	//      in coop or if we are advancing levels at an unexpected time.
+	if (sv_gametype == GM_COOP && !unnatural_level_progression)
+		player.keepinventory = true;
 
 	SV_SendPlayerInfo(player);
 }
 
 VERSION_CONTROL (sv_main_cpp, "$Id$")
-
-
-

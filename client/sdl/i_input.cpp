@@ -62,10 +62,6 @@ static BOOL mousepaused = true; // SoM: This should start off true
 static BOOL havefocus = false;
 static BOOL nomouse = false;
 
-// Used by the console for making keys repeat
-int KeyRepeatDelay;
-int KeyRepeatRate;
-
 EXTERN_CVAR (use_joystick)
 EXTERN_CVAR (joy_active)
 
@@ -118,6 +114,33 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam)
 
 	return CallNextHookEx( g_hKeyboardHook, nCode, wParam, lParam );
 }
+
+static int backup_mouse_settings[3];
+
+// Backup global mouse settings
+void BackupGDIMouseSettings()
+{
+    SystemParametersInfo (SPI_GETMOUSE, 0, &backup_mouse_settings, 0);
+}
+
+// [Russell - From Darkplaces/Nexuiz] - In gdi mode, disable accelerated mouse input
+void FixGDIMouseInput()
+{
+    int mouse_settings[3];
+
+    // Turn off accelerated mouse input incoming from windows
+    mouse_settings[0] = 0;
+    mouse_settings[1] = 0;
+    mouse_settings[2] = 0;
+
+    SystemParametersInfo (SPI_SETMOUSE, 0, (PVOID)mouse_settings, 0);
+}
+
+// Restore global mouse settings
+void STACK_ARGS RestoreGDIMouseSettings()
+{
+    SystemParametersInfo (SPI_SETMOUSE, 0, (PVOID)backup_mouse_settings, 0);
+}
 #endif
 
 void I_FlushInput()
@@ -125,6 +148,21 @@ void I_FlushInput()
 	// eat all pending input from outside the game
 	SDL_Event ev;
 	while (SDL_PollEvent(&ev));
+}
+
+void I_EnableKeyRepeat()
+{
+	SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY / 2, SDL_DEFAULT_REPEAT_INTERVAL);
+}
+
+void I_DisableKeyRepeat()
+{
+	SDL_EnableKeyRepeat(0, 0);	
+}
+
+void I_ResetKeyRepeat()
+{
+	SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
 }
 
 static bool MouseShouldBeGrabbed()
@@ -174,13 +212,32 @@ static void SetCursorState (int visible)
 
 static void UpdateFocus(void)
 {
-    Uint8 state;
+	static bool curfocus = false;
 
-    state = SDL_GetAppState();
+	SDL_PumpEvents();
 
-    // We should have input (keyboard) focus and be visible
-    // (not minimized)
-    havefocus = (state & SDL_APPINPUTFOCUS) && (state & SDL_APPACTIVE);
+	Uint8 state = SDL_GetAppState();
+
+	// We should have input (keyboard) focus and be visible (not minimized)
+	havefocus = (state & SDL_APPINPUTFOCUS) && (state & SDL_APPACTIVE);
+
+	// [CG] Handle focus changes, this is all necessary to avoid repeat events.
+	// [AM] This fixes the tab key sticking when alt-tabbing away from the
+	//      program, but does not seem to solve the problem of tab being 'dead'
+	//      for one keypress after switching back.
+	if (curfocus != havefocus)
+	{
+		if (havefocus)
+		{
+			SDL_Event event;
+			while (SDL_PollEvent(&event))
+			{
+				// Do nothing
+			}
+		}
+
+		curfocus = havefocus;
+	}
 }
 
 //
@@ -206,6 +263,16 @@ static void UpdateGrab(void)
 		SetCursorState(true);
 		SDL_WM_GrabInput(SDL_GRAB_OFF);
 	}
+
+	#if defined WIN32 && !defined _XBOX
+    if (Args.CheckParm ("-gdi"))
+	{
+        if (grab)
+            FixGDIMouseInput();
+        else
+            RestoreGDIMouseSettings();
+    }
+    #endif
 
 	mousegrabbed = grab;
 }
@@ -480,10 +547,7 @@ bool I_InitInput (void)
 
 	SDL_EnableUNICODE(true);
 
-	// denis - disable key repeats as they mess with the mouse in XP
-	// mike - maybe not?
-	//SDL_EnableKeyRepeat(0, SDL_DEFAULT_REPEAT_INTERVAL);
-	SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL*2);
+	I_DisableKeyRepeat();
 
 	// Initialize the joystick subsystem and open a joystick if use_joystick is enabled. -- Hyper_Eye
 	Printf(PRINT_HIGH, "I_InitInput: Initializing SDL's joystick subsystem.\n");
@@ -515,7 +579,7 @@ void STACK_ARGS I_ShutdownInput (void)
 	//SDL_SetCursor(cursors[1]);
 	SDL_ShowCursor(1);
 	SDL_WM_GrabInput(SDL_GRAB_OFF);
-	SDL_EnableKeyRepeat(SDL_DEFAULT_REPEAT_DELAY, SDL_DEFAULT_REPEAT_INTERVAL);
+	I_ResetKeyRepeat();
 
 #ifdef WIN32
 	// denis - in fullscreen, prevent exit on accidental windows key press
@@ -590,7 +654,7 @@ void I_GetEvent (void)
                 Command << "vid_setmode " << ev.resize.w << " " << ev.resize.h 
                     << std::endl;
 
-                AddCommandString(Command.str().c_str());
+                AddCommandString(Command.str());
 
                 vid_defwidth.Set((float)ev.resize.w);
 				vid_defheight.Set((float)ev.resize.h);
@@ -631,6 +695,7 @@ void I_GetEvent (void)
             if(event.data1 == SDLK_F4 && SDL_GetModState() & (KMOD_LALT | KMOD_RALT))
                 AddCommandString("quit");
             // SoM: Ignore the tab portion of alt-tab presses
+            // [AM] Windows 7 seems to preempt this check.
             if(event.data1 == SDLK_TAB && SDL_GetModState() & (KMOD_LALT | KMOD_RALT))
                event.data1 = event.data2 = event.data3 = 0;
             else

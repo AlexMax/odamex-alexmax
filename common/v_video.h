@@ -1,4 +1,4 @@
-// Emacs style mode select   -*- C++ -*- 
+// Emacs style mode select   -*- C++ -*-
 //-----------------------------------------------------------------------------
 //
 // $Id$
@@ -37,11 +37,13 @@
 // Needed because we are refering to patches.
 #include "r_data.h"
 
-extern int CleanWidth, CleanHeight, CleanXfac, CleanYfac;
+extern int CleanXfac, CleanYfac;
+extern float RealXfac, RealYfac;
 
 extern BOOL    gotconback;
 
 extern int DisplayWidth, DisplayHeight, DisplayBits;
+extern int SquareWidth;
 
 //
 // VIDEO
@@ -80,6 +82,14 @@ public:
 	int height;
 	int pitch;
 	inline bool is8bit() const { return bits == 8; };
+	inline bool isProtectedRes() const {                      // [ML] If this is 320x200 or 640x400, the resolutions
+        if ((width == 320 && height <= 200) || (width == 640 && height <= 400))    // "protected" from aspect ratio correction.
+        {
+            return true;
+        }
+
+        return false;
+	};
 
 	int m_LockCount;
 	palette_t *m_Palette;
@@ -96,6 +106,7 @@ public:
 	void GetBlock (int x, int y, int width, int height, byte *dest) const;
 
 	// Darken a rectangle of th canvas
+	void Dim (int x, int y, int width, int height, const char* color, float amount) const;
 	void Dim (int x, int y, int width, int height) const;
 
 	// Fill an area with a 64x64 flat texture
@@ -484,12 +495,6 @@ std::string V_GetColorStringByName (const char *name);
 
 
 BOOL V_SetResolution (int width, int height, int bpp);
-
-
-#ifdef USEASM
-extern "C" void ASM_PatchPitch (void);
-extern "C" void ASM_PatchColSize (void);
-#endif
 
 #endif // __V_VIDEO_H__
 

@@ -26,6 +26,8 @@
 #include "m_random.h"
 #include "p_ctf.h"
 #include "i_system.h"
+#include "g_warmup.h"
+#include "p_unlag.h"
 
 bool G_CheckSpot (player_t &player, mapthing2_t *mthing);
 
@@ -76,7 +78,7 @@ void SV_CTFEvent (flag_t f, flag_score_t event, player_t &who)
 	if(event == SCORE_NONE)
 		return;
 
-	if(validplayer(who))
+	if(validplayer(who) && warmup.checkscorechange())
 		who.points += ctf_points[event];
 
 	for (size_t i = 0; i < players.size(); ++i)
@@ -187,13 +189,15 @@ static const char *CTF_TimeMSG(unsigned int milliseconds)
 	return msg;
 }
 
+extern void P_GiveTeamPoints(player_t* player, int num);
+
 //
 //	[Toke - CTF] SV_FlagScore
 //	Event of a player capturing the flag
 //
 void SV_FlagScore (player_t &player, flag_t f)
 {
-	TEAMpoints[player.userinfo.team]++;
+	P_GiveTeamPoints(&player, 1);
 
 	SV_CTFEvent (f, SCORE_CAPTURE, player);
 
@@ -292,10 +296,10 @@ void SV_FlagDrop (player_t &player, flag_t f)
 	player.flags[f] = false; // take ex-carrier's flag
 	CTFdata[f].flagger = 0;
 
-	CTF_SpawnDroppedFlag (f,
-				   player.mo->x,
-				   player.mo->y,
-				   player.mo->z);
+	fixed_t xoffs = 0, yoffs = 0, zoffs = 0;
+	Unlag::getInstance().getReconciliationOffset(player.id, xoffs, yoffs, zoffs);
+
+	CTF_SpawnDroppedFlag(f, player.mo->x + xoffs, player.mo->y + yoffs, player.mo->z + zoffs);
 }
 
 //
@@ -304,7 +308,7 @@ void SV_FlagDrop (player_t &player, flag_t f)
 //
 void CTF_RunTics (void)
 {
-	if (shotclock)
+	if (shotclock || gamestate != GS_LEVEL)
 		return;
 
 	for(size_t i = 0; i < NUMFLAGS; i++)
@@ -400,67 +404,6 @@ void CTF_RememberFlagPos (mapthing2_t *mthing)
 	data->z = mthing->z << FRACBITS;
 
 	data->flaglocated = true;
-}
-
-//
-//	[Toke - CTF] CTF_SelectTeamPlaySpot
-//	Randomly selects a team spawn point
-//
-mapthing2_t *CTF_SelectTeamPlaySpot (player_t &player, int selections)
-{
-    switch (player.userinfo.team)
-    {
-        case TEAM_BLUE:
-        {
-            if (sv_gametype != GM_CTF && sv_teamsinplay < 1)
-                break;
-
-            for (size_t j = 0; j < MaxBlueTeamStarts; ++j)
-            {
-                size_t i = M_Random () % selections;
-                if (G_CheckSpot (player, &blueteamstarts[i]) )
-                {
-                    return &blueteamstarts[i];
-                }
-            }
-        }
-        break;
-
-        case TEAM_RED:
-        {
-            if (sv_gametype != GM_CTF && sv_teamsinplay < 2)
-                break;
-
-            for (size_t j = 0; j < MaxRedTeamStarts; ++j)
-            {
-                size_t i = M_Random () % selections;
-                if (G_CheckSpot (player, &redteamstarts[i]) )
-                {
-                    return &redteamstarts[i];
-                }
-            }
-		}
-		break;
-
-        default:
-        {
-
-        }
-        break;
-    }
-
-	if (sv_gametype == GM_CTF) {
-		if (MaxBlueTeamStarts) return &blueteamstarts[0];
-		else if (MaxRedTeamStarts) return &redteamstarts[0];
-	} else {
-		if (sv_teamsinplay >= 1 && MaxBlueTeamStarts)
-			return &blueteamstarts[0];
-		else
-		if (sv_teamsinplay >= 2 && MaxRedTeamStarts)
-			return &redteamstarts[0];
-	}
-
-	return NULL;
 }
 
 FArchive &operator<< (FArchive &arc, flagdata &flag)

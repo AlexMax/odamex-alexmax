@@ -62,6 +62,9 @@
 #include "p_mobj.h"
 #include "p_pspr.h"
 #include "d_netcmd.h"
+#include "g_warmup.h"
+#include "c_level.h"
+#include "v_text.h"
 #include "hu_minimenu.h"
 
 #include <string>
@@ -142,10 +145,8 @@ EXTERN_CVAR (sv_weaponstay)
 
 EXTERN_CVAR (cl_name)
 EXTERN_CVAR (cl_color)
-EXTERN_CVAR (cl_team)
 EXTERN_CVAR (cl_skin)
 EXTERN_CVAR (cl_gender)
-EXTERN_CVAR (cl_unlag)
 EXTERN_CVAR (cl_interp)
 EXTERN_CVAR (cl_predictsectors)
 
@@ -187,11 +188,12 @@ int CL_GetPlayerColor(player_t *player)
 	}
 	else if (sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF)
 	{
-		if (r_forceenemycolor && !P_AreTeammates(consoleplayer(), *player))
-			return enemycolor;
-		if (r_forceteamcolor &&
-			(P_AreTeammates(consoleplayer(), *player) || player->id == consoleplayer_id))
+		if (r_forceteamcolor && 
+					(P_AreTeammates(consoleplayer(), *player) || player->id == consoleplayer_id))
 			return teamcolor;
+		if (r_forceenemycolor && !P_AreTeammates(consoleplayer(), *player) &&
+					player->id != consoleplayer_id)
+			return enemycolor;
 
 		// Adjust the shade of color for team games
 		int red = RPART(player->userinfo.color);
@@ -242,60 +244,9 @@ CVAR_FUNC_IMPL (r_forceteamcolor)
 	CL_RebuildAllPlayerTranslations();
 }
 
-EXTERN_CVAR (cl_weaponpref1)
-EXTERN_CVAR (cl_weaponpref2)
-EXTERN_CVAR (cl_weaponpref3)
-EXTERN_CVAR (cl_weaponpref4)
-EXTERN_CVAR (cl_weaponpref5)
-EXTERN_CVAR (cl_weaponpref6)
-EXTERN_CVAR (cl_weaponpref7)
-EXTERN_CVAR (cl_weaponpref8)
-EXTERN_CVAR (cl_weaponpref9)
-
-static cvar_t *weaponpref_cvar_map[NUMWEAPONS] = {
-	&cl_weaponpref1, &cl_weaponpref2, &cl_weaponpref3, &cl_weaponpref4,
-	&cl_weaponpref5, &cl_weaponpref6, &cl_weaponpref7, &cl_weaponpref8,
-	&cl_weaponpref9 };
-
-
-//
-// CL_SetWeaponPreferenceCvar
-//
-// Sets the value of one of the cl_weaponpref* cvars identified by slot
-//
-void CL_SetWeaponPreferenceCvar(int slot, weapontype_t weapon)
+CVAR_FUNC_IMPL (cl_team)
 {
-	if (slot < 0 || slot >= NUMWEAPONS)
-		return;
-
-	weaponpref_cvar_map[slot]->Set(static_cast<float>(weapon));
-}
-
-//
-// CL_RefreshWeaponPreferenceCvars
-//
-// Copies userinfo.weapon_prefs to the cl_weaponpref* cvars
-//
-void CL_RefreshWeaponPreferenceCvars()
-{
-	weapontype_t *prefs = consoleplayer().userinfo.weapon_prefs;
-
-	for (size_t i = 0; i < NUMWEAPONS; i++)
-		weaponpref_cvar_map[i]->Set(static_cast<float>(prefs[i]));
-}
-
-//
-// CL_PrepareWeaponPreferenceUserInfo
-//
-// Copies the weapon order preferences from the cl_weaponpref* cvars
-// to the userinfo struct for the consoleplayer.
-//
-void CL_PrepareWeaponPreferenceUserInfo()
-{
-	weapontype_t *prefs = consoleplayer().userinfo.weapon_prefs;
-
-	for (size_t i = 0; i < NUMWEAPONS; i++)
-		prefs[i] = static_cast<weapontype_t>(weaponpref_cvar_map[i]->asInt());
+	CL_RebuildAllPlayerTranslations();
 }
 
 EXTERN_CVAR (sv_maxplayers)
@@ -484,6 +435,8 @@ void CL_QuitNetGame(void)
 			}
 		}
 	}
+
+	cvar_t::C_RestoreCVars();
 }
 
 
@@ -540,6 +493,9 @@ void CL_CheckDisplayPlayer()
 	static byte previd = consoleplayer_id;
 	byte newid = 0;
 
+	if (displayplayer_id != previd)
+		newid = displayplayer_id;
+
 	if (!validplayer(displayplayer()) || !displayplayer().mo)
 		newid = consoleplayer_id;
 
@@ -547,8 +503,8 @@ void CL_CheckDisplayPlayer()
 		  netdemo.isPlaying() || netdemo.isPaused()))
 		newid = consoleplayer_id;
 
-	if (displayplayer_id != previd)
-		newid = displayplayer_id;
+	if (displayplayer().spectator)
+		newid = consoleplayer_id;
 
 	if (newid)
 	{
@@ -1216,12 +1172,13 @@ void CL_SendUserInfo(void)
 	MSG_WriteLong	(&net_buffer, coninfo->color);
 	MSG_WriteString	(&net_buffer, (char *)skins[coninfo->skin].name); // [Toke - skins]
 	MSG_WriteLong	(&net_buffer, coninfo->aimdist);
-	MSG_WriteByte	(&net_buffer, (char)coninfo->unlag);  // [SL] 2011-05-11
+	MSG_WriteBool	(&net_buffer, coninfo->unlag);  // [SL] 2011-05-11
+	MSG_WriteBool	(&net_buffer, coninfo->predict_weapons);
 	MSG_WriteByte	(&net_buffer, (char)coninfo->update_rate);
 	MSG_WriteByte	(&net_buffer, (char)coninfo->switchweapon);
 	for (size_t i = 0; i < NUMWEAPONS; i++)
 	{
-		MSG_WriteByte (&net_buffer, (char)coninfo->weapon_prefs[i]);
+		MSG_WriteByte (&net_buffer, coninfo->weapon_prefs[i]);
 	}
 }
 
@@ -1396,6 +1353,8 @@ void CL_RequestConnectInfo(void)
 std::string missing_file, missing_hash;
 bool CL_PrepareConnect(void)
 {
+	cvar_t::C_BackupCVars(CVAR_SERVERINFO);
+
 	size_t i;
 	DWORD server_token = MSG_ReadLong();
 	server_host = MSG_ReadString();
@@ -1413,9 +1372,9 @@ bool CL_PrepareConnect(void)
 	Printf(PRINT_HIGH, "> Server: %s\n", server_host.c_str());
 	Printf(PRINT_HIGH, "> Map: %s\n", server_map.c_str());
 
-	std::vector<std::string> wadnames(server_wads);
+	std::vector<std::string> newwadfiles(server_wads);
 	for(i = 0; i < server_wads; i++)
-		wadnames[i] = MSG_ReadString();
+		newwadfiles[i] = MSG_ReadString();
 
 	MSG_ReadBool();							// deathmatch
 	MSG_ReadByte();							// skill
@@ -1430,11 +1389,11 @@ bool CL_PrepareConnect(void)
 		MSG_ReadByte();
 	}
 
-	std::vector<std::string> wadhashes(server_wads);
+	std::vector<std::string> newwadhashes(server_wads);
 	for(i = 0; i < server_wads; i++)
 	{
-		wadhashes[i] = MSG_ReadString();
-		Printf(PRINT_HIGH, "> %s\n   %s\n", wadnames[i].c_str(), wadhashes[i].c_str());
+		newwadhashes[i] = MSG_ReadString();
+		Printf(PRINT_HIGH, "> %s\n   %s\n", newwadfiles[i].c_str(), newwadhashes[i].c_str());
 	}
 
 	MSG_ReadString();
@@ -1503,20 +1462,20 @@ bool CL_PrepareConnect(void)
     Printf(PRINT_HIGH, "\n");
 
     // DEH/BEX Patch files
-	std::vector<std::string> PatchFiles;
-    size_t PatchCount = MSG_ReadByte();
+    size_t patch_count = MSG_ReadByte();
+	std::vector<std::string> newpatchfiles(patch_count);
     
-    for (i = 0; i < PatchCount; ++i)
-        PatchFiles.push_back(MSG_ReadString());
+    for (i = 0; i < patch_count; ++i)
+        newpatchfiles[i] = MSG_ReadString();
 	
     // TODO: Allow deh/bex file downloads
-	std::vector<size_t> missing_files = D_DoomWadReboot(wadnames, PatchFiles, wadhashes);
+	D_DoomWadReboot(newwadfiles, newpatchfiles, newwadhashes);
 
-	if(!missing_files.empty())
+	if (!missingfiles.empty())
 	{
 		// denis - download files
-		missing_file = wadnames[missing_files[0]];
-		missing_hash = wadhashes[missing_files[0]];
+		missing_file = missingfiles[0]; 
+		missing_hash = missinghashes[0];
 
 		if (netdemo.isPlaying())
 		{
@@ -1541,7 +1500,6 @@ bool CL_PrepareConnect(void)
 //
 //  Connecting to a server...
 //
-extern std::string missing_file, missing_hash;
 bool CL_Connect(void)
 {
 	players.clear();
@@ -2135,7 +2093,11 @@ void CL_SpawnPlayer()
 		p->mo->health = 0;
 	}
 
-	G_PlayerReborn (*p);
+	G_PlayerReborn(*p);
+	// [AM] If we're "reborn" as a spectator, don't touch the keepinventory
+	//      flag, but otherwise turn it off.
+	if (!p->spectator)
+		p->keepinventory = false;
 
 	mobj = new AActor (x, y, z, MT_PLAYER);
 	
@@ -2213,18 +2175,18 @@ void CL_PlayerInfo(void)
 {
 	player_t *p = &consoleplayer();
 
-	for(size_t j = 0; j < NUMWEAPONS; j++)
+	for (size_t j = 0; j < NUMWEAPONS; j++)
 		p->weaponowned[j] = MSG_ReadBool();
 
-	for(size_t j = 0; j < NUMAMMO; j++)
+	for (size_t j = 0; j < NUMAMMO; j++)
 	{
-		p->maxammo[j] = MSG_ReadShort ();
-		p->ammo[j] = MSG_ReadShort ();
+		p->maxammo[j] = MSG_ReadShort();
+		p->ammo[j] = MSG_ReadShort();
 	}
 
-	p->health = MSG_ReadByte ();
-	p->armorpoints = MSG_ReadByte ();
-	p->armortype = MSG_ReadByte ();
+	p->health = MSG_ReadByte();
+	p->armorpoints = MSG_ReadByte();
+	p->armortype = MSG_ReadByte();
 
 	weapontype_t newweapon = static_cast<weapontype_t>(MSG_ReadByte());
 	if (newweapon >= NUMWEAPONS)	// bad weapon number, choose something else
@@ -2232,8 +2194,11 @@ void CL_PlayerInfo(void)
 
 	if (newweapon != p->readyweapon)
 		p->pendingweapon = newweapon;
-	
+
 	p->backpack = MSG_ReadBool();
+
+	// [AM] Determine if we should be keeping our inventory on next spawn.
+	p->keepinventory = MSG_ReadBool();
 }
 
 //
@@ -2319,7 +2284,13 @@ void CL_UpdateMobjInfo(void)
 //
 void CL_RemoveMobj(void)
 {
-	P_ClearId(MSG_ReadShort());
+	int netid = MSG_ReadShort();
+
+	AActor *mo = P_FindThingById(netid);
+	if (mo && mo->player && mo->player->id == displayplayer_id)
+		displayplayer_id = consoleplayer_id;
+
+	P_ClearId(netid);
 }
 
 
@@ -2843,34 +2814,40 @@ void CL_ReadPacketHeader(void)
 void CL_GetServerSettings(void)
 {
 	cvar_t *var = NULL, *prev = NULL;
-		
+
+	// TODO: REMOVE IN 0.7 - We don't need this loop anymore
 	while (MSG_ReadByte() != 2)
 	{
 		std::string CvarName = MSG_ReadString();
 		std::string CvarValue = MSG_ReadString();
-			
+
 		var = cvar_t::FindCVar (CvarName.c_str(), &prev);
-			
+
 		// GhostlyDeath <June 19, 2008> -- Read CVAR or dump it               
 		if (var)
 		{
 			if (var->flags() & CVAR_SERVERINFO)
-                var->Set(CvarValue.c_str());
-        }
-        else
-        {
-            // [Russell] - create a new "temporary" cvar, CVAR_AUTO marks it
-            // for cleanup on program termination
-            var = new cvar_t (CvarName.c_str(), NULL, "", CVARTYPE_NONE,
-                CVAR_SERVERINFO | CVAR_AUTO | CVAR_UNSETTABLE);
-                                  
-            var->Set(CvarValue.c_str());
-        }
-			
-    }
-    
+				var->Set(CvarValue.c_str());
+		}
+		else
+		{
+			// [Russell] - create a new "temporary" cvar, CVAR_AUTO marks it
+			// for cleanup on program termination
+			// [AM] We have no way of telling of cvars are CVAR_NOENABLEDISABLE,
+			//      so let's set it on all cvars.
+			var = new cvar_t(CvarName.c_str(), NULL, "", CVARTYPE_NONE,
+			                 CVAR_SERVERINFO | CVAR_AUTO | CVAR_UNSETTABLE |
+			                 CVAR_NOENABLEDISABLE);
+			var->Set(CvarValue.c_str());
+		}
+	}
+
 	// Nes - update the skies in case sv_freelook is changed.
 	R_InitSkyMap ();
+
+	// [AM] - Adhere to sv_allowwidescreen setting.
+	ST_AdjustStatusBarScale(st_scale != 0);
+	setsizeneeded = true;
 }
 
 //
@@ -3062,21 +3039,62 @@ void CL_ConsolePlayer(void)
 	digest = MSG_ReadString();
 }
 
+//
+// CL_LoadMap
+//
+// Read wad & deh filenames and map name from the server and loads
+// the appropriate wads & map.
+//
 void CL_LoadMap(void)
 {
-	const char *mapname = MSG_ReadString ();
-
 	bool splitnetdemo = (netdemo.isRecording() && cl_splitnetdemos) || forcenetdemosplit;
 	forcenetdemosplit = false;
 	
 	if (splitnetdemo)
 		netdemo.stopRecording();
 	
-	if(gamestate == GS_DOWNLOAD)
-		return;
+	std::vector<std::string> newwadfiles, newwadhashes;
+	std::vector<std::string> newpatchfiles, newpatchhashes;
 
-	if(gamestate == GS_LEVEL)
-		G_ExitLevel (0, 0);
+	int wadcount = MSG_ReadByte();
+	while (wadcount--)
+	{
+		newwadfiles.push_back(MSG_ReadString());
+		newwadhashes.push_back(MSG_ReadString());
+	}
+
+	int patchcount = MSG_ReadByte();
+	while (patchcount--)
+	{
+		newpatchfiles.push_back(MSG_ReadString());
+		newpatchhashes.push_back(MSG_ReadString());
+	}
+
+	const char *mapname = MSG_ReadString ();
+
+	if (gamestate == GS_DOWNLOAD)
+	{
+		CL_Reconnect();
+		return;
+	}	
+
+	// Load the specified WAD and DEH files and change the level.
+	// if any WADs are missing, reconnect to begin downloading.
+	G_LoadWad(newwadfiles, newpatchfiles, newwadhashes, newpatchhashes);
+
+	if (!missingfiles.empty())
+	{
+		missing_file = missingfiles[0]; 
+		missing_hash = missinghashes[0];
+
+		CL_Reconnect();
+		return;
+	}
+
+	// [SL] 2012-12-02 - Force the music to stop when the new map uses
+	// the same music lump name that is currently playing. Otherwise,
+	// the music from the old wad continues to play...
+	S_StopMusic();
 
 	G_InitNew (mapname);
 
@@ -3120,6 +3138,24 @@ void CL_LoadMap(void)
 		netdemo.writeMapChange();
 }
 
+void CL_ResetMap()
+{
+	// Destroy every actor with a netid that isn't a player.  We're going to
+	// get the contents of the map with a full update later on anyway.
+	AActor* mo;
+	TThinkerIterator<AActor> iterator;
+	while ((mo = iterator.Next()))
+	{
+		if (mo->netid && mo->type != MT_PLAYER)
+		{
+			mo->Destroy();
+		}
+	}
+
+	// write the map index to the netdemo
+	if (netdemo.isRecording() && recv_full_update)
+		netdemo.writeMapChange();
+}
 
 void CL_EndGame()
 {
@@ -3172,6 +3208,7 @@ void CL_Spectate()
 			player.deltaviewheight = 1000 << FRACBITS;
 		} else {
 			displayplayer_id = consoleplayer_id; // get out of spynext
+			player.cheats &= ~CF_FLY;	// remove flying ability
 		}
 	}
 
@@ -3184,6 +3221,25 @@ void CL_ReadyState() {
 	player.ready = MSG_ReadBool();
 }
 
+// Set local warmup state.
+void CL_WarmupState()
+{
+	warmup.set_client_status(static_cast<Warmup::status_t>(MSG_ReadByte()));
+	if (warmup.get_status() == Warmup::COUNTDOWN)
+	{
+		// Read an extra countdown number off the wire
+		short count = MSG_ReadShort();
+		std::ostringstream buffer;
+		buffer << "Match begins in " << count << "...";
+		C_GMidPrint(buffer.str().c_str(), CR_GREEN, 0);
+	}
+	else if (warmup.get_status() == Warmup::INGAME)
+	{
+		// Clear the midprint when the game starts
+		C_GMidPrint("", CR_GREY, 0);
+	}
+}
+
 // client source (once)
 typedef void (*client_callback)();
 typedef std::map<svc_t, client_callback> cmdmap;
@@ -3194,8 +3250,9 @@ cmdmap cmds;
 //
 void CL_InitCommands(void)
 {
-	cmds[svc_abort]			= &CL_EndGame;
+	cmds[svc_abort]				= &CL_EndGame;
 	cmds[svc_loadmap]			= &CL_LoadMap;
+	cmds[svc_resetmap]			= &CL_ResetMap;
 	cmds[svc_playerinfo]		= &CL_PlayerInfo;
 	cmds[svc_consoleplayer]		= &CL_ConsolePlayer;
 	cmds[svc_updatefrags]		= &CL_UpdateFrags;
@@ -3265,6 +3322,7 @@ void CL_InitCommands(void)
 	
 	cmds[svc_spectate]   		= &CL_Spectate;
 	cmds[svc_readystate]		= &CL_ReadyState;
+	cmds[svc_warmupstate]		= &CL_WarmupState;
 
 	cmds[svc_touchspecial]      = &CL_TouchSpecialThing;
 
@@ -3640,25 +3698,33 @@ void CL_SimulatePlayers()
 			// previous world_index, then old position was probably extrapolated
 			// and should be smoothly moved towards the corrected position instead
 			// of snapping to it.
-		
-			PlayerSnapshot prevsnap = player->snapshots.getSnapshot(world_index - 1);
-			v3fixed_t offset;
-			M_SetVec3Fixed(&offset, prevsnap.getX() - player->mo->x,
-									prevsnap.getY() - player->mo->y,
-									prevsnap.getZ() - player->mo->z);
+			
+			if (snap.isContinuous())
+			{
+				PlayerSnapshot prevsnap = player->snapshots.getSnapshot(world_index - 1);
 
-			static const fixed_t correction_amount = FRACUNIT * 0.20f; 
-			M_ScaleVec3Fixed(&offset, &offset, correction_amount);
-		
-			#ifdef _SNAPSHOT_DEBUG_
-			if (offset.x != 0 || offset.y != 0 || offset.z != 0)
-				Printf(PRINT_HIGH, "Snapshot %i, Correcting extrapolation error\n", world_index);
-			#endif // _SNAPSHOT_DEBUG_
-	
-			// Apply the current snapshot to the player (with smoothing offset)
-			snap.setX(snap.getX() - offset.x);
-			snap.setY(snap.getY() - offset.y);
-			snap.setZ(snap.getZ() - offset.z);
+				v3fixed_t offset;
+				M_SetVec3Fixed(&offset, prevsnap.getX() - player->mo->x,
+										prevsnap.getY() - player->mo->y,
+										prevsnap.getZ() - player->mo->z);
+
+				fixed_t dist = M_LengthVec3Fixed(&offset);
+				if (dist > 2 * FRACUNIT)
+				{
+					#ifdef _SNAPSHOT_DEBUG_
+					Printf(PRINT_HIGH, "Snapshot %i, Correcting extrapolation error of %i\n",
+							world_index, dist >> FRACBITS);
+					#endif	// _SNAPSHOT_DEBUG_
+
+					static const fixed_t correction_amount = FRACUNIT * 0.80f; 
+					M_ScaleVec3Fixed(&offset, &offset, correction_amount);
+					
+					// Apply a smoothing offset to the current snapshot
+					snap.setX(snap.getX() - offset.x);
+					snap.setY(snap.getY() - offset.y);
+					snap.setZ(snap.getZ() - offset.z);
+				}
+			}
 
 			snap.toPlayer(player);
 		}
@@ -3699,7 +3765,9 @@ void CL_SimulateWorld()
 		else if (world_index > upper_sync_limit)
 			reason = "too far ahead of server";
 		else if (world_index < lower_sync_limit)
-			reason == "too far behind server";
+			reason = "too far behind server";
+		else
+			reason = "invalid world_index";
 			
 		Printf(PRINT_HIGH, "Gametic %i, world_index %i, Resynching world index (%s).\n",
 			gametic, world_index, reason.c_str());

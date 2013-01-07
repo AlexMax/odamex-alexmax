@@ -54,10 +54,14 @@ extern dyncolormap_t NormalLight;
 extern bool r_fakingunderwater;
 
 EXTERN_CVAR (r_viewsize)
+EXTERN_CVAR (r_widescreen)
+EXTERN_CVAR (sv_allowwidescreen)
 
-static float	LastFOV = 90.0f;
+static float	LastFOV = 0.0f;
 fixed_t			FocalLengthX;
 fixed_t			FocalLengthY;
+double			focratio;
+double			ifocratio;
 int 			viewangleoffset = 0;
 
 // increment every time a check is made
@@ -145,7 +149,9 @@ void (*hcolfunc_post2) (int hx, int sx, int yl, int yh);
 void (*hcolfunc_post4) (int sx, int yl, int yh);
 
 static int lastcenteryfrac;
-int FieldOfView = 2048;	// Fineangles in the SCREENWIDTH wide window
+// [AM] Number of fineangles in a default 90 degree FOV at a 4:3 resolution.
+int FieldOfView = 2048;
+int CorrectFieldOfView = 2048;
 
 //
 //
@@ -536,13 +542,16 @@ void R_InitTextureMapping (void)
 	// Use tangent table to generate viewangletox: viewangletox will give
 	// the next greatest x after the view angle.
 
-	const fixed_t hitan = finetangent[FINEANGLES/4+FieldOfView/2];
-	const fixed_t lotan = finetangent[FINEANGLES/4-FieldOfView/2];
+	const fixed_t hitan = finetangent[FINEANGLES/4+CorrectFieldOfView/2];
+	const fixed_t lotan = finetangent[FINEANGLES/4-CorrectFieldOfView/2];
 	const int highend = viewwidth + 1;
 
 	// Calc focallength so FieldOfView angles covers viewwidth.
 	FocalLengthX = FixedDiv (centerxfrac, hitan);
 	FocalLengthY = FixedDiv (FixedMul (centerxfrac, yaspectmul), hitan);
+
+	focratio = double(FocalLengthY) / double(FocalLengthX);
+	ifocratio = double(FocalLengthX) / double(FocalLengthY);
 
 	for (i = 0; i < FINEANGLES/2; i++)
 	{
@@ -590,17 +599,10 @@ void R_InitTextureMapping (void)
 	clipangle = xtoviewangle[0];
 }
 
-//
-//
-// R_SetFOV
-//
-// Changes the field of view
-//
-//
-
-void R_SetFOV (float fov)
+// Changes the field of view.
+void R_SetFOV(float fov, bool force = false)
 {
-	if (fov == LastFOV)
+	if (fov == LastFOV && !force)
 		return;
 
 	if (fov < 1)
@@ -609,7 +611,20 @@ void R_SetFOV (float fov)
 		fov = 179;
 
 	LastFOV = fov;
-	FieldOfView = (int)(fov * (float)FINEANGLES / 360.0f);
+	FieldOfView = static_cast<int>(fov * static_cast<float>(FINEANGLES) / 360.0f);
+	float am = (static_cast<float>(screen->width) / screen->height) / (4.0f / 3.0f);
+	if (R_GetWidescreen() >= WIDE_TRUE && am > 1.0f)
+	{
+		// [AM] The FOV is corrected to fit the wider screen.
+		float radfov = fov * PI / 180.0f;
+		float widefov = (2 * atan(am * tan(radfov / 2))) * 180.0f / PI;
+		CorrectFieldOfView = static_cast<int>(widefov * static_cast<float>(FINEANGLES) / 360.0f);
+	}
+	else
+	{
+		// [AM] The FOV is left as-is for the wider screen.
+		CorrectFieldOfView = FieldOfView;
+	}
 	setsizeneeded = true;
 }
 
@@ -624,6 +639,19 @@ void R_SetFOV (float fov)
 float R_GetFOV (void)
 {
 	return LastFOV;
+}
+
+// [AM] Always grab the correct widescreen setting based on a
+//      combination of r_widescreen and serverside forcing.
+int R_GetWidescreen()
+{
+	if ((r_widescreen.asInt() < WIDE_TRUE) || !multiplayer ||
+	    (multiplayer && sv_allowwidescreen))
+	{
+		return r_widescreen.asInt();
+	}
+
+	return r_widescreen.asInt() - WIDE_TRUE;
 }
 
 //
@@ -716,6 +744,16 @@ CVAR_FUNC_IMPL (r_detail)
 	setsizeneeded = true;
 }
 
+CVAR_FUNC_IMPL (r_widescreen)
+{
+	if (var.asInt() < 0 || var.asInt() > 3)
+	{
+		Printf(PRINT_HIGH, "Invalid widescreen setting.\n");
+		var.RestoreDefault();
+	}
+	setmodeneeded = true;
+}
+
 //
 //
 // R_ExecuteSetViewSize
@@ -786,7 +824,10 @@ void R_ExecuteSetViewSize (void)
 	virtwidth = screen->width >> detailxshift;
 	virtheight = screen->height >> detailyshift;
 
-	yaspectmul = (fixed_t)(65536.0f*(320.0f*(float)virtheight/(200.0f*(float)virtwidth)));
+	if (R_GetWidescreen() != WIDE_STRETCH)
+		yaspectmul = 78643; // [AM] Force correct aspect ratio
+	else
+		yaspectmul = (fixed_t)(65536.0f*(320.0f*(float)virtheight/(200.0f*(float)virtwidth)));
 
 	colfunc = basecolfunc = R_DrawColumn;
 	lucentcolfunc = R_DrawTranslucentColumn;
@@ -806,9 +847,25 @@ void R_ExecuteSetViewSize (void)
 	R_InitTextureMapping ();
 
 	// psprite scales
-	pspritexscale = centerxfrac / 160;
-	pspriteyscale = FixedMul (pspritexscale, yaspectmul);
-	pspritexiscale = FixedDiv (FRACUNIT, pspritexscale);
+	if (R_GetWidescreen() != WIDE_STRETCH)
+	{
+		// [AM] Using centerxfrac will make our sprite too fat, so we
+		//      generate a corrected 4:3 screen width based on our
+		//      height, then generate the x-scale based on that.
+		int cswidth, crvwidth;
+		cswidth = (4 * screen->height) / 3;
+		if (setblocks < 10)
+			crvwidth = ((setblocks * cswidth) / 10) & (~(15 >> (screen->is8bit() ? 0 : 2)));
+		else
+			crvwidth = cswidth;
+		pspritexscale = (((crvwidth >> detailxshift) / 2) << FRACBITS) / 160;
+	}
+	else
+	{
+		pspritexscale = centerxfrac / 160;
+	}
+	pspriteyscale = FixedMul(pspritexscale, yaspectmul);
+	pspritexiscale = FixedDiv(FRACUNIT, pspritexscale);
 
 	// [RH] Sky height fix for screens not 200 (or 240) pixels tall
 	R_InitSkyMap ();
@@ -1160,6 +1217,108 @@ void R_SetupFrame (player_t *player)
 }
 
 //
+// R_SetFlatDrawFuncs
+//
+// Sets the drawing function pointers to functions that floodfill with
+// flat colors instead of texture mapping.
+//
+void R_SetFlatDrawFuncs()
+{
+	colfunc = R_FillColumnP;
+	hcolfunc_pre = R_FillColumnHorizP;
+	hcolfunc_post1 = rt_copy1col;
+	hcolfunc_post2 = rt_copy2cols;
+	hcolfunc_post4 = rt_copy4cols;
+	spanfunc = R_FillSpan;
+	spanslopefunc = R_FillSpan;
+}
+
+//
+// R_SetBlankDrawFuncs
+//
+// Sets the drawing function pointers to functions that draw nothing.
+// These can be used instead of the flat color functions for lucent midtex.
+//
+void R_SetBlankDrawFuncs()
+{
+	colfunc = R_BlankColumn;
+	hcolfunc_pre = R_BlankColumn; 
+	hcolfunc_post1 = rt_copy1col;
+	hcolfunc_post2 = rt_copy2cols;
+	hcolfunc_post4 = rt_copy4cols;
+	spanfunc = spanslopefunc = R_BlankColumn;
+}
+
+//
+// R_ResetDrawFuncs
+//
+void R_ResetDrawFuncs()
+{
+	if (r_drawflat)
+	{
+		R_SetFlatDrawFuncs();
+	}
+	else
+	{
+		colfunc = basecolfunc;
+		hcolfunc_pre = R_DrawColumnHoriz;
+		hcolfunc_post1 = rt_map1col;
+		hcolfunc_post2 = rt_map2cols;
+		hcolfunc_post4 = rt_map4cols;
+		spanfunc = R_DrawSpan;
+		spanslopefunc = R_DrawSlopeSpan;
+	}
+}
+
+void R_SetLucentDrawFuncs()
+{
+	if (r_drawflat)
+	{
+		R_SetBlankDrawFuncs();
+	}
+	else
+	{
+		colfunc = lucentcolfunc;
+		hcolfunc_pre = R_DrawColumnHoriz;
+		hcolfunc_post1 = rt_lucent1col;
+		hcolfunc_post2 = rt_lucent2cols;
+		hcolfunc_post4 = rt_lucent4cols;
+	}
+}
+
+void R_SetTranslatedDrawFuncs()
+{
+	if (r_drawflat)
+	{
+		R_SetFlatDrawFuncs();
+	}
+	else
+	{
+		colfunc = transcolfunc;
+		hcolfunc_pre = R_DrawColumnHoriz;
+		hcolfunc_post1 = rt_tlate1col;
+		hcolfunc_post2 = rt_tlate2cols;
+		hcolfunc_post4 = rt_tlate4cols;
+	}
+}
+
+void R_SetTranslatedLucentDrawFuncs()
+{
+	if (r_drawflat)
+	{
+		R_SetBlankDrawFuncs();
+	}
+	else
+	{
+		colfunc = tlatedlucentcolfunc;
+		hcolfunc_pre = R_DrawColumnHoriz;
+		hcolfunc_post1 = rt_tlatelucent1col;
+		hcolfunc_post2 = rt_tlatelucent2cols;
+		hcolfunc_post4 = rt_tlatelucent4cols;
+	}
+}
+
+//
 //
 // R_RenderView
 //
@@ -1175,27 +1334,7 @@ void R_RenderPlayerView (player_t *player)
 	R_ClearPlanes ();
 	R_ClearSprites ();
 
-	// [RH] Show off segs if r_drawflat is 1
-	if (r_drawflat)
-	{
-		hcolfunc_pre = R_FillColumnHorizP;
-		hcolfunc_post1 = rt_copy1col;
-		hcolfunc_post2 = rt_copy2cols;
-		hcolfunc_post4 = rt_copy4cols;
-		colfunc = R_FillColumnP;
-		spanfunc = R_FillSpan;
-		spanslopefunc = R_FillSpan;
-	}
-	else
-	{
-		hcolfunc_pre = R_DrawColumnHoriz;
-		colfunc = basecolfunc;
-		hcolfunc_post1 = rt_map1col;
-		hcolfunc_post2 = rt_map2cols;
-		hcolfunc_post4 = rt_map4cols;
-		spanfunc = R_DrawSpan;
-		spanslopefunc = R_DrawSlopeSpan;
-	}
+	R_ResetDrawFuncs();
 
 	// [RH] Hack to make windows into underwater areas possible
 	r_fakingunderwater = false;
@@ -1234,8 +1373,6 @@ void R_MultiresInit (void)
 {
 	int i;
 
-	// in r_things.c
-	extern int *r_dscliptop, *r_dsclipbot;
 	// in r_draw.c
 	extern byte **ylookup;
 	extern int *columnofs;
@@ -1243,16 +1380,12 @@ void R_MultiresInit (void)
 	// [Russell] - Possible bug, ylookup is 2 star.
     M_Free(ylookup);
     M_Free(columnofs);
-    M_Free(r_dscliptop);
-    M_Free(r_dsclipbot);
     M_Free(negonearray);
     M_Free(screenheightarray);
     M_Free(xtoviewangle);
 
 	ylookup = (byte **)M_Malloc (screen->height * sizeof(byte *));
 	columnofs = (int *)M_Malloc (screen->width * sizeof(int));
-	r_dscliptop = (int *)M_Malloc (screen->width * sizeof(int));
-	r_dsclipbot = (int *)M_Malloc (screen->width * sizeof(int));
 
 	// Moved from R_InitSprites()
 	negonearray = (int *)M_Malloc (sizeof(int) * screen->width);
@@ -1264,8 +1397,6 @@ void R_MultiresInit (void)
 	// GhostlyDeath -- Clean up the buffers
 	memset(ylookup, 0, screen->height * sizeof(byte*));
 	memset(columnofs, 0, screen->width * sizeof(int));
-	memset(r_dscliptop, 0, screen->width * sizeof(int));
-	memset(r_dsclipbot, 0, screen->width * sizeof(int));
 
 	for(i = 0; i < screen->width; i++)
 	{

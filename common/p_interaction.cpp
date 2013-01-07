@@ -35,12 +35,15 @@
 #include "p_lnspec.h"
 #include "p_ctf.h"
 #include "p_acs.h"
+#include "g_warmup.h"
 
 extern bool predicting;
 extern bool singleplayerjustdied;
 
 EXTERN_CVAR(sv_doubleammo)
 EXTERN_CVAR(sv_weaponstay)
+EXTERN_CVAR(sv_weapondamage)
+EXTERN_CVAR(sv_monsterdamage)
 EXTERN_CVAR(sv_fraglimit)
 EXTERN_CVAR(sv_fragexitswitch) // [ML] 04/4/06: Added compromise for older exit method
 EXTERN_CVAR(sv_friendlyfire)
@@ -77,6 +80,38 @@ void WeaponPickupMessage(AActor *toucher, weapontype_t &Weapon);
 //
 // GET STUFF
 //
+
+// Give frags to a player
+void P_GiveFrags(player_t* player, int num)
+{
+	if (!warmup.checkscorechange())
+		return;
+	player->fragcount += num;
+}
+
+// Give coop kills to a player
+void P_GiveKills(player_t* player, int num)
+{
+	if (!warmup.checkscorechange())
+		return;
+	player->killcount += num;
+}
+
+// Give coop kills to a player
+void P_GiveDeaths(player_t* player, int num)
+{
+	if (!warmup.checkscorechange())
+		return;
+	player->deathcount += num;
+}
+
+// Give a specific number of points to a player's team
+void P_GiveTeamPoints(player_t* player, int num)
+{
+	if (!warmup.checkscorechange())
+		return;
+	TEAMpoints[player->userinfo.team] += num;
+}
 
 //
 // P_GiveAmmo
@@ -394,7 +429,7 @@ void P_GiveSpecial(player_t *player, AActor *special)
 {
 	if (!player || !player->mo || !special)
 		return;
-		
+
 	AActor *toucher = player->mo;
 	int sound = 0;
 	bool firstgrab = false;
@@ -910,7 +945,7 @@ void P_TouchSpecialThing(AActor *special, AActor *toucher)
 	// out of reach?
 	fixed_t delta = special->z - toucher->z;
 	fixed_t lowerbound = co_zdoomphys ? -32*FRACUNIT : -8*FRACUNIT;
-	
+
 	if (delta > toucher->height || delta < lowerbound)
 		return;
 
@@ -957,7 +992,7 @@ void SexMessage (const char *from, char *to, int gender, const char *victim, con
 		else
 		{
 			int gendermsg = -1;
-			
+
 			switch (from[1])
 			{
 			case 'g':	gendermsg = 0;	break;
@@ -1060,11 +1095,11 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 			{
 				if (target->player == source->player) // [RH] Cumulative frag count
 				{
-					splayer->fragcount--;
+					P_GiveFrags(splayer, -1);
 					// [Toke] Minus a team frag for suicide
 					if (sv_gametype == GM_TEAMDM)
 					{
-						TEAMpoints[splayer->userinfo.team]--;
+						P_GiveTeamPoints(splayer, -1);
 					}
 				}
 				// [Toke] Minus a team frag for killing teammate
@@ -1072,10 +1107,10 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 				         (splayer->userinfo.team == tplayer->userinfo.team))
 				{
 					// [Toke - Teamplay || deathz0r - updated]
-					splayer->fragcount--;
+					P_GiveFrags(splayer, -1);
 					if (sv_gametype == GM_TEAMDM)
 					{
-						TEAMpoints[splayer->userinfo.team]--;
+						P_GiveTeamPoints(splayer, -1);
 					}
 					else if (sv_gametype == GM_CTF)
 					{
@@ -1084,11 +1119,11 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 				}
 				else
 				{
-					splayer->fragcount++;
+					P_GiveFrags(splayer, 1);
 					// [Toke] Add a team frag
 					if (sv_gametype == GM_TEAMDM)
 					{
-						TEAMpoints[splayer->userinfo.team]++;
+						P_GiveTeamPoints(splayer, 1);
 					}
 					else if (sv_gametype == GM_CTF)
 					{
@@ -1109,7 +1144,7 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 		if (sv_gametype == GM_COOP &&
             ((target->flags & MF_COUNTKILL) || (target->type == MT_SKULL)))
 		{
-			splayer->killcount++;
+			P_GiveKills(splayer, 1);
 			SV_UpdateFrags(*splayer);
 		}
 	}
@@ -1124,7 +1159,7 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 	{
 		if (!joinkill && !shotclock)
 		{
-			tplayer->deathcount++;
+			P_GiveDeaths(tplayer, 1);
 		}
 
 		// Death script execution, care of Skull Tag
@@ -1136,7 +1171,8 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 		// count environment kills against you
 		if (!source && !joinkill && !shotclock)
 		{
-			tplayer->fragcount--; // [RH] Cumulative frag count
+			// [RH] Cumulative frag count
+			P_GiveFrags(tplayer, -1);
 		}
 
 		CTF_CheckFlags(*target->player);
@@ -1155,14 +1191,8 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 		{
 			singleplayerjustdied = true;
 		}
-		// [RH] Force a delay between death and respawn
-		// [Toke] Lets not fuck up deathmatch tactics ok randy?
-		if (!clientside) {
-			tplayer->respawn_time = level.time + sv_forcerespawntime.asInt() * TICRATE;
-		} else {
-			// vanilla immediate respawn
-			target->player->respawn_time = level.time;
-		}
+
+		tplayer->death_time = level.time;
 
 		if (target == consoleplayer().camera)
 		{
@@ -1206,7 +1236,7 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 	{
 		// [Toke] Better sv_fraglimit
 		if (sv_gametype == GM_DM && sv_fraglimit &&
-            splayer->fragcount >= sv_fraglimit && !sv_fragexitswitch && !shotclock)
+            splayer->fragcount >= sv_fraglimit && !shotclock)
 		{
             // [ML] 04/4/06: Added !sv_fragexitswitch
             SV_BroadcastPrintf(
@@ -1332,6 +1362,12 @@ void P_DamageMobj(AActor *target, AActor *inflictor, AActor *source, int damage,
     {
 		damage >>= 1;	// take half damage in trainer mode
     }
+
+	// [AM] Weapon and monster damage scaling.
+	if (source && source->player && target)
+		damage *= sv_weapondamage;
+	else if (source && target && target->player)
+		damage *= sv_monsterdamage;
 
 	// Some close combat weapons should not
 	// inflict thrust and push the victim out of reach,

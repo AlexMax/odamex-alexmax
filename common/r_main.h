@@ -33,7 +33,6 @@
 
 BOOL R_AlignFlat (int linenum, int side, int fc);
 
-const double fixed_conv = 1.0 / 65536.0;
 //
 // POV related.
 //
@@ -170,8 +169,14 @@ R_AddPointToBox
   fixed_t*	box );
 
 fixed_t R_PointToDist2 (fixed_t dx, fixed_t dy);
-void R_SetFOV (float fov);
+void R_SetFOV(float fov, bool force);
 float R_GetFOV (void);
+
+#define WIDE_STRETCH 0
+#define WIDE_ZOOM 1
+#define WIDE_TRUE 2
+
+int R_GetWidescreen(void);
 
 //
 // REFRESH - the actual rendering functions.
@@ -191,5 +196,12 @@ void R_SetViewSize (int blocks);
 
 // [RH] Initialize multires stuff for renderer
 void R_MultiresInit (void);
+
+void R_ResetDrawFuncs(void);
+void R_SetLucentDrawFuncs(void);
+void R_SetTranslatedDrawFuncs(void);
+void R_SetTranslatedLucentDrawFuncs(void);
+
+
 
 #endif // __R_MAIN_H__

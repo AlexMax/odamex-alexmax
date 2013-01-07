@@ -35,6 +35,7 @@
 #include "gstrings.h"
 #include "hu_stuff.h"
 #include "cl_demo.h"
+#include "d_player.h"
 
 extern NetDemo netdemo;
 
@@ -104,6 +105,7 @@ char DefBindings[] =
 	"bind pause pause; "
 	"bind sysrq screenshot; "			// <- Also known as the Print Screen key
 	"bind t messagemode; "
+	"bind y messagemode2; "
 	"bind \\\\ +showscores; "				// <- Another new command
 	"bind f11 bumpgamma; "
 	"bind f12 spynext; "
@@ -369,6 +371,32 @@ bool C_DoNetDemoKey (event_t *ev)
 		AddCommandString(binding->c_str());
 
 	return true;
+}
+
+//
+// C_DoSpectatorKey
+//
+// [SL] 2012-09-14 - Handles the hard-coded key bindings used while spectating
+// or during NetDemo playback.  Returns false if the key pressed is not
+// bound to any spectating command such as spynext.
+//
+bool C_DoSpectatorKey (event_t *ev)
+{
+	if (!consoleplayer().spectator && !netdemo.isPlaying() && !netdemo.isPaused())
+		return false;
+
+	if (ev->type == ev_keydown && ev->data1 == KEY_MWHEELUP)
+	{
+		AddCommandString("spyprev");
+		return true;
+	}
+	if (ev->type == ev_keydown && ev->data1 == KEY_MWHEELDOWN)
+	{
+		AddCommandString("spynext");
+		return true;
+	}
+
+	return false;	
 }
 
 BOOL C_DoKey (event_t *ev)

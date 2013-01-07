@@ -30,6 +30,7 @@
 #include "s_sound.h"
 #include "i_system.h"
 #include "i_net.h"
+#include "gi.h"
 
 #include "p_snapshot.h"
 
@@ -49,10 +50,13 @@ EXTERN_CVAR (sv_freelook)
 EXTERN_CVAR (co_zdoomphys)
 EXTERN_CVAR (cl_deathcam)
 EXTERN_CVAR (sv_forcerespawn)
+EXTERN_CVAR (sv_forcerespawntime)
+EXTERN_CVAR (co_zdoomspawndelay)
 
 extern bool predicting, step_mode;
 
 static player_t nullplayer;		// used to indicate 'player not found' when searching
+EXTERN_CVAR (sv_allowmovebob)
 EXTERN_CVAR (cl_movebob)
 
 player_t &idplayer(byte id)
@@ -103,6 +107,25 @@ size_t P_NumPlayersInGame()
 	for (size_t i = 0; i < players.size(); ++i)
 	{
 		if (!players[i].spectator && players[i].ingame())
+			++num_players;
+	}
+
+	return num_players;
+}
+
+//
+// P_NumReadyPlayersInGame()
+//
+// Returns the number of players who are marked ready in the current game.
+// This does not include spectators or downloaders.
+//
+size_t P_NumReadyPlayersInGame()
+{
+	size_t num_players = 0;
+
+	for (size_t i = 0; i < players.size(); ++i)
+	{
+		if (!players[i].spectator && players[i].ingame() && players[i].ready)
 			++num_players;
 	}
 
@@ -230,7 +253,10 @@ void P_CalcHeight (player_t *player)
 		}
 	}
 
-	bob *= cl_movebob;
+	// [SL] Scale view-bobbing based on user's preference (if the server allows)
+	if (sv_allowmovebob)
+		bob *= cl_movebob;
+
 	player->viewz = player->mo->z + player->viewheight + bob;
 
 	if (player->viewz > player->mo->ceilingz-4*FRACUNIT)
@@ -411,7 +437,7 @@ void P_MovePlayer (player_t *player)
 		if (mo->state == &states[S_PLAY])
 		{
 			// denis - fixme - this function might destoy player->mo without setting it to 0
-			P_SetMobjState (player->mo, S_PLAY_RUN1); 
+			P_SetMobjState (player->mo, S_PLAY_RUN1);
 		}
 
 		if (player->cheats & CF_REVERTPLEASE)
@@ -420,11 +446,11 @@ void P_MovePlayer (player_t *player)
 			player->camera = player->mo;
 		}
 	}
-	
+
 	// [RH] check for jump
 	if (player->jumpTics)
 		player->jumpTics--;
-		
+
 	if ((cmd->ucmd.buttons & BT_JUMP) == BT_JUMP)
 	{
 		if (player->mo->waterlevel >= 2)
@@ -434,15 +460,15 @@ void P_MovePlayer (player_t *player)
 		else if (player->mo->flags2 & MF2_FLY)
 		{
 			player->mo->momz = 3*FRACUNIT;
-		}		
+		}
 		else if (sv_allowjump && player->mo->onground && !player->jumpTics)
 		{
 			player->mo->momz += 8*FRACUNIT;
 			if(!player->spectator)
 				UV_SoundAvoidPlayer(player->mo, CHAN_VOICE, "player/male/jump1", ATTN_NORM);
-				
+
             player->mo->flags2 &= ~MF2_ONMOBJ;
-            player->jumpTics = 18;				
+            player->jumpTics = 18;
 		}
 	}
 }
@@ -555,9 +581,16 @@ void P_DeathThink (player_t *player)
 
 	if(serverside)
 	{
+		bool force_respawn =	(!clientside && sv_forcerespawn &&
+								level.time >= player->death_time + sv_forcerespawntime * TICRATE);
+
+		// [SL] Can we respawn yet?
+		// Delay respawn by 1 second like ZDoom if co_zdoomspawndelay is enabled
+		bool delay_respawn =	(!clientside && co_zdoomspawndelay &&
+								(level.time < player->death_time + TICRATE));
+
 		// [Toke - dmflags] Old location of DF_FORCE_RESPAWN
-		if (player->ingame() && (player->cmd.ucmd.buttons & BT_USE
-			|| (!clientside && sv_forcerespawn && level.time >= player->respawn_time)))
+		if (player->ingame() && ((player->cmd.ucmd.buttons & BT_USE && !delay_respawn) || force_respawn))
 		{
 			player->playerstate = PST_REBORN;
 		}
@@ -665,7 +698,7 @@ void P_PlayerThink (player_t *player)
 				newweapon = wp_chainsaw;
 			}
 
-			if (gamemode == commercial
+			if ((gameinfo.flags & GI_MAPxx)
 				&& newweapon == wp_shotgun
 				&& player->weaponowned[wp_supershotgun]
 				&& player->readyweapon != wp_supershotgun)
@@ -793,12 +826,13 @@ void player_s::Serialize (FArchive &arc)
 			<< damagecount
 			<< bonuscount
 			<< points
+			<< keepinventory
 			/*<< attacker->netid*/
 			<< extralight
 			<< fixedcolormap
 			<< xviewshift
 			<< jumpTics
-			<< respawn_time
+			<< death_time
 			<< air_finished;
 		for (i = 0; i < NUMPOWERS; i++)
 			arc << powers[i];
@@ -843,12 +877,13 @@ void player_s::Serialize (FArchive &arc)
 			>> damagecount
 			>> bonuscount
 			>> points
+			>> keepinventory
 			/*>> attacker->netid*/
 			>> extralight
 			>> fixedcolormap
 			>> xviewshift
 			>> jumpTics
-			>> respawn_time
+			>> death_time
 			>> air_finished;
 		for (i = 0; i < NUMPOWERS; i++)
 			arc >> powers[i];
@@ -898,6 +933,7 @@ player_s::player_s()
 	fragcount = 0;
 	deathcount = 0;
 	killcount = 0;
+	keepinventory = false;
 	pendingweapon = wp_nochange;
 	readyweapon = wp_nochange;
 	for (i = 0; i < NUMWEAPONS; i++)
@@ -919,11 +955,12 @@ player_s::player_s()
 	xviewshift = 0;
 	memset(psprites, 0, sizeof(pspdef_t) * NUMPSPRITES);
 	jumpTics = 0;
-	respawn_time = 0;
+	death_time = 0;
 	memset(oldvelocity, 0, sizeof(oldvelocity));
 	camera = AActor::AActorPtr();
 	air_finished = 0;
 	GameTime = 0;
+	JoinTime = 0;
 	ping = 0;
 	last_received = 0;
 	tic = 0;
@@ -946,7 +983,7 @@ player_s::player_s()
 	BlendG = 0;
 	BlendB = 0;
 	BlendA = 0;
-	
+
 	memset(netcmds, 0, sizeof(ticcmd_t) * BACKUPTICS);
 }
 
@@ -985,6 +1022,7 @@ player_s &player_s::operator =(const player_s &other)
 	fragcount = other.fragcount;
 	deathcount = other.deathcount;
 	killcount = other.killcount;
+	keepinventory = other.keepinventory;
 
 	pendingweapon = other.pendingweapon;
 	readyweapon = other.readyweapon;
@@ -1018,15 +1056,15 @@ player_s &player_s::operator =(const player_s &other)
 
     jumpTics = other.jumpTics;
 
-	respawn_time = other.respawn_time;
+	death_time = other.death_time;
 
 	memcpy(oldvelocity, other.oldvelocity, sizeof(oldvelocity));
 
 	camera = other.camera;
 	air_finished = other.air_finished;
 
-	JoinTime = other.JoinTime;
 	GameTime = other.GameTime;
+	JoinTime = other.JoinTime;
 	ping = other.ping;
 
 	last_received = other.last_received;
@@ -1057,7 +1095,7 @@ player_s &player_s::operator =(const player_s &other)
 	client = other.client;
 
 	snapshots = other.snapshots;
-	
+
 	to_spawn = other.to_spawn;
 
 	return *this;

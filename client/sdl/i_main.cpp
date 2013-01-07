@@ -47,6 +47,10 @@ typedef BOOL (WINAPI *SetAffinityFunc)(HANDLE hProcess, DWORD mask);
 #include <iostream>
 
 #include <SDL.h>
+// [Russell] - Don't need SDLmain library
+#ifdef WIN32
+#undef main
+#endif // WIN32
 
 #include "errors.h"
 #include "hardware.h"
@@ -55,6 +59,7 @@ typedef BOOL (WINAPI *SetAffinityFunc)(HANDLE hProcess, DWORD mask);
 #include "m_argv.h"
 #include "d_main.h"
 #include "i_system.h"
+#include "i_input.h"
 #include "c_console.h"
 #include "z_zone.h"
 #include "version.h"
@@ -68,6 +73,11 @@ typedef BOOL (WINAPI *SetAffinityFunc)(HANDLE hProcess, DWORD mask);
 
 #ifdef OSX
 #include <CoreFoundation/CoreFoundation.h>
+#endif
+
+// Use main() on windows for msvc
+#if defined(_MSC_VER) && !defined(GCONSOLE)
+#    pragma comment(linker, "/subsystem:windows /ENTRY:mainCRTStartup")
 #endif
 
 DArgs Args;
@@ -147,7 +157,12 @@ int main(int argc, char *argv[])
 		// GDI mouse issues fill many users with great sadness. We are going back
 		// to directx as defulat for now and the people will rejoice. --Hyper_Eye
      	if (Args.CheckParm ("-gdi"))
+        {
+            BackupGDIMouseSettings();
+        	atterm(RestoreGDIMouseSettings);
+
         	putenv((char*)"SDL_VIDEODRIVER=windib");
+        }
     	else if (getenv("SDL_VIDEODRIVER") == NULL || Args.CheckParm ("-directx") > 0)
         	putenv((char*)"SDL_VIDEODRIVER=directx");
 

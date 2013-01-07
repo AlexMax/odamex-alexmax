@@ -65,6 +65,7 @@
 IMPLEMENT_CLASS (DCanvas, DObject)
 
 int DisplayWidth, DisplayHeight, DisplayBits;
+int SquareWidth;
 
 unsigned int Col2RGB8[65][256];
 byte RGB32k[32][32][32];
@@ -80,7 +81,7 @@ DBoundingBox dirtybox;
 EXTERN_CVAR (vid_defwidth)
 EXTERN_CVAR (vid_defheight)
 EXTERN_CVAR (vid_defbits)
-EXTERN_CVAR (autoadjust_video_settings)
+EXTERN_CVAR (vid_autoadjust)
 EXTERN_CVAR (vid_overscan)
 
 EXTERN_CVAR (ui_dimamount)
@@ -240,7 +241,7 @@ void DCanvas::Clear (int left, int top, int right, int bottom, int color) const
 }
 
 
-void DCanvas::Dim(int x1, int y1, int w, int h) const
+void DCanvas::Dim(int x1, int y1, int w, int h, const char* color, float famount) const
 {
 	if (!buffer)
 		return;
@@ -248,25 +249,22 @@ void DCanvas::Dim(int x1, int y1, int w, int h) const
 	if (x1 < 0 || x1 + w > width || y1 < 0 || y1 + h > height)
 		return;
 
-	if (ui_dimamount < 0)
-		ui_dimamount.Set (0.0f);
-	else if (ui_dimamount > 1)
-		ui_dimamount.Set (1.0f);
-
-	if (ui_dimamount == 0)
+	if (famount <= 0.0f)
 		return;
+	else if (famount > 1.0f)
+		famount = 1.0f;
 
 	if (is8bit())
 	{
 		int bg;
 		int x, y;
 
-		fixed_t amount = (fixed_t)(ui_dimamount * 64);
+		fixed_t amount = (fixed_t)(famount * 64.0f);
 		unsigned int *fg2rgb = Col2RGB8[amount];
 		unsigned int *bg2rgb = Col2RGB8[64-amount];
-		unsigned int fg = 
-				fg2rgb[V_GetColorFromString(DefaultPalette->basecolors, ui_dimcolor.cstring())];
-		
+		unsigned int fg =
+				fg2rgb[V_GetColorFromString(DefaultPalette->basecolors, color)];
+
 		byte *dest = buffer + y1 * pitch + x1;
 		int gap = pitch - w;
 
@@ -308,11 +306,11 @@ void DCanvas::Dim(int x1, int y1, int w, int h) const
 	{
 		int x, y;
 		int *line;
-		int fill = V_GetColorFromString (NULL, ui_dimcolor.cstring());
+		int fill = V_GetColorFromString (NULL, color);
 
 		line = (int *)(screen->buffer);
 
-		if (ui_dimamount == 1.0)
+		if (famount == 1.0f)
 		{
 			fill = (fill >> 2) & 0x3f3f3f;
 			for (y = y1; y < y1 + h; y++)
@@ -324,7 +322,7 @@ void DCanvas::Dim(int x1, int y1, int w, int h) const
 				line += pitch >> 2;
 			}
 		}
-		else if (ui_dimamount == 2.0)
+		else if (famount == 2.0)
 		{
 			fill = (fill >> 1) & 0x7f7f7f;
 			for (y = y1; y < y1 + h; y++)
@@ -336,7 +334,7 @@ void DCanvas::Dim(int x1, int y1, int w, int h) const
 				line += pitch >> 2;
 			}
 		}
-		else if (ui_dimamount == 3.0)
+		else if (famount == 3.0)
 		{
 			fill = fill - ((fill >> 2) & 0x3f3f3f);
 			for (y = y1; y < y1 + h; y++)
@@ -349,6 +347,19 @@ void DCanvas::Dim(int x1, int y1, int w, int h) const
 			}
 		}
 	}
+}
+
+void DCanvas::Dim(int x1, int y1, int w, int h) const
+{
+	if (ui_dimamount < 0.0f)
+		ui_dimamount.Set (0.0f);
+	else if (ui_dimamount > 1.0f)
+		ui_dimamount.Set (1.0f);
+
+	if (ui_dimamount == 0.0f)
+		return;
+
+	Dim(x1, y1, w, h, ui_dimcolor.cstring(), ui_dimamount);
 }
 
 std::string V_GetColorStringByName (const char *name)
@@ -415,7 +426,7 @@ BEGIN_COMMAND (setcolor)
 			setcmd += " \"";
 			setcmd += desc;
 			setcmd += "\"";
-			AddCommandString (setcmd.c_str());
+			AddCommandString (setcmd);
 		}
 	}
 }
@@ -459,17 +470,11 @@ void DCanvas::Lock ()
 			{
 				dc_pitch = pitch << detailyshift;
 				R_InitFuzzTable ();
-#ifdef USEASM
-				ASM_PatchPitch ();
-#endif
 			}
 
 			if ((is8bit() ? 1 : 4) << detailxshift != ds_colsize)
 			{
 				ds_colsize = (is8bit() ? 1 : 4) << detailxshift;
-#ifdef USEASM
-				ASM_PatchColSize ();
-#endif
 			}
 		}
 	}
@@ -495,7 +500,7 @@ void DCanvas::Blit (int srcx, int srcy, int srcwidth, int srcheight,
 BOOL V_DoModeSetup (int width, int height, int bits)
 {
 	int basew = 320, baseh = 200;
-	
+
 	// Free the virtual framebuffer
 	if(screen)
 	{
@@ -504,46 +509,49 @@ BOOL V_DoModeSetup (int width, int height, int bits)
 	}
 
 	I_SetMode (width, height, bits);
-	
+
 	I_SetOverscan (vid_overscan);
 
-	/*
-	CleanXfac = ((height * 4)/3) / 320;
+	RealXfac = (((static_cast<float>(height) * 4.0f)/3.0f) / static_cast<float>(basew));
+	RealYfac = (((static_cast<float>(width) * 3.0f)/4.0f) / static_cast<float>(baseh));
 
-	if(!CleanXfac)
-		CleanXfac = 1;
-		
-	// [ML] The height determines the scale, these should always be the same 
-	// or stuff like the menu will be stretched on widescreen resolutions
-	CleanYfac = CleanXfac;
-	*/
-	
-	// [ML] 7/30/10: Going back to this style, they'll still be the same in the end
+	if (!RealXfac)
+    {
+        RealXfac = 1.0f;
+    }
+
+	if (!RealYfac)
+    {
+        RealYfac = 1.0f;
+    }
+
 	// This uses the smaller of the two results. It's still not ideal but at least
 	// this allows con_scaletext to have some purpose...
-	
-    CleanXfac = width / basew; 
+
+    CleanXfac = width / basew;
     CleanYfac = height / baseh;
-    
+
 	if (CleanXfac == 0 || CleanYfac == 0)
 		CleanXfac = CleanYfac = 1;
 	else
 	{
-		if (CleanXfac < CleanYfac) 
-			CleanYfac = CleanXfac; 
-		else 
-			CleanXfac = CleanYfac;		
+		if (CleanXfac < CleanYfac)
+			CleanYfac = CleanXfac;
+		else
+			CleanXfac = CleanYfac;
 	}
-
-	CleanWidth = width / CleanXfac;
-	CleanHeight = height / CleanYfac;
 
 	DisplayWidth = width;
 	DisplayHeight = height;
 	DisplayBits = bits;
 
+	SquareWidth = (static_cast<float>(DisplayHeight) * 4.0f) / 3.0f;
+
+	if (SquareWidth > DisplayWidth)
+        SquareWidth = DisplayWidth;
+
 	// Allocate a new virtual framebuffer
-	if (I_CheckVideoDriver("directx") && vid_fullscreen)
+	if (vid_fullscreen)
 		screen = I_AllocateScreen (width, height, bits, false);
 	else
 		screen = I_AllocateScreen (width, height, bits, true);
@@ -581,7 +589,7 @@ BOOL V_SetResolution (int width, int height, int bits)
 		oldbits = bits;
 	}
 
-	if ((int)(autoadjust_video_settings)) {
+	if ((int)(vid_autoadjust)) {
 		if (vid_fullscreen) {
 			// Fullscreen needs to check for a valid resolution.
 			I_ClosestResolution(&width, &height, bits);
@@ -616,25 +624,42 @@ BEGIN_COMMAND (vid_setmode)
 	int		width = 0, height = 0;
 	int		bits = DisplayBits;
 
+	// No arguments
+	if (argc == 1) {
+		Printf(PRINT_HIGH, "Usage: vid_setmode <width> <height>\n");
+		return;
+	}
+	// Width
 	if (argc > 1) {
-		width = atoi (argv[1]);
-		if (argc > 2) {
-			height = atoi (argv[2]);
-			if (!height)
-                height = screen->height;
-			if (argc > 3) {
-				bits = 8;
-				//bits = atoi (argv[3]);
-			}
-		}
+		width = atoi(argv[1]);
+	}
+	// Height (optional)
+	if (argc > 2) {
+		height = atoi(argv[2]);
+	}
+	if (!height) {
+		height = screen->height;
+	}
+	// Bits (always 8-bit for now)
+	bits = 8;
+
+	if (width < 320 || height < 200) {
+		Printf(PRINT_HIGH, "%dx%d is too small.  Minimum resolution is 320x200.\n", width, height);
+		if (width < 320)
+			width = 320;
+		if (height < 200)
+			height = 200;
 	}
 
-	if (width) {
-		if (I_CheckResolution (width, height, bits))
-			goodmode = true;
+	if (width > MAXWIDTH || height > MAXHEIGHT) {
+		Printf(PRINT_HIGH, "%dx%d is too large.  Maximum resolution is %dx%d.\n", width, height, MAXWIDTH, MAXHEIGHT);
+		if (width > MAXWIDTH)
+			width = MAXWIDTH;
+		if (height > MAXHEIGHT)
+			height = MAXHEIGHT;
 	}
 
-	if (goodmode) {
+	if (I_CheckResolution(width, height, bits)) {
 		// The actual change of resolution will take place
 		// near the beginning of D_Display().
 		if (gamestate != GS_STARTUP) {
@@ -643,11 +668,8 @@ BEGIN_COMMAND (vid_setmode)
 			NewHeight = height;
 			NewBits = bits;
 		}
-	} else if (width) {
-		Printf (PRINT_HIGH, "Unknown resolution %d x %d x %d\n", width, height, bits);
 	} else {
-      // SoM: enforce 8-bit modes for now
-		Printf (PRINT_HIGH, "Usage: vid_setmode <width> <height>\n");
+		Printf(PRINT_HIGH, "Unknown resolution %dx%d\n", width, height);
 	}
 }
 END_COMMAND (vid_setmode)
@@ -726,7 +748,7 @@ void V_Init (void)
       bits = 8;
 	}
 
-    if ((int)(autoadjust_video_settings))
+    if ((int)(vid_autoadjust))
         I_ClosestResolution (&width, &height, bits);
 
 	if (!V_SetResolution (width, height, bits))

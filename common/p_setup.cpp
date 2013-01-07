@@ -128,6 +128,7 @@ mapthing2_t		*deathmatchstarts;
 mapthing2_t		*deathmatch_p;
 
 std::vector<mapthing2_t> playerstarts;
+std::vector<mapthing2_t> voodoostarts;
 
 //	[Toke - CTF - starts] Teamplay starts
 size_t			MaxBlueTeamStarts;
@@ -305,7 +306,7 @@ void P_LoadSegs (int lump)
 		li->frontsector = sides[ldef->sidenum[side]].sector;
 
 		// killough 5/3/98: ignore 2s flag if second sidedef missing:
-		if (ldef->flags & ML_TWOSIDED && ldef->sidenum[side^1]!=-1)
+		if (ldef->flags & ML_TWOSIDED && ldef->sidenum[side^1]!=R_NOSIDE)
 			li->backsector = sides[ldef->sidenum[side^1]].sector;
 		else
 		{
@@ -495,6 +496,7 @@ void P_LoadThings (int lump)
 	mapthing_t *lastmt = (mapthing_t *)(data + W_LumpLength (lump));
 
 	playerstarts.clear();
+	voodoostarts.clear();
 
 	// [RH] ZDoom now uses Hexen-style maps as its native format. // denis - growwwwl
 	//		Since this is the only place where Doom-style Things are ever
@@ -541,6 +543,7 @@ void P_LoadThings2 (int lump, int position)
 	mapthing2_t *lastmt = (mapthing2_t *)(data + W_LumpLength (lump));
 
 	playerstarts.clear();
+	voodoostarts.clear();
 
 	for ( ; mt < lastmt; mt++)
 	{
@@ -620,7 +623,7 @@ void P_AdjustLine (line_t *ld)
 	}
 
 	// denis - prevent buffer overrun
-	if(*ld->sidenum == -1)
+	if(*ld->sidenum == R_NOSIDE)
 		return;
 
 	// killough 4/4/98: support special sidedef interpretation below
@@ -642,11 +645,11 @@ void P_FinishLoadingLineDefs (void)
 
 	for (i = numlines, linenum = 0; i--; ld++, linenum++)
 	{
-		ld->frontsector = ld->sidenum[0]!=-1 ? sides[ld->sidenum[0]].sector : 0;
-		ld->backsector  = ld->sidenum[1]!=-1 ? sides[ld->sidenum[1]].sector : 0;
-		if (ld->sidenum[0] != -1)
+		ld->frontsector = ld->sidenum[0]!=R_NOSIDE ? sides[ld->sidenum[0]].sector : 0;
+		ld->backsector  = ld->sidenum[1]!=R_NOSIDE ? sides[ld->sidenum[1]].sector : 0;
+		if (ld->sidenum[0] != R_NOSIDE)
 			sides[ld->sidenum[0]].linenum = linenum;
-		if (ld->sidenum[1] != -1)
+		if (ld->sidenum[1] != R_NOSIDE)
 			sides[ld->sidenum[1]].linenum = linenum;
 
 		switch (ld->special)
@@ -714,9 +717,9 @@ void P_LoadLineDefs (int lump)
 		ld->sidenum[1] = LESHORT(mld->sidenum[1]);
 
 		if(ld->sidenum[0] >= numsides || ld->sidenum[0] < 0)
-			ld->sidenum[0] = -1;
+			ld->sidenum[0] = R_NOSIDE;
 		if(ld->sidenum[1] >= numsides || ld->sidenum[1] < 0)
-			ld->sidenum[1] = -1;
+			ld->sidenum[1] = R_NOSIDE;
 
 		P_AdjustLine (ld);
 	}
@@ -767,9 +770,9 @@ void P_LoadLineDefs2 (int lump)
 		ld->sidenum[1] = LESHORT(mld->sidenum[1]);
 
 		if(ld->sidenum[0] >= numsides || ld->sidenum[0] < 0)
-			ld->sidenum[0] = -1;
+			ld->sidenum[0] = R_NOSIDE;
 		if(ld->sidenum[1] >= numsides || ld->sidenum[1] < 0)
-			ld->sidenum[1] = -1;
+			ld->sidenum[1] = R_NOSIDE;
 
 		P_AdjustLine (ld);
 	}
@@ -1524,14 +1527,16 @@ void P_SetupLevel (char *lumpname, int position)
 
     if (serverside)
     {
-		for (i=0 ; i<players.size() ; i++)
+		for (i = 0 ; i < players.size() ; i++)
 		{
+			// [AM] On the server, we might need to preserve players inventories between maps.
 			SV_PreservePlayer(players[i]);
 
-    		// if deathmatch, randomly spawn the active players
-			if (players[i].ingame())
+			if (!players[i].keepinventory && players[i].ingame())
 			{
-				G_DeathMatchSpawnPlayer (players[i]); // denis - this function checks for deathmatch internally
+				// if deathmatch, randomly spawn the active players
+				// denis - this function checks for deathmatch internally
+				G_DeathMatchSpawnPlayer (players[i]); 
 			}
 		}
     }
@@ -1551,7 +1556,7 @@ void P_SetupLevel (char *lumpname, int position)
 	R_OldBlend = ~0;
 
 	// preload graphics
-	if (precache)
+	if (clientside && precache)
 		R_PrecacheLevel ();
 }
 

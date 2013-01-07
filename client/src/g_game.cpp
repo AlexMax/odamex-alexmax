@@ -65,6 +65,7 @@
 #include "cl_demo.h"
 #include "gi.h"
 #include "hu_minimenu.h"
+#include "hu_mousegraph.h"
 
 #ifdef _XBOX
 #include "i_xbox.h"
@@ -94,12 +95,14 @@ void	G_DoSaveGame (void);
 void	CL_RunTics (void);
 
 bool	C_DoNetDemoKey(event_t *ev);
+bool	C_DoSpectatorKey(event_t *ev);
 
 EXTERN_CVAR (sv_skill)
 EXTERN_CVAR (novert)
 EXTERN_CVAR (sv_monstersrespawn)
 EXTERN_CVAR (sv_itemsrespawn)
 EXTERN_CVAR (sv_weaponstay)
+EXTERN_CVAR (sv_keepkeys)
 EXTERN_CVAR (co_nosilentspawns)
 EXTERN_CVAR (co_allowdropoff)
 
@@ -166,6 +169,7 @@ EXTERN_CVAR (dynresval) // [Toke - Mouse] Dynamic Resolution Value
 EXTERN_CVAR (dynres_state) // [Toke - Mouse] Dynamic Resolution on/off
 EXTERN_CVAR (mouse_type) // [Toke - Mouse] Zdoom or standard mouse code
 EXTERN_CVAR (m_filter)
+EXTERN_CVAR (hud_mousegraph)
 EXTERN_CVAR (cl_predictpickup)
 
 CVAR_FUNC_IMPL(cl_mouselook)
@@ -234,7 +238,6 @@ int 			mousey;
 // [Toke - Mouse] new mouse stuff
 int	mousexleft;
 int	mouseydown;
-
 
 // Joystick values are repeated
 // Store a value for each of the analog axis controls -- Hyper_Eye
@@ -533,7 +536,7 @@ void G_BuildTiccmd (ticcmd_t *cmd)
 	if (sendcenterview)
 	{
 		sendcenterview = false;
-		look = -32768;
+		look = CENTERVIEW;
 	}
 	else
 	{
@@ -751,6 +754,8 @@ BOOL G_Responder (event_t *ev)
 	{
 		if (C_DoNetDemoKey(ev))	// netdemo playback ate the event
 			return true;
+		if (C_DoSpectatorKey(ev))
+			return true;
 		if (HU_Responder (ev))
 			return true;		// chat ate the event
 		if (ST_Responder (ev))
@@ -782,8 +787,8 @@ BOOL G_Responder (event_t *ev)
 	  case ev_mouse:
 		G_ProcessMouseMovementEvent(ev);
 
-		if (displaymouse == 1)
-			Printf(PRINT_MEDIUM, "(%d %d) ", mousex, mousey);
+		if (hud_mousegraph)
+			mousegraph.append(mousex, mousey);
 
 		break;
 
@@ -866,6 +871,12 @@ void G_Ticker (void)
 		{
 		case ga_loadlevel:
 			G_DoLoadLevel (-1);
+			break;
+		case ga_fullresetlevel:
+			gameaction = ga_nothing;
+			break;
+		case ga_resetlevel:
+			gameaction = ga_nothing;
 			break;
 		case ga_newgame:
 			G_DoNewGame ();
@@ -1105,32 +1116,40 @@ void G_PlayerFinishLevel (player_t &player)
 void G_PlayerReborn (player_t &p) // [Toke - todo] clean this function
 {
 	size_t i;
-	for (i = 0; i < NUMAMMO; i++)
+	if (!p.keepinventory)
 	{
-		p.maxammo[i] = maxammo[i];
-		p.ammo[i] = 0;
+		for (i = 0; i < NUMAMMO; i++)
+		{
+			p.maxammo[i] = maxammo[i];
+			p.ammo[i] = 0;
+		}
+		for (i = 0; i < NUMWEAPONS; i++)
+			p.weaponowned[i] = false;
+
+		p.backpack = false;
+		p.health = deh.StartHealth;		// [RH] Used to be MAXHEALTH
+		p.armortype = 0;
+		p.armorpoints = 0;
+		p.readyweapon = p.pendingweapon = wp_pistol;
+		p.weaponowned[wp_fist] = true;
+		p.weaponowned[wp_pistol] = true;
+		p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
 	}
-	for (i = 0; i < NUMWEAPONS; i++)
-		p.weaponowned[i] = false;
-	for (i = 0; i < NUMCARDS; i++)
-		p.cards[i] = false;
+
+	if (!sv_keepkeys)
+	{
+		for (i = 0; i < NUMCARDS; i++)
+			p.cards[i] = false;
+	}
+
 	for (i = 0; i < NUMPOWERS; i++)
 		p.powers[i] = false;
 	for (i = 0; i < NUMFLAGS; i++)
 		p.flags[i] = false;
-	p.backpack = false;
 
 	p.usedown = p.attackdown = true;	// don't do anything immediately
 	p.playerstate = PST_LIVE;
-	p.health = deh.StartHealth;		// [RH] Used to be MAXHEALTH
-	p.armortype = 0;
-	p.armorpoints = 0;
-	p.readyweapon = p.pendingweapon = wp_pistol;
-	p.weaponowned[wp_fist] = true;
-	p.weaponowned[wp_pistol] = true;
-	p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
-
-	p.respawn_time = level.time;
+	p.death_time = 0;
 	p.tic = 0;
 }
 
@@ -2107,7 +2126,11 @@ void G_DoPlayDemo (bool justStreamInput)
 
 	Printf (PRINT_HIGH, "Playing demo %s\n", defdemoname.c_str());
 
-	cvar_t::C_BackupCVars ();		// [RH] Save cvars that might be affected by demo
+	// [SL] 2012-12-26 - Backup any cvars that need to be set to default to
+	// ensure demo compatibility. CVAR_SERVERINFO cvars is a handy superset
+	// of those cvars
+	cvar_t::C_BackupCVars(CVAR_SERVERINFO);
+	cvar_t::C_SetCVarsToDefaults(CVAR_SERVERINFO);
 	MakeEmptyUserCmd ();
 	demostartgametic = gametic;
 
@@ -2162,15 +2185,6 @@ void G_DoPlayDemo (bool justStreamInput)
 		sv_fastmonsters = *demo_p++;
 		sv_nomonsters = *demo_p++;
 		byte who = *demo_p++;
-
-		// comatibility
-		sv_freelook = "0";
-		sv_allowjump = "0";
-		co_realactorheight = "0";
-		co_zdoomphys = "0";
-		co_allowdropoff = "0";
-		co_fixweaponimpacts = "0";
-		co_blockmapfix = "0";
 
 		if(!justStreamInput)
 			players.clear();
@@ -2326,10 +2340,10 @@ BOOL G_CheckDemoStatus (void)
 		if (demotest) {
 			AActor *mo = idplayer(1).mo;
 
-			if(mo)
-				Printf(PRINT_HIGH, "%x %x %x %x\n", mo->angle, mo->x, mo->y, mo->z);
+			if (mo)
+				Printf(PRINT_HIGH, "demotest:%x %x %x %x\n", mo->angle, mo->x, mo->y, mo->z);
 			else
-				Printf(PRINT_HIGH, "demotest: no player\n");
+				Printf(PRINT_HIGH, "demotest:no player\n");
 		}
 
 
@@ -2368,42 +2382,5 @@ BOOL G_CheckDemoStatus (void)
 	return false;
 }
 
-EXTERN_CVAR (sv_fraglimit)
-EXTERN_CVAR (sv_allowexit)
-EXTERN_CVAR (sv_fragexitswitch)
-
-BOOL CheckIfExitIsGood (AActor *self)
-{
-	if (self == NULL)
-		return false;
-
-	// [Toke - dmflags] Old location of DF_NO_EXIT
-    // [ML] 04/4/06: Check for sv_fragexitswitch - seems a bit hacky
-
-    unsigned int i;
-
-    for(i = 0; i < players.size(); i++)
-        if(players[i].fragcount >= sv_fraglimit)
-            break;
-
-    if (sv_gametype != GM_COOP && self)
-    {
-        if (!sv_allowexit && sv_fragexitswitch && i == players.size())
-            return false;
-
-        if (!sv_allowexit && !sv_fragexitswitch)
-            return false;
-    }
-
-	if(self->player && multiplayer)
-		Printf (PRINT_HIGH, "%s exited the level.\n", self->player->userinfo.netname);
-
-    return true;
-}
-
 
 VERSION_CONTROL (g_game_cpp, "$Id$")
-
-
-
-
