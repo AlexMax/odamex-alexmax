@@ -36,6 +36,7 @@
 #include "r_state.h"
 
 EXTERN_CVAR (co_blockmapfix)
+EXTERN_CVAR (co_zdoomphys)
 
 AActor::ActorBlockMapListNode::ActorBlockMapListNode(AActor *mo) :
 	actor(mo)
@@ -58,13 +59,22 @@ void AActor::ActorBlockMapListNode::Link()
 		left = right = (actor->x - bmaporgx) >> MAPBLOCKSHIFT;
 	}
 
-	originx = left;
-	originy = top;
-	blockcntx = right - left + 1;
-	blockcnty = bottom - top + 1;
-	
-	if (left >= 0 && right < bmapwidth && top >= 0 && bottom < bmapheight)
+	// do not ignore actors only *partially* outside blockmap
+	// e.g. do not ignore an actor just because its left edge is off the left
+	// side of the blockmap - its *right* edge must be off the left side as well
+	if (right >= 0 && left < bmapwidth && bottom >= 0 && top < bmapheight)
 	{
+		// however, need to clamp a partially off-limits actor to the grid
+		if (left < 0) left = 0;
+		if (right >= bmapwidth) right = bmapwidth - 1;
+		if (top < 0) top = 0;
+		if (bottom >= bmapheight) bottom = bmapheight - 1;
+
+		originx = left;
+		originy = top;
+		blockcntx = right - left + 1;
+		blockcnty = bottom - top + 1;
+
 		// [SL] 2012-05-15 - Add the actor to the blocklinks list for all of the
 		// blockmaps it overlaps, not just the blockmap for the actor's center point.
 		for (int bmy = top; bmy <= bottom; bmy++)
@@ -203,18 +213,27 @@ fixed_t P_AproxDistance2 (AActor *a, AActor *b)
 //
 int P_PointOnLineSide (fixed_t x, fixed_t y, const line_t *line)
 {
-	if (!line->dx)
+	if (co_zdoomphys)
 	{
-		return (x <= line->v1->x) ? (line->dy > 0) : (line->dy < 0);
-	}
-	else if (!line->dy)
-	{
-		return (y <= line->v1->y) ? (line->dx < 0) : (line->dx > 0);
+		// Make use of vector cross product
+		return	int64_t(y - line->v1->y) * int64_t(line->dx) +
+				int64_t(line->v1->x - x) * int64_t(line->dy) >= 0;
 	}
 	else
 	{
-		return FixedMul (line->dy >> FRACBITS, x - line->v1->x)
-			   <= FixedMul (y - line->v1->y , line->dx >> FRACBITS);
+		if (!line->dx)
+		{
+			return (x <= line->v1->x) ? (line->dy > 0) : (line->dy < 0);
+		}
+		else if (!line->dy)
+		{
+			return (y <= line->v1->y) ? (line->dx < 0) : (line->dx > 0);
+		}
+		else
+		{
+			return FixedMul (line->dy >> FRACBITS, x - line->v1->x)
+				   <= FixedMul (y - line->v1->y , line->dx >> FRACBITS);
+		}
 	}
 }
 
@@ -273,27 +292,36 @@ int P_BoxOnLineSide (const fixed_t *tmbox, const line_t *ld)
 //
 int P_PointOnDivlineSide (fixed_t x, fixed_t y, const divline_t *line)
 {
-	if (!line->dx)
+	if (co_zdoomphys)
 	{
-		return (x <= line->x) ? (line->dy > 0) : (line->dy < 0);
-	}
-	else if (!line->dy)
-	{
-		return (y <= line->y) ? (line->dx < 0) : (line->dx > 0);
+		// Make use of vector cross product
+		return	int64_t(y - line->y) * int64_t(line->dx) +
+				int64_t(line->x - x) * int64_t(line->dy) >= 0;
 	}
 	else
 	{
-		fixed_t dx = (x - line->x);
-		fixed_t dy = (y - line->y);
-
-		// try to quickly decide by looking at sign bits
-		if ((line->dy ^ line->dx ^ dx ^ dy) & 0x80000000)
-		{	// (left is negative)
-			return ((line->dy ^ dx) & 0x80000000) ? 1 : 0;
+		if (!line->dx)
+		{
+			return (x <= line->x) ? (line->dy > 0) : (line->dy < 0);
+		}
+		else if (!line->dy)
+		{
+			return (y <= line->y) ? (line->dx < 0) : (line->dx > 0);
 		}
 		else
-		{	// if (left >= right), return 1, 0 otherwise
-			return FixedMul (dy >> 8, line->dx >> 8) >= FixedMul (line->dy >> 8, dx >> 8);
+		{
+			fixed_t dx = (x - line->x);
+			fixed_t dy = (y - line->y);
+
+			// try to quickly decide by looking at sign bits
+			if ((line->dy ^ line->dx ^ dx ^ dy) & 0x80000000)
+			{	// (left is negative)
+				return ((line->dy ^ dx) & 0x80000000) ? 1 : 0;
+			}
+			else
+			{	// if (left >= right), return 1, 0 otherwise
+				return FixedMul (dy >> 8, line->dx >> 8) >= FixedMul (line->dy >> 8, dx >> 8);
+			}
 		}
 	}
 }
@@ -320,47 +348,37 @@ void P_MakeDivline (const line_t *li, divline_t *dl)
 //
 fixed_t P_InterceptVector (const divline_t *v2, const divline_t *v1)
 {
-#if 1
-	fixed_t 	frac;
-	fixed_t 	num;
-	fixed_t 	den;
+	if (co_zdoomphys)
+	{
+		// [RH] Use 64 bit ints, so long divlines don't overflow
+		int64_t den =
+				(int64_t(v1->dy) * int64_t(v2->dx) -
+				 int64_t(v1->dx) * int64_t(v2->dy)) >> FRACBITS;
 
-	den = FixedMul (v1->dy>>8,v2->dx) - FixedMul(v1->dx>>8,v2->dy);
+		if (den == 0)
+			return 0;		// parallel
 
-	if (den == 0)
-		return 0;
-	//	I_Error ("P_InterceptVector: parallel");
+		int64_t num =
+				int64_t(v1->x - v2->x) * int64_t(v1->dy) +
+				int64_t(v2->y - v1->y) * int64_t(v1->dx);
 
-	num =
-		FixedMul ( (v1->x - v2->x)>>8 ,v1->dy )
-		+FixedMul ( (v2->y - v1->y)>>8, v1->dx );
+		return (fixed_t)(num / den);
+	}
+	else
+	{
+		fixed_t den = FixedMul (v1->dy>>8,v2->dx) - FixedMul(v1->dx>>8,v2->dy);
 
-	frac = FixedDiv (num , den);
+		if (den == 0)
+			return 0;
 
-	return frac;
-#else	// UNUSED, float debug.
-	float frac;
-	float num;
-	float den;
-	float v1x = (float)v1->x/FRACUNIT;
-	float v1y = (float)v1->y/FRACUNIT;
-	float v1dx = (float)v1->dx/FRACUNIT;
-	float v1dy = (float)v1->dy/FRACUNIT;
-	float v2x = (float)v2->x/FRACUNIT;
-	float v2y = (float)v2->y/FRACUNIT;
-	float v2dx = (float)v2->dx/FRACUNIT;
-	float v2dy = (float)v2->dy/FRACUNIT;
+		fixed_t num =
+			FixedMul ( (v1->x - v2->x)>>8 ,v1->dy )
+			+FixedMul ( (v2->y - v1->y)>>8, v1->dx );
 
-	den = v1dy*v2dx - v1dx*v2dy;
+		fixed_t frac = FixedDiv (num , den);
 
-	if (den == 0)
-		return 0;		// parallel
-
-	num = (v1x - v2x)*v1dy + (v2y - v1y)*v1dx;
-	frac = num / den;
-
-	return frac*FRACUNIT;
-#endif
+		return frac;
+	}
 }
 
 
@@ -378,42 +396,43 @@ sector_t *openbottomsec;
 
 void P_LineOpening (const line_t *linedef, fixed_t x, fixed_t y, fixed_t refx, fixed_t refy)
 {
-	sector_t *front, *back;
-	fixed_t fc, ff, bc, bf;
-
-	if (linedef->sidenum[1] == -1)
+	if (linedef->sidenum[1] == R_NOSIDE)
 	{
 		// single sided line
 		openrange = 0;
 		return;
 	}
 
-	front = linedef->frontsector;
-	back = linedef->backsector;
+	sector_t *front = linedef->frontsector;
+	sector_t *back = linedef->backsector;
 
-	fc = P_CeilingHeight(x, y, front);
-	ff = P_FloorHeight(x, y, front);
-	bc = P_CeilingHeight(x, y, back);
-	bf = P_FloorHeight(x, y, back);
+	fixed_t fc = P_CeilingHeight(x, y, front);
+	fixed_t ff = P_FloorHeight(x, y, front);
+	fixed_t bc = P_CeilingHeight(x, y, back);
+	fixed_t bf = P_FloorHeight(x, y, back);
 
-	opentop = MIN(fc, bc);
+	opentop = MIN<fixed_t>(fc, bc);
 
-	bool usefront;
+	bool fflevel = P_IsPlaneLevel(&front->floorplane);
+	bool bflevel = P_IsPlaneLevel(&back->floorplane);
+
+	bool usefront = (ff > bf);
 
 	// [RH] fudge a bit for actors that are moving across lines
 	// bordering a slope/non-slope that meet on the floor. Note
 	// that imprecisions in the plane equation mean there is a
 	// good chance that even if a slope and non-slope look like
 	// they line up, they won't be perfectly aligned.
-	if (refx == MINFIXED ||	abs(ff - bf) > 256)
-		usefront = (ff > bf);
-	else
+	//
+	// [SL] 2012-12-18 - Increase the tolerance from 256 to FRACUNIT/2
+
+	if ((!fflevel || !bflevel) && abs(ff - bf) < FRACUNIT/2)
 	{
-		if (P_IsPlaneLevel(&front->floorplane))
+		if (fflevel)
 			usefront = true;
-		else if (P_IsPlaneLevel(&back->floorplane))
+		else if (bflevel)
 			usefront = false;
-		else
+		else if (refx != MINFIXED)
 			usefront = !P_PointOnLineSide(refx, refy, linedef);
 	}
 
@@ -431,22 +450,6 @@ void P_LineOpening (const line_t *linedef, fixed_t x, fixed_t y, fixed_t refx, f
 	}
 
 	openrange = opentop - openbottom;
-}
-
-//
-// P_LineOpeningIntercept
-//
-// [SL] 2012-02-08 - Calculates where the intercept crosses the line and calls
-// P_LineOpening() to obtain the correct values for opentop, openbottom, and
-// openrange on lines bordering sloping sectors.
-//
-void P_LineOpeningIntercept(const line_t *line, const intercept_t *in)
-{
-	
-	fixed_t crossx = trace.x + FixedMul(trace.dx, in->frac);
-	fixed_t crossy = trace.y + FixedMul(trace.dy, in->frac);	
-	
-	P_LineOpening(line, crossx, crossy);
 }
 
 //
@@ -513,9 +516,9 @@ void AActor::UnlinkFromWorld ()
 void AActor::LinkToWorld ()
 {
 	// link into subsector
-	subsector_t *ss = subsector = R_PointInSubsector (x, y);
+	subsector = R_PointInSubsector (x, y);
 
-	if(!ss)
+	if (!subsector)
 		return;
 
 	if ( !(flags & MF_NOSECTOR) )
@@ -523,7 +526,7 @@ void AActor::LinkToWorld ()
 		// invisible things don't go into the sector links
 		// killough 8/11/98: simpler scheme using pointer-to-pointer prev
 		// pointers, allows head nodes to be treated like everything else
-		AActor **link = &ss->sector->thinglist;
+		AActor **link = &subsector->sector->thinglist;
 		AActor *next = *link;
 		if ((snext = next))
 			next->sprev = &snext;

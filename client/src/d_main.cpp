@@ -73,6 +73,7 @@
 #include "i_system.h"
 #include "i_sound.h"
 #include "i_video.h"
+#include "i_input.h"
 #include "g_game.h"
 #include "hu_stuff.h"
 #include "wi_stuff.h"
@@ -517,7 +518,7 @@ void D_DoAdvanceDemo (void)
     switch (demosequence)
     {
         case 0:
-            if (gamemode == commercial)
+            if (gameinfo.flags & GI_MAPxx)
                 pagetic = TICRATE * 11;
             else
                 pagetic = 170;
@@ -545,9 +546,9 @@ void D_DoAdvanceDemo (void)
         case 4:
             gamestate = GS_DEMOSCREEN;
 
-            if (gamemode == commercial || gamemode == retail)
+            if ((gameinfo.flags & GI_MAPxx) || (gameinfo.flags & GI_MENUHACK_RETAIL))
             {
-				if (gamemode == commercial)
+				if (gameinfo.flags & GI_MAPxx)
 					pagetic = TICRATE * 11;
 				else
 					pagetic = 170;
@@ -583,36 +584,57 @@ void D_DoAdvanceDemo (void)
     // [Russell] - Still need this toilet humor for now unfortunately
 	if (pagename)
 	{
-		int width, height;
+		int width = 320, height = 200;
 		patch_t *data;
 
-		if (gameinfo.flags & GI_PAGESARERAW)
-		{
-			data = W_CachePatch (pagename);
-			width = 320;
-			height = 200;
-		}
-		else
-		{
-			data = W_CachePatch (pagename);
-			width = data->width();
-			height = data->height();
-		}
-
-		if (page && (page->width != width || page->height != height))
+		if (page && (page->width != screen->width || page->height != screen->height))
 		{
 			I_FreeScreen(page);
 			page = NULL;
 		}
 
+		data = W_CachePatch (pagename);
+
 		if (page == NULL)
-			page = I_AllocateScreen (width, height, 8);
+        {
+            if (screen->isProtectedRes())
+            {
+                page = I_AllocateScreen (width, height, 8);
+            }
+            else
+            {
+                page = I_AllocateScreen (screen->width, screen->height, 8);
+            }
+        }
 
 		page->Lock ();
+
 		if (gameinfo.flags & GI_PAGESARERAW)
-			page->DrawBlock (0, 0, 320, 200, (byte *)data);
+        {
+            page->DrawBlock (0, 0, width, height, (byte *)data);
+        }
 		else
-			page->DrawPatch (data, 0, 0);
+        {
+            if (screen->isProtectedRes())
+            {
+                page->DrawPatch(data,0,0);
+            }
+            else
+            {
+                width = data->width();
+                height = data->height();
+                // [ML] We need a better, concise way to determine 4:3 or not...                
+                if ((float)screen->width/screen->height < (float)4.0f/3.0f)
+                {
+                    page->DrawPatchStretched (data, 0, (screen->height / 2) - ((height * RealYfac) / 2), screen->width, (height * RealYfac));
+                }
+                else
+                {
+                    page->DrawPatchStretched (data, (screen->width / 2) - ((width * RealXfac) / 2), 0, (width * RealXfac), screen->height);
+                }
+            }
+        }
+
 		page->Unlock ();
 	}
 }
@@ -802,6 +824,9 @@ void D_DoomMain (void)
 	HU_Init ();
 	I_Init ();
 	V_Init ();
+
+    // SDL needs video mode set up first before input code can be used
+    I_InitInput();
 
 	// Base systems have been inited; enable cvar callbacks
 	cvar_t::EnableCallbacks ();

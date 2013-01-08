@@ -26,13 +26,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sstream>
+#include <functional>
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
 #ifndef _XBOX
 #include <windows.h>
+#endif // !_XBOX
 #include "win32time.h"
-#endif // _XBOX
 #endif // WIN32
 
 #include "doomtype.h"
@@ -570,6 +571,94 @@ void ReplaceString (const char **ptr, const char *str)
 	}
 	*ptr = copystring (str);
 	rst.add(*ptr);
+}
+
+//
+// simple regex matching
+//
+// [SL] Adapted from code written by Brain W. Kernighan and Rob Pike
+//
+// Copyright (C) 1999 Lucent Technologies
+// Excerpted from 'The Practice of Programming'
+// by Brian W. Kernighan and Rob Pike
+
+static int RegexMatchStar(int c, const char *regexp, const char *text, bool cis = false);
+static int RegexMatchPlus(int c, const char *regexp, const char *text, bool cis = false);
+static int RegexMatchHere(const char *regexp, const char *text, bool cis = false);
+
+static int matchchar(int a, char b, bool cis)
+{
+	if (cis)
+		return (toupper(a) == toupper(b));
+	return (a == b);
+}
+
+// RegexMatchStar
+// Search for c*regexp at beginning of text
+// * matches zero or more instances
+//
+static int RegexMatchStar(int c, const char *regexp, const char *text, bool cis)
+{
+	do {
+		if (RegexMatchHere(regexp, text, cis))
+			return 1;
+	} while (*text != '\0' && (matchchar(c, *text++, cis) || c == '.'));
+
+	return 0;
+}
+
+// RegexMatchPlus
+// Search for c*regexp at beginning of text
+// + matches one or more instances
+//
+static int RegexMatchPlus(int c, const char *regexp, const char *text, bool cis)
+{
+	if (*text == '\0' || (!matchchar(c, *text++, cis) && c != '.'))
+		return 0;
+	return RegexMatchStar(c, regexp, text, cis);
+}
+
+// RegexMatchHere
+// Search for regexp at beginning of text
+//
+static int RegexMatchHere(const char *regexp, const char *text, bool cis)
+{
+	if (regexp[0] == '\0')
+		return 1;
+	if (regexp[1] == '*')
+		return RegexMatchStar(regexp[0], regexp+2, text, cis);
+	if (regexp[1] == '+')
+		return RegexMatchPlus(regexp[0], regexp+2, text, cis);
+	if (regexp[0] == '$' && regexp[1] == '\0')
+		return *text == '\0';
+	if (*text!='\0' && (regexp[0]=='.' || matchchar(regexp[0], *text, cis)))
+		return RegexMatchHere(regexp+1, text+1, cis);
+	return 0;
+}
+
+// RegexMatch
+// Search for regexp anywhere in text
+// Returns the position in the text where the match starts or -1 if no match
+// Setting cis will search case-insensitively
+//
+int RegexMatch(const char *regexp, const char *text, bool cis)
+{
+	const char *textstart = text;
+
+	if (regexp[0] == '^')
+	{
+		if (RegexMatchHere(regexp+1, text, cis))
+			return 0;
+		return -1;
+	}
+
+	do {
+		// must look even if string is empty
+		if (RegexMatchHere(regexp, text, cis))
+			return (text - textstart);
+	} while (*text++ != '\0');
+
+	return -1;
 }
 
 VERSION_CONTROL (cmdlib_cpp, "$Id$")

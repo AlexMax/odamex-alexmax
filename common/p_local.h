@@ -184,7 +184,6 @@ extern fixed_t			openrange;
 extern fixed_t			lowfloor;
 
 void P_LineOpening (const line_t *linedef, fixed_t x, fixed_t y, fixed_t refx=MINFIXED, fixed_t refy=0);
-void P_LineOpeningIntercept(const line_t *line, const intercept_t *in);
 
 BOOL P_BlockLinesIterator (int x, int y, BOOL(*func)(line_t*) );
 BOOL P_BlockThingsIterator (int x, int y, BOOL(*func)(AActor*), AActor *start=NULL);
@@ -221,9 +220,7 @@ extern AActor			*BlockingMobj;
 extern line_t			*BlockingLine;		// Used only by P_Move
 											// This is not necessarily a *blocking* line
 
-//Added by MC: tmsectortype
 extern fixed_t			tmdropoffz; //Needed in b_move.c
-extern sector_t			*tmsector;
 extern sector_t			*tmfloorsector;
 
 extern	line_t* 		ceilingline;
@@ -239,7 +236,7 @@ bool	P_CheckSlopeWalk (AActor *actor, fixed_t &xmove, fixed_t &ymove);
 BOOL	P_TryMove (AActor* thing, fixed_t x, fixed_t y, bool dropoff, bool onfloor = false);
 BOOL	P_TeleportMove (AActor* thing, fixed_t x, fixed_t y, fixed_t z, BOOL telefrag);	// [RH] Added z and telefrag parameters
 void	P_SlideMove (AActor* mo);
-bool	P_CheckSight (const AActor* t1, const AActor* t2, bool ignoreInvisibility = false);
+bool	P_CheckSight (const AActor* t1, const AActor* t2);
 void	P_UseLines (player_t* player);
 void	P_ApplyTorque(AActor *mo);
 void	P_CopySector(sector_t *dest, sector_t *src);

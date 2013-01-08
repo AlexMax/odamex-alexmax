@@ -47,6 +47,10 @@ typedef BOOL (WINAPI *SetAffinityFunc)(HANDLE hProcess, DWORD mask);
 #include <iostream>
 
 #include <SDL.h>
+// [Russell] - Don't need SDLmain library
+#ifdef WIN32
+#undef main
+#endif // WIN32
 
 #include "errors.h"
 #include "hardware.h"
@@ -69,6 +73,11 @@ typedef BOOL (WINAPI *SetAffinityFunc)(HANDLE hProcess, DWORD mask);
 
 #ifdef OSX
 #include <CoreFoundation/CoreFoundation.h>
+#endif
+
+// Use main() on windows for msvc
+#if defined(_MSC_VER) && !defined(GCONSOLE)
+#    pragma comment(linker, "/subsystem:windows /ENTRY:mainCRTStartup")
 #endif
 
 DArgs Args;

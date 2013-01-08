@@ -172,7 +172,7 @@ CVAR (cl_predictweapons, "1", "Draw weapon effects immediately", CVARTYPE_BOOL, 
 CVAR (cl_color,		"40 cf 00", "", CVARTYPE_STRING,	CVAR_USERINFO | CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 CVAR (cl_gender,	"male", "",	CVARTYPE_STRING,	CVAR_USERINFO | CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 CVAR (cl_skin,		"base", "",	CVARTYPE_STRING,	CVAR_USERINFO | CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
-CVAR (cl_team,		"blue", "",	CVARTYPE_STRING,		CVAR_USERINFO | CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
+CVAR_FUNC_DECL (cl_team,	"blue", "",	CVARTYPE_STRING,		CVAR_USERINFO | CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 
 CVAR (chasedemo, "0", "",	CVARTYPE_BOOL, CVAR_NULL)
 
@@ -278,7 +278,7 @@ END_CUSTOM_CVAR (snd_channels)
 static char *C_GetDefaultMusicSystem()
 {
 	static char str[4];
-	
+
 	MusicSystemType defaultmusicsystem = MS_SDLMIXER;
 	#ifdef OSX
 	defaultmusicsystem = MS_AUDIOUNIT;
@@ -351,7 +351,7 @@ CVAR (vid_defheight, "480", "",	CVARTYPE_WORD, CVAR_CLIENTINFO | CVAR_ARCHIVE | 
 // Default bitdepth
 CVAR (vid_defbits, "8", "",	CVARTYPE_BYTE, CVAR_CLIENTINFO | CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 // Force video mode
-CVAR (autoadjust_video_settings, "1", "",	CVARTYPE_BOOL, CVAR_CLIENTINFO | CVAR_ARCHIVE)
+CVAR (vid_autoadjust, "1", "",	CVARTYPE_BOOL, CVAR_CLIENTINFO | CVAR_ARCHIVE)
 // Frames per second counter
 CVAR (vid_fps, "0", "",	CVARTYPE_BOOL, CVAR_CLIENTINFO)
 // Fullscreen mode

@@ -198,7 +198,7 @@ void G_InitNew (const char *mapname)
 	// [RH] Mark all levels as not visited
 	if (!savegamerestore)
 	{
-		for (i = 0; i < numwadlevelinfos; i++)
+		for (i = 0; i < wadlevelinfos.size(); i++)
 			wadlevelinfos[i].flags &= ~LEVEL_VISITED;
 
 		for (i = 0; LevelInfos[i].mapname[0]; i++)
@@ -326,7 +326,7 @@ void G_ExitLevel (int position, int drawscores)
 void G_SecretExitLevel (int position, int drawscores)
 {
 	// IF NO WOLF3D LEVELS, NO SECRET EXIT!
-	if ( (gamemode == commercial)
+	if ( (gameinfo.flags & GI_MAPxx)
 		 && (W_CheckNumForName("map31")<0))
 		secretexit = false;
 	else

@@ -172,7 +172,6 @@
 					<Add option="/DWIN32" />
 					<Add option="/DNDEBUG" />
 					<Add option="/D_WINDOWS" />
-					<Add option="/DNOASM" />
 					<Add option="/DNOMINMAX" />
 					<Add option="/D_CRT_SECURE_NO_WARNINGS" />
 					<Add option="/DPORTMIDI" />
@@ -190,7 +189,6 @@
 					<Add directory="../../libtextscreen" />
 				</ResourceCompiler>
 				<Linker>
-					<Add library="SDLmain.lib" />
 					<Add library="SDL.lib" />
 					<Add library="SDL_mixer.lib" />
 					<Add library="ws2_32.lib" />
@@ -248,7 +246,6 @@
 					<Add option="/wd4430" />
 					<Add option="/DWIN32" />
 					<Add option="/D_WINDOWS" />
-					<Add option="/DNOASM" />
 					<Add option="/DNOMINMAX" />
 					<Add option="/D_CRT_SECURE_NO_WARNINGS" />
 					<Add option="/DPORTMIDI" />
@@ -267,7 +264,6 @@
 				</ResourceCompiler>
 				<Linker>
 					<Add option="/DEBUG" />
-					<Add library="SDLmain.lib" />
 					<Add library="SDL.lib" />
 					<Add library="SDL_mixer.lib" />
 					<Add library="ws2_32.lib" />
@@ -310,7 +306,6 @@
 			<Add option="-fexceptions" />
 			<Add option="-Wno-long-long" />
 			<Add option="-fno-optimize-sibling-calls" />
-			<Add option="-DNOASM" />
 			<Add option="-DPORTMIDI" />
 			<Add directory="." />
 			<Add directory="../src" />
@@ -320,7 +315,6 @@
 			<Add directory="../../portmidi/porttime" />
 		</Compiler>
 		<Linker>
-			<Add library="SDLmain" />
 			<Add library="SDL" />
 			<Add library="SDL_mixer" />
 			<Add directory="../../lib" />
@@ -396,7 +390,6 @@
 		<Unit filename="../../common/m_cheat.h" />
 		<Unit filename="../../common/m_fileio.cpp" />
 		<Unit filename="../../common/m_fileio.h" />
-		<Unit filename="../../common/m_fixed.cpp" />
 		<Unit filename="../../common/m_fixed.h" />
 		<Unit filename="../../common/m_memio.cpp" />
 		<Unit filename="../../common/m_memio.h" />

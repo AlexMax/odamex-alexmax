@@ -65,6 +65,7 @@
 IMPLEMENT_CLASS (DCanvas, DObject)
 
 int DisplayWidth, DisplayHeight, DisplayBits;
+int SquareWidth;
 
 unsigned int Col2RGB8[65][256];
 byte RGB32k[32][32][32];
@@ -80,7 +81,7 @@ DBoundingBox dirtybox;
 EXTERN_CVAR (vid_defwidth)
 EXTERN_CVAR (vid_defheight)
 EXTERN_CVAR (vid_defbits)
-EXTERN_CVAR (autoadjust_video_settings)
+EXTERN_CVAR (vid_autoadjust)
 EXTERN_CVAR (vid_overscan)
 
 EXTERN_CVAR (ui_dimamount)
@@ -261,9 +262,9 @@ void DCanvas::Dim(int x1, int y1, int w, int h, const char* color, float famount
 		fixed_t amount = (fixed_t)(famount * 64.0f);
 		unsigned int *fg2rgb = Col2RGB8[amount];
 		unsigned int *bg2rgb = Col2RGB8[64-amount];
-		unsigned int fg = 
+		unsigned int fg =
 				fg2rgb[V_GetColorFromString(DefaultPalette->basecolors, color)];
-		
+
 		byte *dest = buffer + y1 * pitch + x1;
 		int gap = pitch - w;
 
@@ -469,17 +470,11 @@ void DCanvas::Lock ()
 			{
 				dc_pitch = pitch << detailyshift;
 				R_InitFuzzTable ();
-#ifdef USEASM
-				ASM_PatchPitch ();
-#endif
 			}
 
 			if ((is8bit() ? 1 : 4) << detailxshift != ds_colsize)
 			{
 				ds_colsize = (is8bit() ? 1 : 4) << detailxshift;
-#ifdef USEASM
-				ASM_PatchColSize ();
-#endif
 			}
 		}
 	}
@@ -505,7 +500,7 @@ void DCanvas::Blit (int srcx, int srcy, int srcwidth, int srcheight,
 BOOL V_DoModeSetup (int width, int height, int bits)
 {
 	int basew = 320, baseh = 200;
-	
+
 	// Free the virtual framebuffer
 	if(screen)
 	{
@@ -514,43 +509,46 @@ BOOL V_DoModeSetup (int width, int height, int bits)
 	}
 
 	I_SetMode (width, height, bits);
-	
+
 	I_SetOverscan (vid_overscan);
 
-	/*
-	CleanXfac = ((height * 4)/3) / 320;
+	RealXfac = (((static_cast<float>(height) * 4.0f)/3.0f) / static_cast<float>(basew));
+	RealYfac = (((static_cast<float>(width) * 3.0f)/4.0f) / static_cast<float>(baseh));
 
-	if(!CleanXfac)
-		CleanXfac = 1;
-		
-	// [ML] The height determines the scale, these should always be the same 
-	// or stuff like the menu will be stretched on widescreen resolutions
-	CleanYfac = CleanXfac;
-	*/
-	
-	// [ML] 7/30/10: Going back to this style, they'll still be the same in the end
+	if (!RealXfac)
+    {
+        RealXfac = 1.0f;
+    }
+
+	if (!RealYfac)
+    {
+        RealYfac = 1.0f;
+    }
+
 	// This uses the smaller of the two results. It's still not ideal but at least
 	// this allows con_scaletext to have some purpose...
-	
-    CleanXfac = width / basew; 
+
+    CleanXfac = width / basew;
     CleanYfac = height / baseh;
-    
+
 	if (CleanXfac == 0 || CleanYfac == 0)
 		CleanXfac = CleanYfac = 1;
 	else
 	{
-		if (CleanXfac < CleanYfac) 
-			CleanYfac = CleanXfac; 
-		else 
-			CleanXfac = CleanYfac;		
+		if (CleanXfac < CleanYfac)
+			CleanYfac = CleanXfac;
+		else
+			CleanXfac = CleanYfac;
 	}
-
-	CleanWidth = width / CleanXfac;
-	CleanHeight = height / CleanYfac;
 
 	DisplayWidth = width;
 	DisplayHeight = height;
 	DisplayBits = bits;
+
+	SquareWidth = (static_cast<float>(DisplayHeight) * 4.0f) / 3.0f;
+
+	if (SquareWidth > DisplayWidth)
+        SquareWidth = DisplayWidth;
 
 	// Allocate a new virtual framebuffer
 	if (vid_fullscreen)
@@ -591,7 +589,7 @@ BOOL V_SetResolution (int width, int height, int bits)
 		oldbits = bits;
 	}
 
-	if ((int)(autoadjust_video_settings)) {
+	if ((int)(vid_autoadjust)) {
 		if (vid_fullscreen) {
 			// Fullscreen needs to check for a valid resolution.
 			I_ClosestResolution(&width, &height, bits);
@@ -750,7 +748,7 @@ void V_Init (void)
       bits = 8;
 	}
 
-    if ((int)(autoadjust_video_settings))
+    if ((int)(vid_autoadjust))
         I_ClosestResolution (&width, &height, bits);
 
 	if (!V_SetResolution (width, height, bits))

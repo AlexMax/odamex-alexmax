@@ -31,7 +31,11 @@
 
 #ifdef WIN32
 #define WIN32_LEAN_AND_MEAN
+#ifdef _XBOX
+#include <xtl.h>
+#else
 #include <windows.h>
+#endif // _XBOX
 #else
 #include <sys/stat.h>
 #endif
@@ -62,6 +66,14 @@
 #include "s_sound.h"
 #include "gi.h"
 
+#ifdef GEKKO
+#include "i_wii.h"
+#endif
+
+#ifdef _XBOX
+#include "i_xbox.h"
+#endif
+
 EXTERN_CVAR (waddirs)
 
 std::vector<std::string> wadfiles, wadhashes;		// [RH] remove limit on # of loaded wads
@@ -77,7 +89,7 @@ extern gameinfo_t CommercialBFGGameInfo;
 
 bool lastWadRebootSuccess = true;
 
-#ifdef WIN32
+#if defined(WIN32) && !defined(_XBOX)
 
 #define arrlen(array) (sizeof(array) / sizeof(*array))
 
@@ -342,7 +354,7 @@ void D_AddSearchDir(std::vector<std::string> &dirs, const char *dir, const char 
 // [AM] Add platform-sepcific search directories
 static void D_AddPlatformSearchDirs(std::vector<std::string> &dirs)
 {
-	#if defined(WIN32)
+	#if defined(WIN32) && !defined(_XBOX)
 
 	const char separator = ';';
 
@@ -441,7 +453,8 @@ static void D_AddPlatformSearchDirs(std::vector<std::string> &dirs)
 
 	D_AddSearchDir(dirs, "/usr/share/games/doom", separator);
 	D_AddSearchDir(dirs, "/usr/local/share/games/doom", separator);
-
+	D_AddSearchDir(dirs, "/usr/local/share/doom", separator);
+    
 	#endif
 }
 
@@ -521,10 +534,12 @@ static bool CheckIWAD (std::string suggestion, std::string &titlestring)
 	{
 		"doom2f.wad",
 		"doom2.wad",
+		"doom2bfg.wad",
 		"plutonia.wad",
 		"tnt.wad",
 		"doomu.wad", // Hack from original Linux version. Not necessary, but I threw it in anyway.
 		"doom.wad",
+		"doombfg.wad",
 		"doom1.wad",
 		"freedoom.wad",
 		"freedm.wad",
@@ -964,24 +979,17 @@ bool D_DoomWadReboot(
 	W_Close();
 
 	// [ML] 9/11/10: Reset custom wad level information from MAPINFO et al.
-    // I have never used memset, I hope I am not invoking satan by doing this :(
-	if (wadlevelinfos)
-    {
-		for (i = 0; i < numwadlevelinfos; i++)
-			if (wadlevelinfos[i].snapshot)
-			{
-				delete wadlevelinfos[i].snapshot;
-				wadlevelinfos[i].snapshot = NULL;
-			}
-        memset(wadlevelinfos,0,sizeof(wadlevelinfos));
-        numwadlevelinfos = 0;
-    }
+	for (i = 0; i < wadlevelinfos.size(); i++)
+	{
+		if (wadlevelinfos[i].snapshot)
+		{
+			delete wadlevelinfos[i].snapshot;
+			wadlevelinfos[i].snapshot = NULL;
+		}
+	}
 
-    if (wadclusterinfos)
-    {
-        memset(wadclusterinfos,0,sizeof(wadclusterinfos));
-        numwadclusterinfos = 0;
-    }
+	wadlevelinfos.clear();
+	wadclusterinfos.clear();
 
 	// Restart the memory manager
 	Z_Init();

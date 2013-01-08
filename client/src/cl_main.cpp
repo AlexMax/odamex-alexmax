@@ -144,7 +144,6 @@ EXTERN_CVAR (sv_weaponstay)
 
 EXTERN_CVAR (cl_name)
 EXTERN_CVAR (cl_color)
-EXTERN_CVAR (cl_team)
 EXTERN_CVAR (cl_skin)
 EXTERN_CVAR (cl_gender)
 EXTERN_CVAR (cl_interp)
@@ -188,11 +187,12 @@ int CL_GetPlayerColor(player_t *player)
 	}
 	else if (sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF)
 	{
-		if (r_forceenemycolor && !P_AreTeammates(consoleplayer(), *player))
-			return enemycolor;
-		if (r_forceteamcolor &&
-			(P_AreTeammates(consoleplayer(), *player) || player->id == consoleplayer_id))
+		if (r_forceteamcolor && 
+					(P_AreTeammates(consoleplayer(), *player) || player->id == consoleplayer_id))
 			return teamcolor;
+		if (r_forceenemycolor && !P_AreTeammates(consoleplayer(), *player) &&
+					player->id != consoleplayer_id)
+			return enemycolor;
 
 		// Adjust the shade of color for team games
 		int red = RPART(player->userinfo.color);
@@ -239,6 +239,11 @@ CVAR_FUNC_IMPL (r_forceenemycolor)
 }
 
 CVAR_FUNC_IMPL (r_forceteamcolor)
+{
+	CL_RebuildAllPlayerTranslations();
+}
+
+CVAR_FUNC_IMPL (cl_team)
 {
 	CL_RebuildAllPlayerTranslations();
 }
@@ -428,6 +433,8 @@ void CL_QuitNetGame(void)
 			}
 		}
 	}
+
+	cvar_t::C_RestoreCVars();
 }
 
 
@@ -1353,6 +1360,8 @@ void CL_RequestConnectInfo(void)
 std::string missing_file, missing_hash;
 bool CL_PrepareConnect(void)
 {
+	cvar_t::C_BackupCVars(CVAR_SERVERINFO);
+
 	size_t i;
 	DWORD server_token = MSG_ReadLong();
 	server_host = MSG_ReadString();
@@ -3206,6 +3215,7 @@ void CL_Spectate()
 			player.deltaviewheight = 1000 << FRACBITS;
 		} else {
 			displayplayer_id = consoleplayer_id; // get out of spynext
+			player.cheats &= ~CF_FLY;	// remove flying ability
 		}
 	}
 

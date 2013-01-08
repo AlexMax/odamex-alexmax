@@ -24,16 +24,11 @@
 #ifndef __VERSION_H__
 #define __VERSION_H__
 
-#if _MSC_VER == 1200
-// MSVC6, disable broken warnings about truncated stl lines
-#pragma warning(disable:4786)
-#endif
-
 // Lots of different representations for the version number
-#define CONFIGVERSIONSTR "61"
-#define GAMEVER (0*256+61)
+#define CONFIGVERSIONSTR "62"
+#define GAMEVER (0*256+62)
 
-#define DOTVERSIONSTR "0.6.1"
+#define DOTVERSIONSTR "0.6.2"
 
 #define COPYRIGHTSTR "Copyright (C) 2006-2012 The Odamex Team"
 

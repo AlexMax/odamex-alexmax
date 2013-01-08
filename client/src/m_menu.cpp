@@ -48,9 +48,11 @@
 #include "r_sky.h"
 #include "cl_main.h"
 #include "c_bind.h"
+#include "c_level.h"
 
 #include "gi.h"
 #include "m_memio.h"
+#include "m_fileio.h"
 
 #ifdef _XBOX
 #include "i_xbox.h"
@@ -125,6 +127,7 @@ oldmenu_t *currentMenu;
 //
 void M_NewGame(int choice);
 void M_Episode(int choice);
+void M_Expansion(int choice);
 void M_ChooseSkill(int choice);
 void M_LoadGame(int choice);
 void M_SaveGame(int choice);
@@ -274,6 +277,32 @@ oldmenu_t EpiDef =
 	48,63,				// x,y
 	ep1 				// lastOn
 };
+
+//
+// EXPANSION SELECT (DOOM2 BFG)
+//
+enum expansions_t
+{
+	hoe,
+	nrftl,
+	exp_end
+} expansions_e;
+
+oldmenuitem_t ExpansionMenu[]=
+{
+	{1,"M_EPI1", M_Expansion,'h'},
+	{1,"M_EPI2", M_Expansion,'n'},
+};
+
+oldmenu_t ExpDef =
+{
+	exp_end,	 		// # of menu items
+	ExpansionMenu,		// oldmenuitem_t ->
+	M_DrawEpisode,		// drawing routine ->
+	48,63,				// x,y
+	hoe 				// lastOn
+};
+
 
 //
 // NEW GAME
@@ -954,10 +983,21 @@ void M_NewGame(int choice)
 	}
 */
 	if (gameinfo.flags & GI_MAPxx)
-		M_SetupNextMenu(&NewDef);
+    {
+        if (gamemode == commercial_bfg)
+        {
+            M_SetupNextMenu(&ExpDef);
+        }
+        else
+        {
+            M_SetupNextMenu(&NewDef);
+        }
+    }
 	else if (gamemode == retail_chex)			// [ML] Don't show the episode selection in chex mode
-		M_SetupNextMenu(&NewDef);
-	else if (gameinfo.flags & GI_MENUHACK_RETAIL)
+    {
+        M_SetupNextMenu(&NewDef);
+    }
+    else if (gameinfo.flags & GI_MENUHACK_RETAIL)
 	{
 	    EpiDef.numitems = ep_end;
 	    M_SetupNextMenu(&EpiDef);
@@ -996,8 +1036,36 @@ void M_StartGame(int choice)
 	sv_skill.Set ((float)(choice+1));
 	sv_gametype = GM_COOP;
 
-	G_DeferedInitNew (CalcMapName (epi+1, 1));
-	M_ClearMenus ();
+    if (gamemode == commercial_bfg)     // Funky external loading madness fun time (DOOM 2 BFG)
+    {
+        std::string str = "nerve.wad";
+
+        if (epi)
+        {
+            // Load No Rest for The Living Externally
+            epi = 0;
+            G_LoadWad(str);
+        }
+        else
+        {
+            // Check for nerve.wad, if it's loaded re-load with just iwad (DOOM 2 BFG)
+            for (unsigned int i = 2; i < wadfiles.size(); i++)
+            {
+                if (StdStringCompare(str, M_ExtractFileName(wadfiles[i]), true) == 0)
+                {
+                    G_LoadWad(wadfiles[1]);
+                }
+            }
+
+            G_DeferedInitNew (CalcMapName (epi+1, 1));
+        }
+    }
+    else
+    {
+        G_DeferedInitNew (CalcMapName (epi+1, 1));
+    }
+
+    M_ClearMenus ();
 }
 
 void M_ChooseSkill(int choice)
@@ -1025,23 +1093,64 @@ void M_Episode (int choice)
 	M_SetupNextMenu(&NewDef);
 }
 
+void M_Expansion (int choice)
+{
+	epi = choice;
+	M_SetupNextMenu(&NewDef);
+}
+
+
 //
 // Read This Menus
 // Had a "quick hack to fix romero bug"
 //
 void M_DrawReadThis1 (void)
 {
-	screen->DrawPatchIndirect ((patch_t *)W_CachePatch(gameinfo.info.infoPage[0]), 0, 0);
+	patch_t *p = W_CachePatch(gameinfo.info.infoPage[0]);
+
+	if (screen->isProtectedRes())
+    {
+        screen->DrawPatchIndirect (p, 0, 0);
+    }
+    else
+    {
+        screen->Clear(0, 0, screen->width, screen->height, 0);
+
+        if ((float)screen->width/screen->height < (float)4.0f/3.0f)
+        {
+            screen->DrawPatchStretched(p, 0, (screen->height / 2) - ((p->height() * RealYfac) / 2), screen->width, (p->height() * RealYfac));
+        }
+        else
+        {
+            screen->DrawPatchStretched(p,(screen->width / 2) - ((p->width() * RealXfac) / 2), 0, (p->width() * RealXfac), screen->height);
+        }
+    }
 }
-
-
 
 //
 // Read This Menus - optional second page.
 //
 void M_DrawReadThis2 (void)
 {
-	screen->DrawPatchIndirect ((patch_t *)W_CachePatch(gameinfo.info.infoPage[1]), 0, 0);
+	patch_t *p = W_CachePatch(gameinfo.info.infoPage[1]);
+
+	if (screen->isProtectedRes())
+    {
+        screen->DrawPatchIndirect (p, 0, 0);
+    }
+    else
+    {
+        screen->Clear(0, 0, screen->width, screen->height, 0);
+
+        if ((float)screen->width/screen->height < (float)4.0f/3.0f)
+        {
+            screen->DrawPatchStretched(p, 0, (screen->height / 2) - ((p->height() * RealYfac) / 2), screen->width, (p->height() * RealYfac));
+        }
+        else
+        {
+            screen->DrawPatchStretched(p,(screen->width / 2) - ((p->width() * RealXfac) / 2), 0, (p->width() * RealXfac), screen->height);
+        }
+    }
 }
 
 //
@@ -1049,7 +1158,25 @@ void M_DrawReadThis2 (void)
 //
 void M_DrawReadThis3 (void)
 {
-	screen->DrawPatchIndirect ((patch_t *)W_CachePatch(gameinfo.info.infoPage[2]), 0, 0);
+	patch_t *p = W_CachePatch(gameinfo.info.infoPage[2]);
+
+	if (screen->isProtectedRes())
+    {
+        screen->DrawPatchIndirect (p, 0, 0);
+    }
+    else
+    {
+        screen->Clear(0, 0, screen->width, screen->height, 0);
+
+        if ((float)screen->width/screen->height < (float)4.0f/3.0f)
+        {
+            screen->DrawPatchStretched(p, 0, (screen->height / 2) - ((p->height() * RealYfac) / 2), screen->width, (p->height() * RealYfac));
+        }
+        else
+        {
+            screen->DrawPatchStretched(p,(screen->width / 2) - ((p->width() * RealXfac) / 2), 0, (p->width() * RealXfac), screen->height);
+        }
+    }
 }
 
 //
@@ -1360,7 +1487,6 @@ static void M_PlayerSetupDrawer (void)
 				break;
 
 			case 4:
-			default:
 				for (b = 0; b < FireScreen->height; b++)
 				{
 					byte *to = screen->buffer + y * screen->pitch + x;
@@ -1380,6 +1506,29 @@ static void M_PlayerSetupDrawer (void)
 					}
 				}
 				break;
+
+				case 5:
+				default:
+					for (b = 0; b < FireScreen->height; b++)
+					{
+						byte *to = screen->buffer + y * screen->pitch + x;
+						from = FireScreen->buffer + b * FireScreen->pitch;
+						y += CleanYfac;
+
+						for (a = 0; a < FireScreen->width; a++, to += 5, from++)
+						{
+							int c;
+							for (c = CleanYfac; c; c--)
+							{
+								*(to + pitch*c) = FireRemap[*from];
+								*(to + pitch*c + 1) = FireRemap[*from];
+								*(to + pitch*c + 2) = FireRemap[*from];
+								*(to + pitch*c + 3) = FireRemap[*from];
+								*(to + pitch*c + 4) = FireRemap[*from];
+							}
+						}
+					}
+                break;
 			}
 			FireScreen->Unlock ();
 		}
@@ -2203,7 +2352,7 @@ void M_Init (void)
 	messageString = NULL;
 	messageLastMenuActive = menuactive;
 
-    if (gamemode == commercial)
+    if (gameinfo.flags & GI_MAPxx)
     {
         // Commercial has no "read this" entry.
         MainDef.numitems = d2_main_end;

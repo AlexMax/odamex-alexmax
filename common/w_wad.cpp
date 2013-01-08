@@ -82,79 +82,71 @@ typedef struct
     std::string hash[MAX_HASHES];
 } gamewadinfo_t;
 
-#if _MSC_VER <= 1200	// GhostlyDeath -- Work on VC6
-static gamewadinfo_t doomwadnames[11];
-bool WasVC6Inited = false;
-
-void W_VC6Init(void)
-{
-	if (!WasVC6Inited)
-	{
-		// DOOM2F
-		doomwadnames[0].name = "DOOM2F.WAD";
-
-		// DOOM2
-		doomwadnames[1].name = "DOOM2.WAD";
-		doomwadnames[1].hash[0] = "25E1459CA71D321525F84628F45CA8CD",
-		doomwadnames[1].hash[1] = "C3BEA40570C23E511A7ED3EBCD9865F7"; // BFG Edition
-
-		// PLUTONIA
-		doomwadnames[2].name = "PLUTONIA.WAD";
-		doomwadnames[2].hash[0] = "75C8CF89566741FA9D22447604053BD7";
-
-		// TNT
-		doomwadnames[3].name = "TNT.WAD";
-		doomwadnames[3].hash[0] = "4E158D9953C79CCF97BD0663244CC6B6";
-
-		// DOOMU
-		doomwadnames[4].name = "DOOMU.WAD";
-		doomwadnames[4].hash[0] = "C4FE9FD920207691A9F493668E0A2083";
-
-		// DOOM
-		doomwadnames[5].name = "DOOM.WAD";
-		doomwadnames[5].hash[0] = "C4FE9FD920207691A9F493668E0A2083";
-		doomwadnames[5].hash[1] = "1CD63C5DDFF1BF8CE844237F580E9CF3";
-		doomwadnames[5].hash[2] = "FB35C4A5A9FD49EC29AB6E900572C524"; // BFG Edition
-
-		// DOOM SHAREWARE
-		doomwadnames[6].name = "DOOM1.WAD";
-		doomwadnames[6].hash[0] = "F0CEFCA49926D00903CF57551D901ABE";
-
-		// FREEDOOM
-		doomwadnames[7].name = "FREEDOOM.WAD";
-
-		// FREEDM
-		doomwadnames[8].name = "FREEDM.WAD";
-
-		// CHEX
-		doomwadnames[9].name = "CHEX.WAD";
-		doomwadnames[9].hash[0] = "25485721882b050afa96a56e5758dd52";
-
-
-		WasVC6Inited = true;
-	}
-}
-
-#define MSVC6_SETUPWADS if (!WasVC6Inited) W_VC6Init();
-
-#else
 // Valid IWAD file names
 static const gamewadinfo_t doomwadnames[] =
 {
     { "DOOM2F.WAD", { "" } },
     { "DOOM2.WAD", { "25E1459CA71D321525F84628F45CA8CD", "C3BEA40570C23E511A7ED3EBCD9865F7" } },
+    { "DOOM2BFG.WAD", { "C3BEA40570C23E511A7ED3EBCD9865F7" } },
     { "PLUTONIA.WAD", { "75C8CF89566741FA9D22447604053BD7" } },
     { "TNT.WAD", { "4E158D9953C79CCF97BD0663244CC6B6" } },
     { "DOOMU.WAD", { "C4FE9FD920207691A9F493668E0A2083" } },
     { "DOOM.WAD", { "C4FE9FD920207691A9F493668E0A2083", "1CD63C5DDFF1BF8CE844237F580E9CF3","FB35C4A5A9FD49EC29AB6E900572C524" } },
+    { "DOOMBFG.WAD", { "FB35C4A5A9FD49EC29AB6E900572C524" } },
     { "DOOM1.WAD", { "F0CEFCA49926D00903CF57551D901ABE" } },
     { "FREEDOOM.WAD", { "" } },
     { "FREEDM.WAD", { "" } },
     { "CHEX.WAD", { "25485721882b050afa96a56e5758dd52" } },
     { "", { "" } }
 };
-#define MSVC6_SETUPWADS
-#endif
+
+//
+// W_LumpNameHash
+//
+// Hash function used for lump names. Must be mod'ed with table size.
+// Can be used for any 8-character names.
+// by Lee Killough
+//
+// [SL] taken from prboom-plus
+//
+unsigned int W_LumpNameHash(const char *s)
+{
+	unsigned int hash;
+
+	(void)((hash =         toupper(s[0]), s[1]) &&
+			(hash = hash*3+toupper(s[1]), s[2]) &&
+			(hash = hash*2+toupper(s[2]), s[3]) &&
+			(hash = hash*2+toupper(s[3]), s[4]) &&
+			(hash = hash*2+toupper(s[4]), s[5]) &&
+			(hash = hash*2+toupper(s[5]), s[6]) &&
+			(hash = hash*2+toupper(s[6]),
+			 hash = hash*2+toupper(s[7]))
+         );
+	return hash;
+}
+
+//
+// W_HashLumps
+//
+// killough 1/31/98: Initialize lump hash table
+// [SL] taken from prboom-plus
+//
+void W_HashLumps(void)
+{
+	for (unsigned int i = 0; i < numlumps; i++)
+		lumpinfo[i].index = -1;			// mark slots empty
+
+	// Insert nodes to the beginning of each chain, in first-to-last
+	// lump order, so that the last lump of a given name appears first
+	// in any chain, observing pwad ordering rules. killough
+
+	for (unsigned int i = 0; i < numlumps; i++)
+	{
+		unsigned int j = W_LumpNameHash(lumpinfo[i].name) % (unsigned int)numlumps;
+		lumpinfo[i].next = lumpinfo[j].index;     // Prepend to list
+		lumpinfo[j].index = i;
+	}
+}
 
 //
 // W_IsIWAD
@@ -165,8 +157,6 @@ static const gamewadinfo_t doomwadnames[] =
 // for more "accurate" detection.
 BOOL W_IsIWAD(std::string filename, std::string hash)
 {
-	MSVC6_SETUPWADS
-
     std::string name;
 
     if (!filename.length())
@@ -571,6 +561,9 @@ std::vector<std::string> W_InitMultipleFiles (std::vector<std::string> &filename
 
 	memset (lumpcache,0, size);
 
+	// killough 1/31/98: initialize lump hash table
+	W_HashLumps();
+
 	stdisk_lumpnum = W_GetNumForName("STDISK");
 
 	return hashes;
@@ -580,50 +573,40 @@ std::vector<std::string> W_InitMultipleFiles (std::vector<std::string> &filename
 // W_CheckNumForName
 // Returns -1 if name not found.
 //
-
-int W_CheckNumForName (const char* name, int namespc)
+// Rewritten by Lee Killough to use hash table for performance. Significantly
+// cuts down on time -- increases Doom performance over 300%. This is the
+// single most important optimization of the original Doom sources, because
+// lump name lookup is used so often, and the original Doom used a sequential
+// search. For large wads with > 1000 lumps this meant an average of over
+// 500 were probed during every search. Now the average is under 2 probes per
+// search. There is no significant benefit to packing the names into longwords
+// with this new hashing algorithm, because the work to do the packing is
+// just as much work as simply doing the string comparisons with the new
+// algorithm, which minimizes the expected number of comparisons to under 2.
+//
+// [SL] taken from prboom-plus
+//
+int W_CheckNumForName(const char *name, int namespc)
 {
-	union {
-		char	s[9];
-		int	x[2];
+	// Hash function maps the name to one of possibly numlump chains.
+	// It has been tuned so that the average chain length never exceeds 2.
 
-	} name8;
+	// proff 2001/09/07 - check numlumps==0, this happens when called before WAD loaded
+	register int i = (numlumps==0)?(-1):(lumpinfo[W_LumpNameHash(name) % numlumps].index);
 
-	int		v1;
-	int		v2;
-	lumpinfo_t*	lump_p;
+	// We search along the chain until end, looking for case-insensitive
+	// matches which also match a namespace tag. Separate hash tables are
+	// not used for each namespace, because the performance benefit is not
+	// worth the overhead, considering namespace collisions are rare in
+	// Doom wads.
 
-    // make the name into two integers for easy compares
-	strncpy (name8.s,name,9);
+	while (i >= 0 && (strnicmp(lumpinfo[i].name, name, 8) ||
+				lumpinfo[i].namespc != namespc))
+		i = lumpinfo[i].next;
 
-    // in case the name was a fill 8 chars
-	name8.s[8] = 0;
-
-    // case insensitive
-	std::transform(name8.s, name8.s + strlen(name8.s), name8.s, toupper);
-
-	v1 = name8.x[0];
-	v2 = name8.x[1];
-
-
-    // scan backwards so patch lump files take precedence
-	lump_p = lumpinfo + numlumps;
-
-	while (lump_p-- != lumpinfo)
-	{
-		if ( *(int *)lump_p->name == v1
-			&& *(int *)&lump_p->name[4] == v2 && lump_p->namespc == namespc)
-		{
-			return lump_p - lumpinfo;
-		}
-	}
-
-    // TFB. Not found.
-	return -1;
+	// Return the matching lump, or -1 if none found.
+	return i;
 }
-
-
-
 
 //
 // W_GetNumForName
@@ -661,10 +644,7 @@ unsigned W_LumpLength (unsigned lump)
 // Loads the lump into the given buffer,
 //  which must be >= W_LumpLength().
 //
-void
-W_ReadLump
-( unsigned	lump,
- void*		dest )
+void W_ReadLump(unsigned int lump, void* dest)
 {
 	int		c;
 	lumpinfo_t*	l;
@@ -740,10 +720,7 @@ void W_GetLumpName (char *to, unsigned  lump)
 //
 // W_CacheLumpNum
 //
-void*
-W_CacheLumpNum
-( unsigned	lump,
- int		tag )
+void* W_CacheLumpNum(unsigned int lump, int tag)
 {
 	byte*	ptr;
 
@@ -771,10 +748,7 @@ W_CacheLumpNum
 //
 // W_CacheLumpName
 //
-void*
-W_CacheLumpName
-( const char*		name,
- int		tag )
+void* W_CacheLumpName(const char* name, int tag)
 {
 	return W_CacheLumpNum (W_GetNumForName(name), tag);
 }
@@ -848,21 +822,12 @@ patch_t* W_CachePatch(const char* name, int tag)
 
 int W_FindLump (const char *name, int *lastlump)
 {
-	char name8[9];
-	int v1, v2;
 	lumpinfo_t *lump_p;
-
-	// make the name into two integers for easy compares
-	strncpy (name8, name, 8); // denis - todo -string limit?
-	std::transform(name8, name8 + 8, name8, toupper);
-
-	v1 = *(int *)name8;
-	v2 = *(int *)&name8[4];
 
 	lump_p = lumpinfo + *lastlump;
 	while (lump_p < lumpinfo + numlumps)
 	{
-		if (*(int *)lump_p->name == v1 && *(int *)&lump_p->name[4] == v2)
+		if (strnicmp(lump_p->name, name, 8) == 0)
 		{
 			int lump = lump_p - lumpinfo;
 			*lastlump = lump + 1;

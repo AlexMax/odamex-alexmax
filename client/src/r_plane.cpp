@@ -107,7 +107,7 @@ float					plight, shade;
 
 fixed_t 				*yslope;
 fixed_t 				*distscale;
-static double			fplaneheight;
+static fixed_t			planeheight;
 
 static fixed_t			pl_xscale, pl_yscale;
 static fixed_t			pl_sin, pl_cos;
@@ -119,12 +119,6 @@ v3double_t				a, b, c;
 float					ixscale, iyscale;
 
 EXTERN_CVAR (r_skypalette)
-
-#ifdef USEASM
-extern "C" void R_SetSpanSource_ASM (byte *flat);
-extern "C" void R_SetSpanColormap_ASM (byte *colormap);
-extern "C" byte *ds_curcolormap, *ds_cursource;
-#endif
 
 //
 // R_InitPlanes
@@ -233,17 +227,17 @@ void R_MapSlopedPlane(int y, int x1, int x2)
 //
 void R_MapLevelPlane(int y, int x1, int x2)
 {
-	double fdistance = fplaneheight * yslope[y] / 65536.0;
-	double slope = fplaneheight / abs(centery - y);
+	fixed_t distance = FixedMul(planeheight, yslope[y]);
+	fixed_t slope = (fixed_t)(focratio * FixedDiv(planeheight, abs(centery - y) << FRACBITS));
 
-	ds_xstep = (fixed_t)(pl_xstepscale * slope * focratio);
-	ds_ystep = (fixed_t)(pl_ystepscale * slope * focratio);
+	ds_xstep = FixedMul(pl_xstepscale, slope);
+	ds_ystep = FixedMul(pl_ystepscale, slope);
 
 	ds_xfrac = pl_viewxtrans +
-				FixedMul((int)(pl_viewcos * fdistance), pl_xscale) + 
+				FixedMul((int)(FixedMul(pl_viewcos, distance)), pl_xscale) + 
 				(x1 - centerx) * ds_xstep;
 	ds_yfrac = pl_viewytrans -
-				FixedMul((int)(pl_viewsin * fdistance), pl_yscale) +
+				FixedMul((int)(FixedMul(pl_viewsin, distance)), pl_yscale) +
 				(x1 - centerx) * ds_ystep;
 
 	ds_xstep <<= 10;	
@@ -258,7 +252,7 @@ void R_MapLevelPlane(int y, int x1, int x2)
 	else
 	{
 		// Determine lighting based on the span's distance from the viewer.
-		unsigned int index = (int)fdistance >> (LIGHTZSHIFT - FRACBITS);
+		unsigned int index = distance >> LIGHTZSHIFT;
 
 		if (index >= MAXLIGHTZ)
 			index = MAXLIGHTZ-1;
@@ -614,7 +608,7 @@ void R_DrawSlopedPlane(visplane_t *pl)
 	// Point p is the anchor point of the texture.  It starts out as the
 	// map coordinate (0, 0, planez(0,0)) but texture offset and rotation get applied
 	p.x = -yoffsf * cosang - xoffsf * sinang;
-	p.z = -yoffsf * sinang + xoffsf * cosang;
+	p.z = -xoffsf * cosang + yoffsf * sinang;
 	p.y = P_PlaneZ(p.x, p.z, &pl->secplane);
 
 	// Point t is the point along the plane (texwidth, 0, planez(texwidth, 0)) with texture
@@ -700,7 +694,7 @@ void R_DrawLevelPlane(visplane_t *pl)
 
 	// [SL] 2012-02-05 - Plane's height should be constant for all (x,y)
 	// so just use (0, 0) when calculating the plane's z height
-	fplaneheight = double(abs(P_PlaneZ(0, 0, &pl->secplane) - viewz)) / 65536.0;
+	planeheight = abs(P_PlaneZ(0, 0, &pl->secplane) - viewz);
 
 	int light = (pl->lightlevel >> LIGHTSEGSHIFT) + (foggy ? 0 : extralight);
 
@@ -854,11 +848,6 @@ void R_DrawPlanes (void)
 					}
 				}
 				
-#ifdef USEASM
-				if (ds_source != ds_cursource)
-					R_SetSpanSource_ASM (ds_source);
-#endif
-
 				pl->top[pl->maxx+1] = 0xffffffffu;
 				pl->top[pl->minx-1] = 0xffffffffu;
 

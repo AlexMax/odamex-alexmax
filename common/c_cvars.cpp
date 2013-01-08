@@ -154,10 +154,15 @@ void cvar_t::ForceSet (const char *val)
 	{
 		m_Flags |= CVAR_MODIFIED;
 		if(val)
+		{
 			m_String = val;
+            m_Value = atof(val);
+		}
 		else
+		{
 			m_String = "";
-		m_Value = atof (val);
+            m_Value = 0.0f;
+		}
 
 		if (m_Flags & CVAR_USERINFO)
 			D_UserInfoChanged (this);
@@ -206,7 +211,7 @@ void cvar_t::SetDefault (const char *val)
 
 void cvar_t::RestoreDefault ()
 {
-	Set(m_Default.c_str());	
+	Set(m_Default.c_str());
 	m_Flags |= CVAR_ISDEFAULT;
 }
 
@@ -394,21 +399,31 @@ void cvar_t::C_ReadCVars (byte **demo_p)
 static struct backup_s
 {
 	std::string name, string;
-} CVarBackups[MAX_DEMOCVARS];
+} CVarBackups[MAX_BACKUPCVARS];
 
 static int numbackedup = 0;
 
-void cvar_t::C_BackupCVars (void)
+//
+// C_BackupCVars
+//
+// Backup cvars for restoration later. Called before connecting to a server
+// or a demo starts playing to save all cvars which could be changed while
+// by the server or by playing a demo.
+// [SL] bitflag can be used to filter which cvars are set to default.
+// The default value for bitflag is 0xFFFFFFFF, which effectively disables
+// the filtering.
+//
+void cvar_t::C_BackupCVars (unsigned int bitflag)
 {
 	struct backup_s *backup = CVarBackups;
 	cvar_t *cvar = ad.GetCVars();
 
 	while (cvar)
 	{
-		if (((cvar->m_Flags & CVAR_DEMOSAVE)) && !(cvar->m_Flags & CVAR_LATCH))
+		if (cvar->m_Flags & bitflag)
 		{
-			if (backup == &CVarBackups[MAX_DEMOCVARS])
-				I_Error ("C_BackupDemoCVars: Too many cvars to save (%d)", MAX_DEMOCVARS);
+			if (backup == &CVarBackups[MAX_BACKUPCVARS])
+				I_Error ("C_BackupDemoCVars: Too many cvars to save (%d)", MAX_BACKUPCVARS);
 			backup->name = cvar->m_Name;
 			backup->string = cvar->m_String;
 			backup++;
@@ -474,17 +489,26 @@ void cvar_t::UnlatchCVars (void)
 	}
 }
 
-void cvar_t::C_SetCVarsToDefaults (void)
+//
+// C_SetCvarsToDefault
+//
+// Initialize cvars to default values after they are created.
+// [SL] bitflag can be used to filter which cvars are set to default.
+// The default value for bitflag is 0xFFFFFFFF, which effectively disables
+// the filtering.
+//
+void cvar_t::C_SetCVarsToDefaults (unsigned int bitflag)
 {
 	cvar_t *cvar = ad.GetCVars();
 
 	while (cvar)
 	{
-		// Only default save-able cvars
-		if ((cvar->m_Flags & CVAR_ARCHIVE) || (baseapp == client && cvar->m_Flags & CVAR_CLIENTARCHIVE)
-			|| (baseapp == server && cvar->m_Flags & CVAR_SERVERARCHIVE))
-			if(cvar->m_Default.length())
-			cvar->Set (cvar->m_Default.c_str());
+		if (cvar->m_Flags & bitflag)
+		{
+			if (cvar->m_Default.length())
+				cvar->Set (cvar->m_Default.c_str());
+		}
+
 		cvar = cvar->m_Next;
 	}
 }
@@ -516,11 +540,11 @@ void cvar_t::cvarlist()
 
 		count++;
 		Printf (PRINT_HIGH, "%c%c%c%c %s \"%s\"\n",
-				flags & CVAR_ARCHIVE ? 'A' : 
+				flags & CVAR_ARCHIVE ? 'A' :
 					flags & CVAR_CLIENTARCHIVE ? 'C' :
 					flags & CVAR_SERVERARCHIVE ? 'S' : ' ',
 				flags & CVAR_USERINFO ? 'U' : ' ',
-				flags & CVAR_SERVERINFO ? 'S' : 
+				flags & CVAR_SERVERINFO ? 'S' :
 					flags & CVAR_CLIENTINFO ? 'C' : ' ',
 				flags & CVAR_NOSET ? '-' :
 					flags & CVAR_LATCH ? 'L' :
@@ -570,12 +594,12 @@ BEGIN_COMMAND (set)
 			if (strcmp("enabled", argv[2]) == 0 ||
 			    strcmp("true", argv[2]) == 0)
 			{
-				argv[2] = "1";
+				argv[2] = (char *)"1";
 			}
 			else if (strcmp("disabled", argv[2]) == 0 ||
 			         strcmp("false", argv[2]) == 0)
 			{
-				argv[2] = "0";
+				argv[2] = (char *)"0";
 			}
 		}
 
@@ -601,7 +625,7 @@ BEGIN_COMMAND (get)
 		Printf (PRINT_HIGH, "usage: get <variable>\n");
         return;
 	}
-	
+
     var = cvar_t::FindCVar (argv[1], &prev);
 
 	if (var)
@@ -646,7 +670,7 @@ BEGIN_COMMAND (toggle)
 	}
 
     var = cvar_t::FindCVar (argv[1], &prev);
-	
+
     if (var)
     {
         if (var->flags() & CVAR_NOENABLEDISABLE) {

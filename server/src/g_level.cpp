@@ -164,6 +164,7 @@ BEGIN_COMMAND (wad) // denis - changes wads
 	}
 
 	std::string str = JoinStrings(VectorArgs(argc, argv), " ");
+	unnatural_level_progression = true;
 	G_LoadWad(str);
 }
 END_COMMAND (wad)
@@ -190,7 +191,7 @@ std::string G_NextMap(void) {
 	if (!strncmp(next.c_str(), "EndGame", 7) ||
 		(gamemode == retail_chex && !strncmp (level.nextmap, "E1M6", 4))) {
 		if (gameinfo.flags & GI_MAPxx || gamemode == shareware ||
-			(!sv_loopepisode && ((gamemode == registered && level.cluster == 3) || (gamemode == retail && level.cluster == 4)))) {
+			(!sv_loopepisode && (((gameinfo.flags & GI_MENUHACK_RETAIL) && level.cluster == 3) || (gamemode == retail && level.cluster == 4)))) {
 			next = CalcMapName(1, 1);
 		} else if (sv_loopepisode) {
 			next = CalcMapName(level.cluster, 1);
@@ -237,6 +238,7 @@ void G_ChangeMap(size_t index) {
 		return;
 	}
 
+	unnatural_level_progression = true;
 	G_LoadWad(JoinStrings(maplist_entry.wads, " "), maplist_entry.map);
 
 	// Set the new map as the current map
@@ -339,7 +341,7 @@ void G_InitNew (const char *mapname)
 	// [RH] Mark all levels as not visited
 	if (!savegamerestore)
 	{
-		for (i = 0; i < numwadlevelinfos; i++)
+		for (i = 0; i < wadlevelinfos.size(); i++)
 			wadlevelinfos[i].flags &= ~LEVEL_VISITED;
 
 		for (i = 0; LevelInfos[i].mapname[0]; i++)
@@ -507,7 +509,7 @@ void G_SecretExitLevel (int position, int drawscores)
 	mapchange = TICRATE*intlimit;  // wait n seconds, defaults to 10
 
 	// IF NO WOLF3D LEVELS, NO SECRET EXIT!
-	if ( (gamemode == commercial)
+	if ( (gameinfo.flags & GI_MAPxx)
 		 && (W_CheckNumForName("map31")<0))
 		secretexit = false;
 	else

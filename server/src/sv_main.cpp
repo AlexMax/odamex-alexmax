@@ -107,6 +107,7 @@ EXTERN_CVAR(sv_globalspectatorchat)
 EXTERN_CVAR(sv_allowtargetnames)
 EXTERN_CVAR(sv_flooddelay)
 EXTERN_CVAR(sv_ticbuffer)
+EXTERN_CVAR(sv_warmup)
 
 void SexMessage (const char *from, char *to, int gender,
 	const char *victim, const char *killer);
@@ -1627,7 +1628,7 @@ void SV_ClientFullUpdate (player_t &pl)
 	// update warmup state
 	SV_SendWarmupState(pl, warmup.get_status(), warmup.get_countdown());
 
-	// update frags/points/spectate/ready
+	// update frags/points/.tate/ready
 	for (i = 0; i < players.size(); i++)
 	{
 		if (!players[i].ingame())
@@ -2654,12 +2655,8 @@ void SV_Say(player_t &player)
     // Flood protection
     if (player.LastMessage.Time)
     {
-#if defined(_MSC_VER) && _MSC_VER <= 1200
-		// GhostlyDeath <October 28, 2008> -- VC6 can't cast unsigned __int64 to a double!
-		signed __int64 Difference = (I_GetTime() - player.LastMessage.Time);
-#else
         QWORD Difference = (I_GetTime() - player.LastMessage.Time);
-#endif
+
         float Delay = (float)(sv_flooddelay * TICRATE);
 
         if (Difference <= Delay)
@@ -3227,7 +3224,6 @@ int SV_CalculateNumTiccmds(player_t &player)
 	if (!player.mo || player.cmdqueue.empty())
 		return 0;
 
-	static const int minimum_cmds = 1;
 	static const size_t maximum_queue_size = TICRATE / 4;
 
 	if (!sv_ticbuffer || player.spectator || player.playerstate == PST_DEAD)
@@ -3238,23 +3234,25 @@ int SV_CalculateNumTiccmds(player_t &player)
 	if (player.mo->momx == 0 && player.mo->momy == 0 && player.mo->momz == 0)
 	{
 		// Player is not moving
-		return 2 * minimum_cmds;
+		return 2;
+	}
+	if (player.cmdqueue.size() > 2 && gametic % 2*TICRATE == player.id % 2*TICRATE)
+	{
+		// Process an extra ticcmd once every 2 seconds to reduce the
+		// queue size. Use player id to stagger the timing to prevent everyone
+		// from running an extra ticcmd at the same time.
+		return 2;
 	}
 	if (player.cmdqueue.size() > maximum_queue_size)
 	{
 		// The player experienced a large latency spike so try to catch up by
 		// processing more than one ticcmd at the expense of appearing perfectly
 		//  smooth
-		return 2 * minimum_cmds;
-	}
-	if (P_AtInterval(TICRATE/2) && !P_VisibleToPlayers(player.mo))
-	{
-		// Every half second, run two commands if no one can see this player
-		return 2 * minimum_cmds;
+		return 2;
 	}
 
 	// always run at least 1 ticcmd if possible
-	return minimum_cmds;
+	return 1;
 }
 
 //
@@ -3520,9 +3518,12 @@ void SV_SetPlayerSpec(player_t &player, bool setting, bool silent) {
 			player.killcount = 0;
 			SV_UpdateFrags(player);
 
-			// [AM] Set player unready
-			SV_SetReady(player, false, true);
-			player.timeout_ready = 0;
+			// [AM] Set player unready if we're in warmup mode.
+			if (sv_warmup)
+			{
+				SV_SetReady(player, false, true);
+				player.timeout_ready = 0;
+			}
 		}
 	} else if (setting && !player.spectator) {
 		// We want to spectate the player
@@ -3533,8 +3534,14 @@ void SV_SetPlayerSpec(player_t &player, bool setting, bool silent) {
 		}
 
 		player.spectator = true;
-		SV_SetReady(player, false, true);
-		player.timeout_ready = 0;
+
+		// [AM] Set player unready if we're in warmup mode.
+		if (sv_warmup)
+		{
+			SV_SetReady(player, false, true);
+			player.timeout_ready = 0;
+		}
+
 		player.playerstate = PST_LIVE;
 		player.joinafterspectatortime = level.time;
 
@@ -4763,9 +4770,19 @@ void SV_SendKillMobj(AActor *source, AActor *target, AActor *inflictor,
 		MSG_WriteMarker(&cl->reliablebuf, svc_movemobj);
 		MSG_WriteShort(&cl->reliablebuf, target->netid);
 		MSG_WriteByte(&cl->reliablebuf, target->rndindex);
-		MSG_WriteLong(&cl->reliablebuf, target->x);
-		MSG_WriteLong(&cl->reliablebuf, target->y);
-		MSG_WriteLong(&cl->reliablebuf, target->z);
+
+		// [SL] 2012-12-26 - Get real position since this actor is at
+		// a reconciled position with sv_unlag 1
+		fixed_t xoffs = 0, yoffs = 0, zoffs = 0;
+		if (target->player)
+		{
+			Unlag::getInstance().getReconciliationOffset(
+					target->player->id, xoffs, yoffs, zoffs);
+		}
+
+		MSG_WriteLong(&cl->reliablebuf, target->x + xoffs);
+		MSG_WriteLong(&cl->reliablebuf, target->y + yoffs);
+		MSG_WriteLong(&cl->reliablebuf, target->z + zoffs);
 
 		MSG_WriteMarker (&cl->reliablebuf, svc_mobjspeedangle);
 		MSG_WriteShort(&cl->reliablebuf, target->netid);
