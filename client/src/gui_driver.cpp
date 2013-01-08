@@ -99,6 +99,11 @@ static int openVideoContext(void* drv, void* ctx, unsigned int flags)
 	return 0;
 }
 
+static int setVideoContext(void* drv, void* ctx)
+{
+	return 0;
+}
+
 static void closeVideo(void* drv)
 {
 	DPrintf("closeVideo() stub\n");
@@ -221,6 +226,7 @@ AG_DriverSwClass agDriverDCanvas = {
 	// Create a graphics display
 	openVideo,
 	openVideoContext,
+	setVideoContext,
 	closeVideo,
 
 	// Resize the display

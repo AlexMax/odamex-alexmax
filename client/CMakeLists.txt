@@ -1,4 +1,5 @@
 include(FindPortMidi)
+include(FindLibAgar)
 
 # Common
 set(COMMON_DIR ../common)
@@ -72,13 +73,15 @@ if(APPLE)
 endif()
 
 # AGAR
-set(AGAR_DIR "C:/Users/AlexMax/Documents/Libraries/mingw/agar-1.4.1-nofreetype_nothreads_nosdl")
-include_directories("${AGAR_DIR}/include/agar/")
-set(AGAR_LIBRARY "${AGAR_DIR}/lib/libag_gui.a;${AGAR_DIR}/lib/libag_core.a")
+find_package(LibAgar)
+if(LibAgar_FOUND)
+  include_directories(${LibAgar_INCLUDE_DIRS})
+  add_definitions(${LibAgar_DEFINITIONS})
+else()
+  message(WARNING "Agar not found, client target not generated.")
+endif()
 
 # FreeType
-find_package(Freetype)
-
 set(FREETYPE_DIR $ENV{FREETYPE_DIR} CACHE PATH
   "Path to FreeType base directory.  Only necessary if you get errors about FreeType not being found, or if you want to use a different installation of FreeType.")
 set(ENV{FREETYPE_DIR} ${FREETYPE_DIR})
@@ -90,13 +93,13 @@ else()
 endif()
 
 # Client target
-if(SDL_FOUND AND SDLMIXER_FOUND)
+if(LibAgar_FOUND AND SDL_FOUND AND SDLMIXER_FOUND AND FREETYPE_FOUND)
   add_executable(odamex MACOSX_BUNDLE WIN32
     ${COMMON_SOURCES} ${COMMON_HEADERS}
     ${TEXTSCREEN_SOURCES} ${TEXTSCREEN_HEADERS}
     ${CLIENT_SOURCES} ${CLIENT_HEADERS} ${CLIENT_WIN32_RESOURCES}
     ${CLIENT_MAC_OBJC_SOURCES})
-  target_link_libraries(odamex ${AGAR_LIBRARY})
+  target_link_libraries(odamex ${LibAgar_LIBRARIES})
   target_link_libraries(odamex ${SDL_LIBRARY} ${SDLMIXER_LIBRARY})
   target_link_libraries(odamex ${FREETYPE_LIBRARIES})
   if(PORTMIDI_FOUND)
