@@ -90,17 +90,24 @@ static int openVideo(void* drv, unsigned int w, unsigned int h, int depth, unsig
 
 static int openVideoContext(void* drv, void* ctx, unsigned int flags)
 {
-	AG_DriverDCanvas* ddc = static_cast<ag_dcanvas_driver*>(drv);
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+	AG_DriverSw* dsw = static_cast<AG_DriverSw*>(drv);
 	DCanvas* dc = static_cast<DCanvas*>(ctx);
 
 	// Attach a DCanvas pointer to the driver.
 	ddc->s = dc;
+
+	// Set the proper driver settings using DCanvas values.
+	dsw->w = dc->width;
+	dsw->h = dc->height;
+	dsw->depth = dc->bits;
 
 	return 0;
 }
 
 static int setVideoContext(void* drv, void* ctx)
 {
+	DPrintf("setVideoContext() stub\n");
 	return 0;
 }
 

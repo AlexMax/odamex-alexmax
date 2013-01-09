@@ -59,9 +59,9 @@ void GUI::Init()
 	agDriverOps = dc;
 	agDriverSw = AGDRIVER_SW(drv);
 
-/*		AG_Window* win = AG_WindowNew(0);
+	AG_Window* win = AG_WindowNew(0);
 	AG_WindowSetMinSize(win, 320, 200);
-	AG_HSVPal* hsv = AG_HSVPalNew(win, AG_HSVPAL_EXPAND);
+	AG_HSVPalNew(win, AG_HSVPAL_EXPAND);
 	AG_WindowShow(win);
-	AG_EventLoop();*/
+	//AG_EventLoop();
 }
