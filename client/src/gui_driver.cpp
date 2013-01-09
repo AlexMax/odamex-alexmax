@@ -107,12 +107,32 @@ static void popClipRect(void* drv)
 
 static void drawLineH(void* drv, int x1, int x2, int y, AG_Color C)
 {
-	DPrintf("drawLineH: %d, %d, %d\n", x1, x2, y);
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+
+	if (ddc->s->bits == 8)
+	{
+		byte* dest = ddc->s->buffer + (y * ddc->s->pitch) + x1;
+		byte color = BestColor(DefaultPalette->basecolors, C.r, C.g, C.b, DefaultPalette->numcolors);
+
+		memset(dest, color, x2 - x1);
+	}
 }
 
 void drawLineV(void* drv, int x, int y1, int y2, AG_Color C)
 {
-	DPrintf("drawLineH: %d, %d, %d\n", x, y1, y2);
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+
+	if (ddc->s->bits == 8)
+	{
+		byte* dest = ddc->s->buffer + (y1 * ddc->s->pitch) + x;
+		byte color = BestColor(DefaultPalette->basecolors, C.r, C.g, C.b, DefaultPalette->numcolors);
+
+		for (int y = y1;y < y2;y++)
+		{
+			*dest = color;
+			dest += ddc->s->pitch;
+		}
+	}
 }
 
 void blitSurfaceFrom(void* drv, AG_Widget* wid, AG_Widget* widSrc, int s, AG_Rect* r, int x, int y)
