@@ -74,12 +74,67 @@ static void close(void* obj)
 
 static int getDisplaySize(unsigned int* w, unsigned int* h)
 {
-	DPrintf("getDisplaySize() stub\n");
+	AG_SetError("Driver does not implement getDisplaySize().");
+	return -1;
+}
 
-	*w = screen->width;
-	*h = screen->height;
+static void beginRendering(void* drv)
+{
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+	ddc->s->Lock();
+}
 
-	return 0;
+static void renderWindow(AG_Window* win)
+{
+	AG_WidgetDraw(win);
+}
+
+static void endRendering(void* drv)
+{
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+	ddc->s->Unlock();
+}
+
+static void pushClipRect(void* drv, AG_Rect r)
+{
+	DPrintf("pushClipRect: %d, %d, %d, %d\n", r.x, r.y, r.w, r.h);
+}
+
+static void popClipRect(void* drv)
+{
+	DPrintf("popClipRect\n");
+}
+
+static void drawLineH(void* drv, int x1, int x2, int y, AG_Color C)
+{
+	DPrintf("drawLineH: %d, %d, %d\n", x1, x2, y);
+}
+
+void drawLineV(void* drv, int x, int y1, int y2, AG_Color C)
+{
+	DPrintf("drawLineH: %d, %d, %d\n", x, y1, y2);
+}
+
+void blitSurfaceFrom(void* drv, AG_Widget* wid, AG_Widget* widSrc, int s, AG_Rect* r, int x, int y)
+{
+	DPrintf("blitSurfaceFrom\n");
+}
+
+static void drawRectFilled(void* drv, AG_Rect r, AG_Color C)
+{
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+
+	if (ddc->s->bits == 8)
+	{
+		byte* dest = ddc->s->buffer + (r.y * ddc->s->pitch) + r.x;
+		byte color = BestColor(DefaultPalette->basecolors, C.r, C.g, C.b, DefaultPalette->numcolors);
+
+		for (int y = 0;y < r.h;y++)
+		{
+			memset(dest, color, r.w);
+			dest += ddc->s->pitch;
+		}
+	}
 }
 
 static int openVideo(void* drv, unsigned int w, unsigned int h, int depth, unsigned int flags)
@@ -166,9 +221,9 @@ AG_DriverSwClass agDriverDCanvas = {
 		NULL,
 
 		// GUI rendering related
-		NULL,
-		NULL,
-		NULL,
+		beginRendering,
+		renderWindow,
+		endRendering,
 		NULL,
 		NULL,
 		NULL,
@@ -177,8 +232,8 @@ AG_DriverSwClass agDriverDCanvas = {
 		NULL,
 
 		// Clipping and blending control (rendering context)
-		NULL,
-		NULL,
+		pushClipRect,
+		popClipRect,
 		NULL,
 		NULL,
 
@@ -192,7 +247,7 @@ AG_DriverSwClass agDriverDCanvas = {
 
 		// Widget surface operations (rendering context)
 		NULL,
-		NULL,
+		blitSurfaceFrom,
 		NULL,
 		NULL,
 		NULL,
@@ -206,6 +261,8 @@ AG_DriverSwClass agDriverDCanvas = {
 		NULL,
 		NULL,
 		NULL,
+		drawLineH,
+		drawLineV,
 		NULL,
 		NULL,
 		NULL,
@@ -215,9 +272,7 @@ AG_DriverSwClass agDriverDCanvas = {
 		NULL,
 		NULL,
 		NULL,
-		NULL,
-		NULL,
-		NULL,
+		drawRectFilled,
 		NULL,
 		NULL,
 		NULL,

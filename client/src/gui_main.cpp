@@ -60,8 +60,31 @@ void GUI::Init()
 	agDriverSw = AGDRIVER_SW(drv);
 
 	AG_Window* win = AG_WindowNew(0);
-	AG_WindowSetMinSize(win, 320, 200);
-	AG_HSVPalNew(win, AG_HSVPAL_EXPAND);
+	AG_LabelNew(win, 0, "Hello, world!");
+	//AG_WindowSetMinSize(win, 320, 200);
+	//AG_HSVPalNew(win, AG_HSVPAL_EXPAND);
 	AG_WindowShow(win);
-	//AG_EventLoop();
+}
+
+// Render the GUI to the canvas.
+void GUI::Drawer()
+{
+	AG_Window* win;
+
+	AG_FOREACH_WINDOW(win, agDriverSw) {
+		if (win->dirty)
+			break;
+	}
+	if (win != NULL || true) {
+		AG_BeginRendering(agDriverSw);
+		AG_FOREACH_WINDOW(win, agDriverSw) {
+			if (!win->visible) {
+				continue;
+			}
+			AG_ObjectLock(win);
+			AG_WindowDraw(win);
+			AG_ObjectUnlock(win);
+		}
+		AG_EndRendering(agDriverSw);
+	}
 }

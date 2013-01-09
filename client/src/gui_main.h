@@ -26,6 +26,7 @@
 namespace GUI
 {
 	void Init();
+	void Drawer();
 }
 
 #endif

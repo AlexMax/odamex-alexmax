@@ -281,6 +281,7 @@ void D_Display (void)
 		case GS_CONNECTING:
 			C_DrawConsole ();
 			M_Drawer ();
+			GUI::Drawer();
 			I_FinishUpdate ();
 			return;
 
@@ -359,6 +360,7 @@ void D_Display (void)
 			wipe_EndScreen();
 			live_wiping = !wipe_ScreenWipe (1);
 			M_Drawer ();			// menu is drawn even on top of wipes
+			GUI::Drawer(); 			// [AM] Draw the GUI on top of everything else
 			I_FinishUpdate ();		// page flip or blit buffer
 		}
 		else
@@ -366,6 +368,7 @@ void D_Display (void)
 			// normal update
 			C_DrawConsole ();	// draw console
 			M_Drawer ();		// menu is drawn even on top of everything
+			GUI::Drawer(); 		// [AM] Draw the GUI on top of everything else
 			I_FinishUpdate ();	// page flip or blit buffer
 		}
 	}
@@ -397,6 +400,7 @@ void D_Display (void)
 				I_BeginUpdate ();
 				done = wipe_ScreenWipe (tics);
 				M_Drawer ();			// menu is drawn even on top of wipes
+				GUI::Drawer(); 			// [AM] Draw the GUI on top of everything else
 				I_FinishUpdate ();		// page flip or blit buffer
 			} while (!done);
 
@@ -413,6 +417,7 @@ void D_Display (void)
 			wipe_EndScreen();
 			live_wiping = !wipe_ScreenWipe (1);
 			M_Drawer ();			// menu is drawn even on top of wipes
+			GUI::Drawer(); 			// [AM] Draw the GUI on top of everything else
 			I_FinishUpdate ();		// page flip or blit buffer
 		}
 	}
