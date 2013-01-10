@@ -20,6 +20,8 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <stack>
+
 #include <agar/core.h>
 #include <agar/gui.h>
 
@@ -29,6 +31,7 @@ extern "C" {
 	typedef struct ag_dcanvas_driver {
 		struct ag_driver_sw _inherit;
 		DCanvas* s;
+		std::stack<AG_ClipRect>* clipRects;
 	} AG_DriverDCanvas;
 }
 
@@ -39,6 +42,7 @@ static void Init(void* obj)
 	AG_DriverSw* dsw = static_cast<AG_DriverSw*>(obj);
 
 	ddc->s = NULL;
+	ddc->clipRects = new std::stack<AG_ClipRect>();
 
 	dsw->rNom = 1000/TICRATE;
 	dsw->rCur = 0;
@@ -47,7 +51,9 @@ static void Init(void* obj)
 // Driver destructor
 static void Destroy(void* obj)
 {
-	// Nothing...
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(obj);
+
+	delete ddc->clipRects;
 }
 
 static int open(void* obj, const char *spec)
@@ -97,17 +103,38 @@ static void endRendering(void* drv)
 
 static void pushClipRect(void* drv, AG_Rect r)
 {
-	DPrintf("pushClipRect: %d, %d, %d, %d\n", r.x, r.y, r.w, r.h);
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+
+	AG_ClipRect cr;
+	cr.r = AG_RectIntersect(&(ddc->clipRects->top().r), &r);
+	ddc->clipRects->push(cr);
 }
 
 static void popClipRect(void* drv)
 {
-	DPrintf("popClipRect\n");
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+	ddc->clipRects->pop();
 }
 
 static void drawLineH(void* drv, int x1, int x2, int y, AG_Color C)
 {
 	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+	AG_Rect* cr = &(ddc->clipRects->top().r);
+
+	// Clip against y
+	if ((y < cr->y) || (y >= cr->y + cr->h))
+		return;
+
+	if (x1 > x2)
+		std::swap(x1, x2);
+
+	// Clip against y
+	if (x1 < cr->x)
+		x1 = cr->x;
+	if (x2 >= cr->x + cr->w)
+		x2 = cr->x + cr->w - 1;
+	if (x2 - x1 == 0)
+		return;
 
 	if (ddc->s->bits == 8)
 	{
@@ -121,6 +148,22 @@ static void drawLineH(void* drv, int x1, int x2, int y, AG_Color C)
 void drawLineV(void* drv, int x, int y1, int y2, AG_Color C)
 {
 	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+	AG_Rect* cr = &(ddc->clipRects->top().r);
+
+	// Clip against x
+	if ((x < cr->x) || (x >= cr->x + cr->w))
+		return;
+
+	if (y1 > y2)
+		std::swap(y1, y2);
+
+	// Clip against y
+	if (y1 < cr->y)
+		y1 = cr->y;
+	if (y2 >= cr->y + cr->h)
+		y2 = cr->y + cr->h - 1;
+	if (y2 - y1 == 0)
+		return;
 
 	if (ddc->s->bits == 8)
 	{
@@ -135,23 +178,31 @@ void drawLineV(void* drv, int x, int y1, int y2, AG_Color C)
 	}
 }
 
+// [AM] Not yet complete
 void blitSurfaceFrom(void* drv, AG_Widget* wid, AG_Widget* widSrc, int s, AG_Rect* r, int x, int y)
-{
-	DPrintf("blitSurfaceFrom\n");
-}
-
-static void drawRectFilled(void* drv, AG_Rect r, AG_Color C)
 {
 	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
 
 	if (ddc->s->bits == 8)
 	{
-		byte* dest = ddc->s->buffer + (r.y * ddc->s->pitch) + r.x;
+		byte* dest = ddc->s->buffer + (y * ddc->s->pitch) + x;
+		*dest = 176;
+	}
+}
+
+static void drawRectFilled(void* drv, AG_Rect r, AG_Color C)
+{
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+	AG_Rect cr = AG_RectIntersect(&(ddc->clipRects->top().r), &r);
+
+	if (ddc->s->bits == 8)
+	{
+		byte* dest = ddc->s->buffer + (cr.y * ddc->s->pitch) + cr.x;
 		byte color = BestColor(DefaultPalette->basecolors, C.r, C.g, C.b, DefaultPalette->numcolors);
 
-		for (int y = 0;y < r.h;y++)
+		for (int y = 0;y < cr.h;y++)
 		{
-			memset(dest, color, r.w);
+			memset(dest, color, cr.w);
 			dest += ddc->s->pitch;
 		}
 	}
@@ -176,6 +227,14 @@ static int openVideoContext(void* drv, void* ctx, unsigned int flags)
 	dsw->w = dc->width;
 	dsw->h = dc->height;
 	dsw->depth = dc->bits;
+
+	// Set the first clipping rectangle
+	AG_ClipRect cr;
+	cr.r.x = 0;
+	cr.r.y = 0;
+	cr.r.w = dc->width;
+	cr.r.h = dc->height;
+	ddc->clipRects->push(cr);
 
 	return 0;
 }
