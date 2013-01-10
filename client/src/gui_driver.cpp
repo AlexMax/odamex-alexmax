@@ -24,6 +24,7 @@
 
 #include <agar/core.h>
 #include <agar/gui.h>
+#include <agar/gui/packedpixel.h>
 
 #include "v_video.h"
 
@@ -145,7 +146,7 @@ static void drawLineH(void* drv, int x1, int x2, int y, AG_Color C)
 	}
 }
 
-void drawLineV(void* drv, int x, int y1, int y2, AG_Color C)
+static void drawLineV(void* drv, int x, int y1, int y2, AG_Color C)
 {
 	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
 	AG_Rect* cr = &(ddc->clipRects->top().r);
@@ -178,16 +179,96 @@ void drawLineV(void* drv, int x, int y1, int y2, AG_Color C)
 	}
 }
 
-// [AM] Not yet complete
-void blitSurfaceFrom(void* drv, AG_Widget* wid, AG_Widget* widSrc, int s, AG_Rect* r, int x, int y)
+static void DCanvas_BlitSurface(const AG_Surface* surface, const AG_Rect* rect,
+                                DCanvas* s, const AG_ClipRect* clipRect, int destx, int desty)
+{
+	AG_Rect srcRect, destRect;
+
+	if (rect != NULL) {
+		// Clamp the rectangle to the dimensions of the surface.
+		srcRect = *rect;
+		if (srcRect.x < 0)
+			srcRect.x = 0;
+		if (srcRect.x + srcRect.w >= surface->w)
+			srcRect.w = surface->w - srcRect.x;
+		if (srcRect.y < 0)
+			srcRect.y = 0;
+		if (srcRect.y + srcRect.h >= surface->h)
+			srcRect.h = surface->h - srcRect.y;
+	} else {
+		// Rectangle covers the entire surface.
+		srcRect.x = 0;
+		srcRect.y = 0;
+		srcRect.w = surface->w;
+		srcRect.h = surface->h;
+	}
+
+	// Calculate the destination rectangle based on
+	// the source and clipping rectangles.
+	destRect.x = std::max(destx, clipRect->r.x);
+	if (destRect.x + srcRect.w > clipRect->r.x + clipRect->r.w)
+		destRect.w = clipRect->r.x + clipRect->r.w - destRect.x;
+	else
+		destRect.w = srcRect.w;
+	destRect.y = std::max(desty, clipRect->r.y);
+	if (destRect.y + srcRect.h > clipRect->r.y + clipRect->r.h)
+		destRect.h = clipRect->r.y + clipRect->r.h - destRect.y;
+	else
+		destRect.h = srcRect.h;
+
+	if (s->bits == 8)
+	{
+		for (int y = 0;y < destRect.h;y++)
+		{
+			Uint8* source = static_cast<Uint8*>(surface->pixels);
+			source = source + (srcRect.y + y) * surface->pitch +
+			         srcRect.x * surface->format->BytesPerPixel;
+			byte* dest = static_cast<byte*>(s->buffer);
+			dest = dest + (destRect.y + y) * s->pitch + destRect.x;
+			for (int x = 0;x < destRect.w;x++)
+			{
+				Uint32 pixel;
+				AG_PACKEDPIXEL_GET(surface->format->BytesPerPixel, pixel, source);
+				if ((surface->flags & AG_SRCCOLORKEY &&
+				     surface->format->colorkey == pixel))
+				{
+					// We found a transparent pixel using color key
+					// transparency, so we skip it.
+					source += surface->format->BytesPerPixel;
+					dest++;
+					continue;
+				}
+
+				AG_Color color = AG_GetColorRGBA(pixel, surface->format);
+				if ((color.a != AG_ALPHA_OPAQUE) && surface->flags & AG_SRCALPHA)
+				{
+					// Do a blend between the color and background
+					AG_Color destColor;
+					destColor.r = RPART(DefaultPalette->basecolors[*dest]);
+					destColor.g = GPART(DefaultPalette->basecolors[*dest]);
+					destColor.b = BPART(DefaultPalette->basecolors[*dest]);
+
+					*dest = BestColor(DefaultPalette->basecolors,
+					                  (((color.r - destColor.r) * color.a) >> 8) + destColor.r,
+					                  (((color.r - destColor.r) * color.a) >> 8) + destColor.r,
+					                  (((color.r - destColor.r) * color.a) >> 8) + destColor.r,
+					                  DefaultPalette->numcolors);
+				}
+				else
+				{
+					*dest = BestColor(DefaultPalette->basecolors, color.r, color.g, color.b, DefaultPalette->numcolors);
+				}
+				source += surface->format->BytesPerPixel;
+				dest++;
+			}
+		}
+	}
+}
+
+static void blitSurfaceFrom(void* drv, AG_Widget* wid, AG_Widget* widSrc, int s, AG_Rect* r, int x, int y)
 {
 	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
-
-	if (ddc->s->bits == 8)
-	{
-		byte* dest = ddc->s->buffer + (y * ddc->s->pitch) + x;
-		*dest = 176;
-	}
+	DCanvas_BlitSurface(widSrc->surfaces[s], r, ddc->s, &(ddc->clipRects->top()), x, y);
 }
 
 static void drawRectFilled(void* drv, AG_Rect r, AG_Color C)
