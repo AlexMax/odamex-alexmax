@@ -93,7 +93,6 @@ static const gamewadinfo_t doomwadnames[] =
     { "DOOMU.WAD", { "C4FE9FD920207691A9F493668E0A2083" } },
     { "DOOM.WAD", { "C4FE9FD920207691A9F493668E0A2083", "1CD63C5DDFF1BF8CE844237F580E9CF3","FB35C4A5A9FD49EC29AB6E900572C524" } },
     { "DOOMBFG.WAD", { "FB35C4A5A9FD49EC29AB6E900572C524" } },
-    { "DOOM1.WAD", { "F0CEFCA49926D00903CF57551D901ABE" } },
     { "FREEDOOM.WAD", { "" } },
     { "FREEDM.WAD", { "" } },
     { "CHEX.WAD", { "25485721882b050afa96a56e5758dd52" } },
@@ -819,24 +818,21 @@ patch_t* W_CachePatch(const char* name, int tag)
 // Find a named lump. Specifically allows duplicates for merging of e.g.
 // SNDINFO lumps.
 //
-
-int W_FindLump (const char *name, int *lastlump)
+// [SL] 2013-01-15 - Search forwards through the list of lumps in reverse pwad
+// ordering, returning older lumps with a matching name first.
+// Initialize search with lastlump == -1 before calling for the first time.
+//
+int W_FindLump (const char *name, int lastlump)
 {
-	lumpinfo_t *lump_p;
+	if (lastlump < -1)
+		lastlump = -1;
 
-	lump_p = lumpinfo + *lastlump;
-	while (lump_p < lumpinfo + numlumps)
+	for (int i = lastlump + 1; i < (int)numlumps; i++)
 	{
-		if (strnicmp(lump_p->name, name, 8) == 0)
-		{
-			int lump = lump_p - lumpinfo;
-			*lastlump = lump + 1;
-			return lump;
-		}
-		lump_p++;
+		if (strnicmp(lumpinfo[i].name, name, 8) == 0)
+			return i;
 	}
 
-	*lastlump = numlumps;
 	return -1;
 }
 
