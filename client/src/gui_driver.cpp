@@ -117,6 +117,16 @@ static void popClipRect(void* drv)
 	ddc->clipRects->pop();
 }
 
+static void pushBlendingMode(void* drv, AG_BlendFn sFn, AG_BlendFn dFn)
+{
+	// No-op
+}
+
+static void popBlendingMode(void* drv)
+{
+	// No-op
+}
+
 static void drawLineH(void* drv, int x1, int x2, int y, AG_Color C)
 {
 	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
@@ -177,6 +187,26 @@ static void drawLineV(void* drv, int x, int y1, int y2, AG_Color C)
 			dest += ddc->s->pitch;
 		}
 	}
+}
+
+static void drawArrowUp(void *drv, int x, int y, int h, AG_Color C[2])
+{
+	DPrintf("drawArrowUp\n");
+}
+
+static void drawArrowDown(void *drv, int x, int y, int h, AG_Color C[2])
+{
+	DPrintf("drawArrowDown\n");
+}
+
+static void drawArrowLeft(void *drv, int x, int y, int h, AG_Color C[2])
+{
+	DPrintf("drawArrowLeft\n");
+}
+
+static void drawArrowRight(void *drv, int x, int y, int h, AG_Color C[2])
+{
+	DPrintf("drawArrowRight\n");
 }
 
 static void DCanvas_BlitSurface(const AG_Surface* surface, const AG_Rect* rect,
@@ -289,6 +319,17 @@ static void drawRectFilled(void* drv, AG_Rect r, AG_Color C)
 	}
 }
 
+static void updateGlyph(void* drv, AG_Glyph *gl)
+{
+	// No-op
+}
+
+static void drawGlyph(void* drv, const AG_Glyph *gl, int x, int y)
+{
+	AG_DriverDCanvas* ddc = static_cast<AG_DriverDCanvas*>(drv);
+	DCanvas_BlitSurface(gl->su, NULL, ddc->s, &(ddc->clipRects->top()), x, y);
+}
+
 static int openVideo(void* drv, unsigned int w, unsigned int h, int depth, unsigned int flags)
 {
 	AG_SetError("Driver must be attached to a DCanvas instance.");
@@ -394,8 +435,8 @@ AG_DriverSwClass agDriverDCanvas = {
 		// Clipping and blending control (rendering context)
 		pushClipRect,
 		popClipRect,
-		NULL,
-		NULL,
+		pushBlendingMode,
+		popBlendingMode,
 
 		// Hardware cursor interface
 		NULL,
@@ -424,10 +465,10 @@ AG_DriverSwClass agDriverDCanvas = {
 		drawLineH,
 		drawLineV,
 		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
+		drawArrowUp,
+		drawArrowDown,
+		drawArrowLeft,
+		drawArrowRight,
 		NULL,
 		NULL,
 		NULL,
@@ -435,8 +476,8 @@ AG_DriverSwClass agDriverDCanvas = {
 		drawRectFilled,
 		NULL,
 		NULL,
-		NULL,
-		NULL,
+		updateGlyph,
+		drawGlyph,
 
 		// Display list management (GL driver specific)
 		NULL

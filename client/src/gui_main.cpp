@@ -28,6 +28,118 @@
 #include "i_system.h"
 #include "i_video.h"
 
+class ConsoleWindow
+{
+private:
+	char buffer[8192];
+	AG_Window* window;
+	AG_Textbox* backlog;
+	AG_Textbox* cmdline;
+public:
+	ConsoleWindow();
+	~ConsoleWindow();
+	void show();
+	void hide();
+};
+
+ConsoleWindow::ConsoleWindow()
+{
+	window = AG_WindowNewNamed(0, "Console");
+	AG_WindowSetCaption(window, "Console");
+	AG_WindowSetMinSize(window, 300, 180);
+	AG_WindowSetGeometryAligned(window, AG_WINDOW_MC, 300, 180);
+
+	strcpy(buffer, "Odamex v0.6.2 r3426 - Copyright (C) 2006-2012 The Odamex Team\nHeapsize: 128 megabytes\n\nDOOM 2: Hell on Earth\n\nadding odamex.wad\n (218 lumps)\nadding doom2.wad\n (2919 lumps)");
+
+	backlog = AG_TextboxNew(window, AG_TEXTBOX_MULTILINE | AG_TEXTBOX_READONLY | AG_TEXTBOX_EXPAND, NULL);
+	AG_TextboxSetWordWrap(backlog, 1);
+	AG_TextboxBindASCII(backlog, buffer, 8192);
+
+	cmdline = AG_TextboxNew(window, AG_TEXTBOX_HFILL, NULL);
+}
+
+ConsoleWindow::~ConsoleWindow()
+{
+	AG_ObjectDelete(window);
+}
+
+void ConsoleWindow::show()
+{
+	AG_WindowShow(window);
+}
+
+void ConsoleWindow::hide()
+{
+	AG_WindowHide(window);
+}
+
+class PlaybackWindow
+{
+private:
+	AG_Window* window;
+	AG_Slider* position;
+	AG_Toolbar* toolbar;
+	AG_Box* statusline;
+	AG_Label* status;
+	AG_Label* timer;
+public:
+	PlaybackWindow();
+	~PlaybackWindow();
+	void show();
+	void hide();
+};
+
+PlaybackWindow::PlaybackWindow()
+{
+	// Main window
+	window = AG_WindowNewNamed(0, "Demo Playback");
+	AG_WindowSetCaption(window, "Demo Playback");
+
+	// Demo position slider
+	position = AG_SliderNew(window, AG_SLIDER_HORIZ, AG_SLIDER_HFILL);
+	AG_SetInt(position, "min", 0);
+	AG_SetInt(position, "max", 100);
+	AG_SetInt(position, "value", 1);
+	AG_SetInt(position, "inc", 1);
+
+	// Toolbar
+	toolbar = AG_ToolbarNew(window, AG_TOOLBAR_HORIZ, 1, 0);
+	AG_ToolbarButton(toolbar, ">", 0, NULL, "");
+	AG_ToolbarButton(toolbar, "||", 0, NULL, "");
+	AG_ToolbarSeparator(toolbar);
+	AG_ToolbarButton(toolbar, "|<", 0, NULL, "");
+	AG_ToolbarButton(toolbar, "<<", 0, NULL, "");
+	AG_ToolbarButton(toolbar, ">>", 0, NULL, "");
+	AG_ToolbarButton(toolbar, ">|", 0, NULL, "");
+
+	// Status line
+	statusline = AG_BoxNew(window, AG_BOX_HORIZ, AG_BOX_HOMOGENOUS | AG_BOX_FRAME | AG_BOX_HFILL);
+	AG_BoxSetPadding(statusline, 0);
+	AG_BoxSetSpacing(statusline, 0);
+
+	// Status message
+	status = AG_LabelNew(statusline, 0, "Stopped");
+
+	// Demo timer
+	timer = AG_LabelNew(statusline, 0, "00:00 / 16:20");
+	AG_LabelJustify(timer, AG_TEXT_RIGHT);
+}
+
+PlaybackWindow::~PlaybackWindow()
+{
+	AG_ObjectDelete(window);
+}
+
+void PlaybackWindow::show()
+{
+	AG_WindowShow(window);
+}
+
+void PlaybackWindow::hide()
+{
+	AG_WindowHide(window);
+}
+
 void GUI::Init()
 {	// Start the AGAR core
 	if (AG_InitCore("Odamex", 0) == -1)
@@ -59,11 +171,9 @@ void GUI::Init()
 	agDriverOps = dc;
 	agDriverSw = AGDRIVER_SW(drv);
 
-	AG_Window* win = AG_WindowNew(0);
-	AG_LabelNew(win, 0, "Hello, world!");
-	//AG_WindowSetMinSize(win, 320, 200);
-	//AG_HSVPalNew(win, AG_HSVPAL_EXPAND);
-	AG_WindowShow(win);
+	// Staging area
+	ConsoleWindow* consoleWindow = new ConsoleWindow();
+	consoleWindow->show();
 }
 
 // Render the GUI to the canvas.
