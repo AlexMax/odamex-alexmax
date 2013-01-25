@@ -319,6 +319,11 @@ static void drawRectFilled(void* drv, AG_Rect r, AG_Color C)
 	}
 }
 
+void drawRectBlended(void *drv, AG_Rect r, AG_Color C, AG_BlendFn sFn, AG_BlendFn dFn)
+{
+	DPrintf("drawRectBlended\m");
+}
+
 static void updateGlyph(void* drv, AG_Glyph *gl)
 {
 	// No-op
@@ -474,7 +479,7 @@ AG_DriverSwClass agDriverDCanvas = {
 		NULL,
 		NULL,
 		drawRectFilled,
-		NULL,
+		drawRectBlended,
 		NULL,
 		updateGlyph,
 		drawGlyph,
