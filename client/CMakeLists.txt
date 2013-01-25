@@ -1,6 +1,3 @@
-include(FindPortMidi)
-include(FindLibAgar)
-
 # Common
 set(COMMON_DIR ../common)
 file(GLOB COMMON_HEADERS ${COMMON_DIR}/*.h)
@@ -30,9 +27,6 @@ add_definitions(-DNOASM)
 include_directories(${COMMON_DIR} ${TEXTSCREEN_DIR} ${CLIENT_DIR})
 
 # SDL configuration
-set(SDLDIR $ENV{SDLDIR} CACHE PATH
-  "Path to SDL (and optionally SDL_mixer) base directory.  Only necessary if you get errors about SDL not being found, or if you want to use a different installation of SDL.")
-set(ENV{SDLDIR} ${SDLDIR})
 find_package(SDL)
 if(SDL_FOUND)
   include_directories(${SDL_INCLUDE_DIR})
@@ -41,9 +35,6 @@ else()
 endif()
 
 # SDL_Mixer configuration
-set(SDLMIXERDIR $ENV{SDLMIXERDIR} CACHE PATH
-  "Path to SDL_mixer base directory.  Only necessary if you get errors about SDL not being found, or if you want to use a different installation of SDL_mixer.  If SDL_mixer is in the location specified by SDLMAIN then you can leave this blank.")
-set(ENV{SDLMIXERDIR} ${SDLMIXERDIR})
 find_package(SDL_mixer)
 if(SDLMIXER_FOUND)
   include_directories(${SDLMIXER_INCLUDE_DIR})
@@ -52,9 +43,6 @@ else()
 endif()
 
 # Portmidi configuration
-set(PORTMIDI_DIR $ENV{PortMidi_DIR} CACHE PATH
-  "Path to PortMIDI base directory.  Only necessary if you get errors about PortMIDI not being found, or if you want to use a different installation of PortMIDI.")
-set(ENV{PORTMIDI_DIR} ${PORTMIDI_DIR})
 find_package(PortMidi)
 if(PORTMIDI_FOUND)
   include_directories(${PORTMIDI_INCLUDE_DIR})
@@ -72,19 +60,24 @@ if(APPLE)
     ${AUDIOUNIT_LIBRARY})
 endif()
 
-# AGAR
-find_package(LibAgar)
-if(LibAgar_FOUND)
-  include_directories(${LibAgar_INCLUDE_DIRS})
-  add_definitions(${LibAgar_DEFINITIONS})
+# Agar
+if(NOT WIN32)
+  find_package(LibAgar)
+  if(LibAgar_FOUND)
+    include_directories(${LibAgar_INCLUDE_DIRS})
+    add_definitions(${LibAgar_DEFINITIONS})
+  else()
+    message(WARNING "Agar not found, client target not generated.")
+  endif()
 else()
-  message(WARNING "Agar not found, client target not generated.")
+  set(LibAgar_FOUND TRUE)
+  set(LibAgar_DIR "C:/Users/AlexMax/Documents/Libraries/msvc/agar-trunk")
+  set(LibAgar_INCLUDE_DIRS "${LibAgar_DIR}/include")
+  include_directories(${LibAgar_INCLUDE_DIRS})
+  set(LibAgar_LIBRARIES "${LibAgar_DIR}/lib/ag_core.lib" "${LibAgar_DIR}/lib/ag_gui.lib")
 endif()
 
 # FreeType
-set(FREETYPE_DIR $ENV{FREETYPE_DIR} CACHE PATH
-  "Path to FreeType base directory.  Only necessary if you get errors about FreeType not being found, or if you want to use a different installation of FreeType.")
-set(ENV{FREETYPE_DIR} ${FREETYPE_DIR})
 find_package(Freetype)
 if(FREETYPE_FOUND)
   include_directories(${FREETYPE_INCLUDE_DIRS})
