@@ -21,11 +21,12 @@
 //-----------------------------------------------------------------------------
 
 #include <stack>
+#include <sys/types.h>
 
 #include <agar/core.h>
 #include <agar/gui.h>
-#include <agar/gui/packedpixel.h>
 
+#include "doomtype.h"
 #include "v_video.h"
 
 extern "C" {
@@ -250,15 +251,14 @@ static void DCanvas_BlitSurface(const AG_Surface* surface, const AG_Rect* rect,
 	{
 		for (int y = 0;y < destRect.h;y++)
 		{
-			Uint8* source = static_cast<Uint8*>(surface->pixels);
+			uint8_t* source = static_cast<uint8_t*>(surface->pixels);
 			source = source + (srcRect.y + y) * surface->pitch +
 			         srcRect.x * surface->format->BytesPerPixel;
 			byte* dest = static_cast<byte*>(s->buffer);
 			dest = dest + (destRect.y + y) * s->pitch + destRect.x;
 			for (int x = 0;x < destRect.w;x++)
 			{
-				Uint32 pixel;
-				AG_PACKEDPIXEL_GET(surface->format->BytesPerPixel, pixel, source);
+				uint32_t pixel = *source;
 				if ((surface->flags & AG_SRCCOLORKEY &&
 				     surface->format->colorkey == pixel))
 				{
