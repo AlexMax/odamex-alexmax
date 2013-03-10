@@ -35,6 +35,7 @@ class CaptureTheFlag : public Gametype
 public:
 	void onSpawnMapThing(AActor*);
 	bool onGiveSpecial(player_t*, AActor*);
+	void onKillMobj(AActor*, AActor*, AActor*);
 };
 
 /**
@@ -128,6 +129,31 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 		return false;
 	}
 	return true;
+}
+
+void CaptureTheFlag::onKillMobj(AActor* source, AActor* target, AActor* inflictor)
+{
+	if (!target->player)
+		return;
+
+	AActor* flag = 0;
+
+	// Spawn a dropped flag at the players feet.
+	if (target->player->flags[it_blueflag])
+	{
+		flag = new AActor(target->x, target->y, target->z, MT_BDWN);
+		Printf(PRINT_HIGH, "Blue flag dropped!\n");
+	}
+	if (target->player->flags[it_redflag])
+	{
+		flag = new AActor(target->x, target->y, target->z, MT_RDWN);
+		Printf(PRINT_HIGH, "Red flag dropped!\n");
+	}
+
+	if (!flag)
+		return;
+
+	SV_SpawnMobj(flag);
 }
 
 Gametype* gametype = 0;

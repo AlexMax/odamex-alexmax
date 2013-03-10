@@ -1123,12 +1123,6 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 		}
 	}
 
-	// [Toke - CTF]
-	if (sv_gametype == GM_CTF && target->player)
-	{
-		CTF_CheckFlags(*target->player);
-	}
-
 	if (target->player)
 	{
 		if (!joinkill && !shotclock)
@@ -1148,12 +1142,6 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 			// [RH] Cumulative frag count
 			P_GiveFrags(tplayer, -1);
 		}
-
-		CTF_CheckFlags(*target->player);
-
-		// [NightFang] - Added this, thought it would be cooler
-		// [Fly] - No, it's not cooler
-		// target->player->cheats = CF_CHASECAM;
 
 		SV_UpdateFrags(*tplayer);
 
@@ -1239,6 +1227,10 @@ void P_KillMobj(AActor *source, AActor *target, AActor *inflictor, bool joinkill
 			}
 		}
 	}
+
+	// [AM] Depending on what gametype we're playing, we might do some
+	//      additional logic when the mobj is killed.
+	gametype->onKillMobj(source, target, inflictor);
 
 	if (gamemode == retail_chex)	// [ML] Chex Quest mode - monsters don't drop items
     {

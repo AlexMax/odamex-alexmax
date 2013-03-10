@@ -36,7 +36,7 @@ public:
 	 * 
 	 * @param mobj The new AActor to manipulate.
 	 */
-	virtual void onSpawnMapThing(AActor*) { return; }
+	virtual void onSpawnMapThing(AActor* mobj) { return; }
 
 	/**
 	 * This method is run from P_GiveSpecial() as a 'last resort' if the thing
@@ -45,9 +45,18 @@ public:
 	 * @param  player  Player who is picking the item up.
 	 * @param  special The actor that is being picked up.
 	 * @return         True if the gametype has properly handled the thing type,
-	 *                 otherwise false.
+	 *                 and should not fall through to an error, otherwise false.
 	 */
-	virtual bool onGiveSpecial(player_t*, AActor*) { return false; }
+	virtual bool onGiveSpecial(player_t* player, AActor* special) { return false; }
+
+	/**
+	 * This method is run from P_KillMobj().
+	 * 
+	 * @param source    Killer actor.
+	 * @param target    Killed actor.
+	 * @param inflictor Actor actually responsible for death, if not the killer.
+	 */
+	virtual void onKillMobj(AActor* source, AActor* target, AActor* inflictor) { return; }
 };
 
 extern Gametype* gametype;
