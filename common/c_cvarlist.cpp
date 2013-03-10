@@ -27,12 +27,13 @@
 // ---------------
 
 // Game mode
-CVAR (sv_gametype, "0", "Sets the game mode, values are:\n" \
-                        "// 0 = Cooperative\n" \
-                        "// 1 = Deathmatch\n" \
-                        "// 2 = Team Deathmatch\n" \
-                        "// 3 = Capture The Flag",
-      CVARTYPE_BYTE, CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_NOENABLEDISABLE)
+CVAR_FUNC_DECL(sv_gametype, "0",
+	"Sets the game mode, values are:\n" \
+	"// 0 = Cooperative\n" \
+	"// 1 = Deathmatch\n" \
+	"// 2 = Team Deathmatch\n" \
+	"// 3 = Capture The Flag",
+	CVARTYPE_BYTE, CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_NOENABLEDISABLE)
 
 // (Coop/Teamplay/CTF): Players can injure others on the same team
 CVAR (sv_friendlyfire, "1", "When set, players can injure others on the same team, it is ignored in deathmatch",

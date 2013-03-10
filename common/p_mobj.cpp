@@ -38,6 +38,7 @@
 #include "p_mobj.h"
 #include "p_ctf.h"
 #include "gi.h"
+#include "gametype.h"
 
 #define WATER_SINK_FACTOR		3
 #define WATER_SINK_SMALL_FACTOR	4
@@ -2490,6 +2491,10 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 	mobj->tid = mthing->thingid;
 	mobj->AddToHash ();
 
+	// [AM] Depending on what gametype we're playing, we might do some
+	//      additional logic to the newly placed thing.
+	gametype->onSpawnMapThing(mobj);
+
 	SV_SpawnMobj(mobj);
 
 	if ((mthing->type >= 9992 && mthing->type <= 9999) ||
@@ -2499,29 +2504,6 @@ void P_SpawnMapThing (mapthing2_t *mthing, int position)
 			mobj->tracer = mobj->subsector->sector->SecActTarget->ptr();
 		}
 		mobj->subsector->sector->SecActTarget = mobj->ptr();
-	}
-
-	if (sv_gametype == GM_CTF) {
-		// [Toke - CTF] Setup flag sockets
-		if (mthing->type == ID_BLUE_FLAG)
-		{
-			flagdata *data = &CTFdata[it_blueflag];
-			if (data->flaglocated)
-				return;
-
-			CTF_RememberFlagPos (mthing);
-			CTF_SpawnFlag(it_blueflag);
-		}
-
-		if (mthing->type == ID_RED_FLAG)
-		{
-			flagdata *data = &CTFdata[it_redflag];
-			if (data->flaglocated)
-				return;
-
-			CTF_RememberFlagPos (mthing);
-			CTF_SpawnFlag(it_redflag);
-		}
 	}
 
 	// [RH] Go dormant as needed

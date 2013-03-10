@@ -36,6 +36,7 @@
 #include "p_ctf.h"
 #include "p_acs.h"
 #include "g_warmup.h"
+#include "gametype.h"
 
 extern bool predicting;
 extern bool singleplayerjustdied;
@@ -432,7 +433,6 @@ void P_GiveSpecial(player_t *player, AActor *special)
 
 	AActor *toucher = player->mo;
 	int sound = 0;
-	bool firstgrab = false;
 
 	// Identify by sprite.
 	switch (special->sprite)
@@ -851,39 +851,11 @@ void P_GiveSpecial(player_t *player, AActor *special)
             sound = 2;
             break;
 
-	// [Toke - CTF - Core]
-        case SPR_BFLG: // Player touches the blue flag at its base
-            firstgrab = true;
-
-        case SPR_BDWN: // Player touches the blue flag after it's been dropped
-            if (!SV_FlagTouch(*player, it_blueflag, firstgrab))
-            {
-                return;
-            }
-            sound = 3;
-            break;
-
-        case SPR_BSOK:
-            SV_SocketTouch(*player, it_blueflag);
-            return;
-
-        case SPR_RFLG: // Player touches the red flag at its base
-            firstgrab = true;
-
-        case SPR_RDWN: // Player touches the red flag after its been dropped
-            if (!SV_FlagTouch(*player, it_redflag, firstgrab))
-            {
-                return;
-            }
-            sound = 3;
-            break;
-
-        case SPR_RSOK:
-            SV_SocketTouch(*player, it_redflag);
-            return;
-
         default:
-            // I_Error ("P_SpecialThing: Unknown gettable thing %d: %s\n", special->sprite,special->info->name);
+            // [AM] See if the gametype can do something useful with this thing.
+            if (gametype->onGiveSpecial(player, special))
+                return;
+
             Printf(
                 PRINT_HIGH,
                 "P_SpecialThing: Unknown gettable thing %d: %s\n",
@@ -892,6 +864,8 @@ void P_GiveSpecial(player_t *player, AActor *special)
             );
             return;
 	}
+
+
 
 	if (special->flags & MF_COUNTITEM)
 	{

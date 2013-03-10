@@ -5885,7 +5885,7 @@ mobjinfo_t mobjinfo[NUMMOBJTYPES] = {
 	100,		// mass
 	0,		// damage
 	NULL,		// activesound
-	MF_SPECIAL,		// flags
+	0,		// flags
 	0,		// flags2
 	S_NULL,		// raisestate
 	0x10000,
@@ -5916,7 +5916,7 @@ mobjinfo_t mobjinfo[NUMMOBJTYPES] = {
 	100,		// mass
 	0,		// damage
 	NULL,		// activesound
-	MF_SPECIAL,		// flags
+	0,		// flags
 	0,		// flags2
 	S_NULL,		// raisestate
 	0x10000,
@@ -5950,7 +5950,7 @@ mobjinfo_t mobjinfo[NUMMOBJTYPES] = {
 	100,		// mass
 	0,		// damage
 	NULL,		// activesound
-	MF_SPECIAL,		// flags
+	MF_NOBLOCKMAP,		// flags
 	0,		// flags2
 	S_NULL,		// raisestate
 	0x10000,
@@ -5981,7 +5981,7 @@ mobjinfo_t mobjinfo[NUMMOBJTYPES] = {
 	100,		// mass
 	0,		// damage
 	NULL,		// activesound
-	MF_SPECIAL,		// flags
+	MF_NOBLOCKMAP,		// flags
 	0,		// flags2
 	S_NULL,		// raisestate
 	0x10000,
