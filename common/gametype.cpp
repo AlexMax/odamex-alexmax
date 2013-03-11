@@ -32,6 +32,9 @@ class TeamDeathmatch : public Gametype { };
 
 class CaptureTheFlag : public Gametype
 {
+private:
+	std::vector<AActor*> flagstands; // Flag stands.
+	std::vector<AActor*> carriedflags; // Carried flags.
 public:
 	void onSpawnMapThing(AActor*);
 	bool onGiveSpecial(player_t*, AActor*);
@@ -65,6 +68,9 @@ void CaptureTheFlag::onSpawnMapThing(AActor* mobj)
 	// Allow us to touch the flag stand.
 	mobj->flags |= MF_SPECIAL;
 
+	// Keep a pointer to the flag stands so we can easily find them.
+	this->flagstands.push_back(mobj);
+
 	// Spawn the flag on clients, if needed.
 	SV_SpawnMobj(flag);
 }
@@ -76,23 +82,65 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 	case MT_BSOK: // Blue flag stand
 		if (player->userinfo.team == TEAM_BLUE)
 		{
-			if (player->flags[it_redflag] && !(special->tracer->flags2 & MF2_DONTDRAW))
+			if (player->flags[it_redflag] && special->tracer && !special->tracer->player)
 			{
-				// Touching friendly player has an opponents flag and a friendly
-				// socket with a non-invisible flag, so we remove their flag and
-				// they score.
+				// Touching friendly player has an opponents flag and the flag
+				// stand's tracer is pointing to a flag, not a player.
+
+				// Player no longer has the flag.
 				player->flags[it_redflag] = false;
+
+				// Figure out which flag stand to stock with a new Red Flag.
+				std::vector<AActor*>::iterator it;
+				for (it = this->flagstands.begin();it != this->flagstands.end();++it)
+				{
+					if ((*it)->tracer->player == player)
+					{
+						AActor* flag = new AActor((*it)->x, (*it)->y, (*it)->z, MT_RFLG);
+						(*it)->tracer = flag->ptr();
+						SV_SpawnMobj(flag);
+					}
+				}
+
+				// Destroy the carried flag and remove it from the
+				// carried flags iterator.
+				it = this->carriedflags.begin();
+				while (it != this->carriedflags.end())
+				{
+					if ((*it)->tracer->player == player)
+					{
+						(*it)->Destroy();
+						it = this->carriedflags.erase(it);
+					}
+					else
+						++it;
+				}
+
 				Printf(PRINT_HIGH, "Blue Team Scores!\n");
 			}
 		}
 		else if (player->userinfo.team != TEAM_NONE)
 		{
-			if (!player->flags[it_blueflag] && !(special->tracer->flags2 & MF2_DONTDRAW))
+			if (!player->flags[it_blueflag] && special->tracer && !special->tracer->player)
 			{
 				// Touching enemy player has room for a blue flag and the flag
-				// is not invisible, so we invisible the flag and they take it.
+				// stand's tracer is pointing to a flag, not a player.
+
+				// Player now has flag.
 				player->flags[it_blueflag] = true;
-				special->tracer->flags2 |= MF2_DONTDRAW;
+
+				// Destroy the flag on the stand, and trace the player who
+				// currently has the flag associated with that stand.
+				special->tracer->Destroy();
+				special->tracer = player->mo;
+
+				// Create a new carried flag that traces the player who is
+				// holding it, so we can keep reattaching it to the player
+				// every tic.
+				AActor* flag = new AActor(player->mo->x, player->mo->y, player->mo->z, MT_BCAR);
+				flag->tracer = player->mo;
+				this->carriedflags.push_back(flag);
+
 				Printf(PRINT_HIGH, "Blue flag taken!\n");
 			}
 		}
@@ -100,30 +148,130 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 	case MT_RSOK: // Red flag stand
 		if (player->userinfo.team == TEAM_RED)
 		{
-			if (player->flags[it_blueflag] && !(special->tracer->flags2 & MF2_DONTDRAW))
+			if (player->flags[it_blueflag] && special->tracer && !special->tracer->player)
 			{
-				// Touching friendly player has an opponents flag and a friendly
-				// socket with a non-invisible flag, so we remove their flag and
-				// they score.
+				// Touching friendly player has an opponents flag and the flag
+				// stand's tracer is pointing to a flag, not a player.
+
+				// Player no longer has the flag.
 				player->flags[it_blueflag] = false;
+
+				// Figure out which flag stand to stock with a new Red Flag.
+				std::vector<AActor*>::iterator it;
+				for (it = this->flagstands.begin();it != this->flagstands.end();++it)
+				{
+					if ((*it)->tracer->player == player)
+					{
+						AActor* flag = new AActor((*it)->x, (*it)->y, (*it)->z, MT_BFLG);
+						(*it)->tracer = flag->ptr();
+						SV_SpawnMobj(flag);
+					}
+				}
+
+				// Destroy the carried flag and remove it from the
+				// carried flags iterator.
+				it = this->carriedflags.begin();
+				while (it != this->carriedflags.end())
+				{
+					if ((*it)->tracer->player == player)
+					{
+						(*it)->Destroy();
+						it = this->carriedflags.erase(it);
+					}
+					else
+						++it;
+				}
+
 				Printf(PRINT_HIGH, "Red Team Scores!\n");
 			}
 		}
 		else if (player->userinfo.team != TEAM_NONE)
 		{
-			if (!player->flags[it_redflag] && !(special->tracer->flags2 & MF2_DONTDRAW))
+			if (!player->flags[it_redflag] && special->tracer && !special->tracer->player)
 			{
 				// Touching enemy player has room for a blue flag and the flag
-				// is not invisible, so we invisible the flag and they take it.
+				// stand's tracer is pointing to a flag, not a player.
+
+				// Player now has flag.
 				player->flags[it_redflag] = true;
-				special->tracer->flags2 |= MF2_DONTDRAW;
+
+				// Destroy the flag on the stand, and trace the player who
+				// currently has the flag associated with that stand.
+				special->tracer->Destroy();
+				special->tracer = player->mo;
+
+				// Create a new carried flag that traces the player who is
+				// holding it, so we can keep reattaching it to the player
+				// every tic.
+				AActor* flag = new AActor(player->mo->x, player->mo->y, player->mo->z, MT_RCAR);
+				flag->tracer = player->mo;
+				this->carriedflags.push_back(flag);
+
 				Printf(PRINT_HIGH, "Red flag taken!\n");
 			}
 		}
 		break;
 	case MT_BDWN: // Dropped blue flag
+		if (player->userinfo.team == TEAM_BLUE)
+		{
+			// Spawn a new stationary flag at the flag stand.
+			AActor* flag = new AActor(special->tracer->x, special->tracer->y, special->tracer->z, MT_BFLG);
+			special->tracer->tracer = flag->ptr();
+			SV_SpawnMobj(flag);
+
+			// Destroy the dropped flag.
+			special->Destroy();
+
+			Printf(PRINT_HIGH, "Blue flag returned!\n");
+		}
+		else if (player->userinfo.team != TEAM_NONE)
+		{
+			// Flag stand traces the player who now has the flag.
+			special->tracer->tracer = player->mo;
+
+			// Destroy the dropped flag.
+			special->Destroy();
+
+			// Create a new carried flag that traces the player who is
+			// holding it, so we can keep reattaching it to the player
+			// every tic.
+			AActor* flag = new AActor(player->mo->x, player->mo->y, player->mo->z, MT_BCAR);
+			flag->tracer = player->mo;
+			this->carriedflags.push_back(flag);
+
+			Printf(PRINT_HIGH, "Blue flag taken!\n");
+		}
 		break;
 	case MT_RDWN: // Dropped red flag
+		if (player->userinfo.team == TEAM_RED)
+		{
+			// Spawn a new stationary flag at the flag stand.
+			AActor* flag = new AActor(special->tracer->x, special->tracer->y, special->tracer->z, MT_RFLG);
+			special->tracer->tracer = flag->ptr();
+			SV_SpawnMobj(flag);
+
+			// Destroy the dropped flag.
+			special->Destroy();
+
+			Printf(PRINT_HIGH, "Red flag returned!\n");
+		}
+		else if (player->userinfo.team != TEAM_NONE)
+		{
+			// Flag stand traces the player who now has the flag.
+			special->tracer->tracer = player->mo;
+
+			// Destroy the dropped flag.
+			special->Destroy();
+
+			// Create a new carried flag that traces the player who is
+			// holding it, so we can keep reattaching it to the player
+			// every tic.
+			AActor* flag = new AActor(player->mo->x, player->mo->y, player->mo->z, MT_RCAR);
+			flag->tracer = player->mo;
+			this->carriedflags.push_back(flag);
+
+			Printf(PRINT_HIGH, "Red flag taken!\n");
+		}
 		break;
 	default: // Something unexpected
 		return false;
@@ -142,11 +290,60 @@ void CaptureTheFlag::onKillMobj(AActor* source, AActor* target, AActor* inflicto
 	if (target->player->flags[it_blueflag])
 	{
 		flag = new AActor(target->x, target->y, target->z, MT_BDWN);
+
+		// Dropped flags trace the flag stand they belong to.
+		std::vector<AActor*>::iterator it;
+		for (it = this->flagstands.begin();it != this->flagstands.end();++it)
+		{
+			if ((*it)->tracer->player == target->player)
+			{
+				flag->tracer = (*it)->ptr();
+			}
+		}
+
+		// Destroy the carried flag and remove it from the
+		// carried flags iterator.
+		it = this->carriedflags.begin();
+		while (it != this->carriedflags.end())
+		{
+			if ((*it)->tracer->player == target->player)
+			{
+				(*it)->Destroy();
+				it = this->carriedflags.erase(it);
+			}
+			else
+				++it;
+		}
+
 		Printf(PRINT_HIGH, "Blue flag dropped!\n");
 	}
 	if (target->player->flags[it_redflag])
 	{
 		flag = new AActor(target->x, target->y, target->z, MT_RDWN);
+
+		// Dropped flags trace the flag stand they belong to.
+		std::vector<AActor*>::iterator it;
+		for (it = this->flagstands.begin();it != this->flagstands.end();++it)
+		{
+			if ((*it)->tracer->player == target->player)
+			{
+				flag->tracer = (*it)->ptr();
+			}
+		}
+
+		// Remove the carried flag from the carried flags iterator.
+		it = this->carriedflags.begin();
+		while (it != this->carriedflags.end())
+		{
+			if ((*it)->tracer->player == target->player)
+			{
+				(*it)->Destroy();
+				it = this->carriedflags.erase(it);
+			}
+			else
+				++it;
+		}
+
 		Printf(PRINT_HIGH, "Red flag dropped!\n");
 	}
 
