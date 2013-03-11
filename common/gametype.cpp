@@ -156,7 +156,7 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 				// Player no longer has the flag.
 				player->flags[it_blueflag] = false;
 
-				// Figure out which flag stand to stock with a new Red Flag.
+				// Figure out which flag stand to stock with a new Blue Flag.
 				std::vector<AActor*>::iterator it;
 				for (it = this->flagstands.begin();it != this->flagstands.end();++it)
 				{
@@ -226,8 +226,11 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 		}
 		else if (player->userinfo.team != TEAM_NONE)
 		{
+			// Player now has the flag.
+			player->flags[it_blueflag] = true;
+
 			// Flag stand traces the player who now has the flag.
-			special->tracer->tracer = player->mo;
+			special->tracer->tracer = player->mo->ptr();
 
 			// Destroy the dropped flag.
 			special->Destroy();
@@ -257,8 +260,11 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 		}
 		else if (player->userinfo.team != TEAM_NONE)
 		{
+			// Player now has the flag.
+			player->flags[it_redflag] = true;
+
 			// Flag stand traces the player who now has the flag.
-			special->tracer->tracer = player->mo;
+			special->tracer->tracer = player->mo->ptr();
 
 			// Destroy the dropped flag.
 			special->Destroy();
