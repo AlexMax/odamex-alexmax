@@ -103,7 +103,7 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 				}
 
 				// Destroy the carried flag and remove it from the
-				// carried flags iterator.
+				// carried flags vector.
 				it = this->carriedflags.begin();
 				while (it != this->carriedflags.end())
 				{
@@ -169,7 +169,7 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 				}
 
 				// Destroy the carried flag and remove it from the
-				// carried flags iterator.
+				// carried flags vector.
 				it = this->carriedflags.begin();
 				while (it != this->carriedflags.end())
 				{
@@ -308,7 +308,7 @@ void CaptureTheFlag::onKillMobj(AActor* source, AActor* target, AActor* inflicto
 		}
 
 		// Destroy the carried flag and remove it from the
-		// carried flags iterator.
+		// carried flags vector.
 		it = this->carriedflags.begin();
 		while (it != this->carriedflags.end())
 		{
@@ -337,7 +337,8 @@ void CaptureTheFlag::onKillMobj(AActor* source, AActor* target, AActor* inflicto
 			}
 		}
 
-		// Remove the carried flag from the carried flags iterator.
+		// Destroy the carried flag and remove it from the
+		// carried flags vector.
 		it = this->carriedflags.begin();
 		while (it != this->carriedflags.end())
 		{
