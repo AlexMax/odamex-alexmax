@@ -35,11 +35,48 @@ class CaptureTheFlag : public Gametype
 private:
 	std::vector<AActor*> flagstands; // Flag stands.
 	std::vector<AActor*> carriedflags; // Carried flags.
+	void carryFlag(player_t*, mobjtype_t);
+	void uncarryFlag(player_t*);
 public:
 	void onSpawnMapThing(AActor*);
 	bool onGiveSpecial(player_t*, AActor*);
 	void onKillMobj(AActor*, AActor*, AActor*);
 };
+
+/**
+ * Create the carried flag.
+ *
+ * @param type    Flag type to create.
+ * @param carrier Player who is carrying the flag.
+ */
+void CaptureTheFlag::carryFlag(player_t* carrier, mobjtype_t type)
+{
+	AActor* flag = new AActor(carrier->mo->x, carrier->mo->y, carrier->mo->z, type);
+	flag->tracer = carrier->mo;
+	this->carriedflags.push_back(flag);
+}
+
+/**
+ * Destroy the carried flag.
+ * 
+ * @param carrier Player who will no longer be carrying the flag.
+ */
+void CaptureTheFlag::uncarryFlag(player_t* carrier)
+{
+	std::vector<AActor*>::iterator it;
+
+	it = this->carriedflags.begin();
+	while (it != this->carriedflags.end())
+	{
+		if ((*it)->tracer->player == carrier)
+		{
+			(*it)->Destroy();
+			it = this->carriedflags.erase(it);
+		}
+		else
+			++it;
+	}
+}
 
 /**
  * If we are on a flag socket, spawn a flag to go with it.
@@ -75,6 +112,14 @@ void CaptureTheFlag::onSpawnMapThing(AActor* mobj)
 	SV_SpawnMobj(flag);
 }
 
+/**
+ * Handle touching flag stands and dropped flags.
+ * 
+ * @param  player  Player who touched a thing.
+ * @param  special Thing that got touched.
+ * @return         True if we should not fall through to an error message,
+ *                 otherwise false.
+ */
 bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 {
 	switch (special->type)
@@ -102,19 +147,8 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 					}
 				}
 
-				// Destroy the carried flag and remove it from the
-				// carried flags vector.
-				it = this->carriedflags.begin();
-				while (it != this->carriedflags.end())
-				{
-					if ((*it)->tracer->player == player)
-					{
-						(*it)->Destroy();
-						it = this->carriedflags.erase(it);
-					}
-					else
-						++it;
-				}
+				// Destroy the carried flag.
+				this->uncarryFlag(player);
 
 				Printf(PRINT_HIGH, "Blue Team Scores!\n");
 			}
@@ -134,12 +168,8 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 				special->tracer->Destroy();
 				special->tracer = player->mo;
 
-				// Create a new carried flag that traces the player who is
-				// holding it, so we can keep reattaching it to the player
-				// every tic.
-				AActor* flag = new AActor(player->mo->x, player->mo->y, player->mo->z, MT_BCAR);
-				flag->tracer = player->mo;
-				this->carriedflags.push_back(flag);
+				// Create a new carried flag for the player.
+				this->carryFlag(player, MT_BCAR);
 
 				Printf(PRINT_HIGH, "Blue flag taken!\n");
 			}
@@ -168,19 +198,8 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 					}
 				}
 
-				// Destroy the carried flag and remove it from the
-				// carried flags vector.
-				it = this->carriedflags.begin();
-				while (it != this->carriedflags.end())
-				{
-					if ((*it)->tracer->player == player)
-					{
-						(*it)->Destroy();
-						it = this->carriedflags.erase(it);
-					}
-					else
-						++it;
-				}
+				// Destroy the carried flag.
+				this->uncarryFlag(player);
 
 				Printf(PRINT_HIGH, "Red Team Scores!\n");
 			}
@@ -200,12 +219,8 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 				special->tracer->Destroy();
 				special->tracer = player->mo;
 
-				// Create a new carried flag that traces the player who is
-				// holding it, so we can keep reattaching it to the player
-				// every tic.
-				AActor* flag = new AActor(player->mo->x, player->mo->y, player->mo->z, MT_RCAR);
-				flag->tracer = player->mo;
-				this->carriedflags.push_back(flag);
+				// Create a new carried flag for the player.
+				this->carryFlag(player, MT_RCAR);
 
 				Printf(PRINT_HIGH, "Red flag taken!\n");
 			}
@@ -235,12 +250,8 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 			// Destroy the dropped flag.
 			special->Destroy();
 
-			// Create a new carried flag that traces the player who is
-			// holding it, so we can keep reattaching it to the player
-			// every tic.
-			AActor* flag = new AActor(player->mo->x, player->mo->y, player->mo->z, MT_BCAR);
-			flag->tracer = player->mo;
-			this->carriedflags.push_back(flag);
+			// Create a new carried flag for the player.
+			this->carryFlag(player, MT_BCAR);
 
 			Printf(PRINT_HIGH, "Blue flag taken!\n");
 		}
@@ -269,12 +280,8 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 			// Destroy the dropped flag.
 			special->Destroy();
 
-			// Create a new carried flag that traces the player who is
-			// holding it, so we can keep reattaching it to the player
-			// every tic.
-			AActor* flag = new AActor(player->mo->x, player->mo->y, player->mo->z, MT_RCAR);
-			flag->tracer = player->mo;
-			this->carriedflags.push_back(flag);
+			// Create a new carried flag for the player.
+			this->carryFlag(player, MT_RCAR);
 
 			Printf(PRINT_HIGH, "Red flag taken!\n");
 		}
@@ -285,6 +292,15 @@ bool CaptureTheFlag::onGiveSpecial(player_t* player, AActor* special)
 	return true;
 }
 
+/**
+ * Handle dropping flags on death.
+ * 
+ * TODO: Commonize this into also dropping flags on disconnect and spectate.
+ * 
+ * @param source    Damage source.
+ * @param target    Damage target.
+ * @param inflictor Damage inflictor.
+ */
 void CaptureTheFlag::onKillMobj(AActor* source, AActor* target, AActor* inflictor)
 {
 	if (!target->player)
@@ -295,6 +311,9 @@ void CaptureTheFlag::onKillMobj(AActor* source, AActor* target, AActor* inflicto
 	// Spawn a dropped flag at the players feet.
 	if (target->player->flags[it_blueflag])
 	{
+		// Target no longer has the flag.
+		target->player->flags[it_blueflag] = false;
+
 		flag = new AActor(target->x, target->y, target->z, MT_BDWN);
 
 		// Dropped flags trace the flag stand they belong to.
@@ -307,24 +326,16 @@ void CaptureTheFlag::onKillMobj(AActor* source, AActor* target, AActor* inflicto
 			}
 		}
 
-		// Destroy the carried flag and remove it from the
-		// carried flags vector.
-		it = this->carriedflags.begin();
-		while (it != this->carriedflags.end())
-		{
-			if ((*it)->tracer->player == target->player)
-			{
-				(*it)->Destroy();
-				it = this->carriedflags.erase(it);
-			}
-			else
-				++it;
-		}
+		// Destroy the carried flag.
+		this->uncarryFlag(target->player);
 
 		Printf(PRINT_HIGH, "Blue flag dropped!\n");
 	}
 	if (target->player->flags[it_redflag])
 	{
+		// Target no longer has the flag.
+		target->player->flags[it_redflag] = false;
+
 		flag = new AActor(target->x, target->y, target->z, MT_RDWN);
 
 		// Dropped flags trace the flag stand they belong to.
@@ -337,19 +348,8 @@ void CaptureTheFlag::onKillMobj(AActor* source, AActor* target, AActor* inflicto
 			}
 		}
 
-		// Destroy the carried flag and remove it from the
-		// carried flags vector.
-		it = this->carriedflags.begin();
-		while (it != this->carriedflags.end())
-		{
-			if ((*it)->tracer->player == target->player)
-			{
-				(*it)->Destroy();
-				it = this->carriedflags.erase(it);
-			}
-			else
-				++it;
-		}
+		// Destroy the carried flag.
+		this->uncarryFlag(target->player);
 
 		Printf(PRINT_HIGH, "Red flag dropped!\n");
 	}
@@ -362,6 +362,9 @@ void CaptureTheFlag::onKillMobj(AActor* source, AActor* target, AActor* inflicto
 
 Gametype* gametype = 0;
 
+/**
+ * Switch the gametype class out when we change our gametype variable.
+ */
 CVAR_FUNC_IMPL(sv_gametype)
 {
 	if (gametype != 0)
