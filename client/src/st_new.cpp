@@ -88,9 +88,6 @@ extern flagdata CTFdata[NUMFLAGS];
 
 extern NetDemo netdemo;
 
-int V_TextScaleXAmount();
-int V_TextScaleYAmount();
-
 EXTERN_CVAR (hud_scale)
 EXTERN_CVAR (hud_timer)
 EXTERN_CVAR (hud_targetcount)
@@ -396,7 +393,7 @@ void ST_voteDraw (int y) {
 	}
 
 	size_t x1, x2;
-	x1 = (screen->width - V_StringWidth(result_string.c_str()) * xscale) >> 1;
+	x1 = (screen->width - screen->StringWidth(result_string.c_str()) * xscale) >> 1;
 	if (hud_scale) {
 		screen->DrawTextClean(result_color, x1, y, result_string.c_str());
 	} else {

@@ -67,6 +67,8 @@ IMPLEMENT_CLASS (DCanvas, DObject)
 int DisplayWidth, DisplayHeight, DisplayBits;
 int SquareWidth;
 
+FFont *SmallFont, *BigFont, *ConFont;
+
 unsigned int Col2RGB8[65][256];
 byte RGB32k[32][32][32];
 
@@ -704,7 +706,6 @@ void V_InitPalette (void)
 void V_Init (void)
 {
 	int width, height, bits;
-
 	width = height = bits = 0;
 
 	const char *w = Args.CheckValue ("-width");
@@ -753,10 +754,16 @@ void V_Init (void)
 	else
         AddCommandString("checkres");
 
-	V_InitConChars (0xf7);
-	C_InitConsole (screen->width, screen->height, true);
+	V_InitPalette();
 
-	V_InitPalette ();
+	if (W_CheckNumForName("FONTA_S") >= 0)
+		SmallFont = new FFont("SmallFont", "FONTA%02u", HU_FONTSTART, HU_FONTSIZE, 1);
+	else
+		SmallFont = new FFont("SmallFont", "STCFN%.3d", HU_FONTSTART, HU_FONTSIZE, HU_FONTSTART);
+	screen->SetFont(SmallFont);
+
+	ConFont = new FSingleLumpFont("ConsoleFont", W_GetNumForName("CONFONT"));
+	C_InitConsole(screen->width, screen->height, true);
 }
 
 void DCanvas::AttachPalette (palette_t *pal)

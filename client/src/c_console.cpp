@@ -122,9 +122,6 @@ CVAR_FUNC_IMPL (hud_scaletext)
 		var.Set(4.0f);
 }
 
-int V_TextScaleXAmount();
-int V_TextScaleYAmount();
-
 static struct NotifyText
 {
 	int timeout;
@@ -382,7 +379,7 @@ void C_AddNotifyString (int printlevel, const char *source)
 		(gamestate != GS_LEVEL && gamestate != GS_INTERMISSION) )
 		return;
 
-	width = DisplayWidth / V_TextScaleXAmount();
+	width = DisplayWidth / 1;
 
 	if (addtype == APPENDLINE && NotifyStrings[NUMNOTIFIES-1].printlevel == printlevel)
 	{
@@ -751,8 +748,8 @@ static void C_DrawNotifyText (void)
 				color = PrintColors[NotifyStrings[i].printlevel];
 
 			screen->DrawTextStretched (color, 0, line, NotifyStrings[i].text,
-										V_TextScaleXAmount(), V_TextScaleYAmount());
-			line += 8 * V_TextScaleYAmount();
+										1, 1);
+			line += 8 * 1;
 		}
 	}
 }
@@ -805,16 +802,16 @@ void C_DrawConsole (void)
 
 		if (ConBottom >= 12)
 		{
-			screen->PrintStr (screen->width - 8 - strlen(VersionString) * 8,
+			/*screen->PrintStr (screen->width - 8 - strlen(VersionString) * 8,
 						ConBottom - 12,
-						VersionString, strlen (VersionString));
+						VersionString, strlen (VersionString));*/
 
             // Download progress bar hack
             if (gamestate == GS_DOWNLOAD)
             {
-                screen->PrintStr (left + 2,
+                /*screen->PrintStr (left + 2,
 						ConBottom - 10,
-						DownloadStr.c_str(), DownloadStr.length());
+						DownloadStr.c_str(), DownloadStr.length());*/
             }
 
 			if (TickerMax)
@@ -840,7 +837,7 @@ void C_DrawConsole (void)
 					i = tickend;
 				tickstr[i] = -125;
 				sprintf (tickstr + tickend + 3, "%u%%", (TickerAt * 100) / TickerMax);
-				screen->PrintStr (8, ConBottom - 12, tickstr, strlen (tickstr));
+				// screen->PrintStr (8, ConBottom - 12, tickstr, strlen (tickstr));
 			}
 		}
 	}
@@ -852,7 +849,7 @@ void C_DrawConsole (void)
 	{
 		for (; lines > 1; lines--)
 		{
-			screen->PrintStr (left, offset + lines * 8, (char*)&zap[2], zap[1]);
+			// screen->PrintStr (left, offset + lines * 8, (char*)&zap[2], zap[1]);
 			zap -= ConCols + 2;
 		}
 		if (ConBottom >= 20)
@@ -860,16 +857,16 @@ void C_DrawConsole (void)
 //			if (gamestate == GS_STARTUP)
 //				screen->PrintStr (8, ConBottom - 20, DoomStartupTitle, strlen (DoomStartupTitle));
 //			else
-			screen->PrintStr (left, ConBottom - 20, "\x8c", 1);
+			// screen->PrintStr (left, ConBottom - 20, "\x8c", 1);
 #define MIN(a,b) (((a)<(b))?(a):(b))
-			screen->PrintStr (left + 8, ConBottom - 20,
+			/*screen->PrintStr (left + 8, ConBottom - 20,
 						(char *)&CmdLine[2+CmdLine[259]],
-						MIN(CmdLine[0] - CmdLine[259], ConCols - 1));
+						MIN(CmdLine[0] - CmdLine[259], ConCols - 1));*/
 #undef MIN
 			if (cursoron)
 			{
-				screen->PrintStr (left + 8 + (CmdLine[1] - CmdLine[259])* 8,
-							ConBottom - 20, "\xb", 1);
+				/*screen->PrintStr (left + 8 + (CmdLine[1] - CmdLine[259])* 8,
+							ConBottom - 20, "\xb", 1);*/
 			}
 			if (RowAdjust && ConBottom >= 28)
 			{
@@ -878,7 +875,7 @@ void C_DrawConsole (void)
 				// Indicate that the view has been scrolled up (10)
 				// and if we can scroll no further (12)
 				c = (SkipRows + RowAdjust + ConBottom/8 < ConRows) ? 10 : 12;
-				screen->PrintStr (0, ConBottom - 28, &c, 1);
+				// screen->PrintStr (0, ConBottom - 28, &c, 1);
 			}
 		}
 	}
@@ -1479,7 +1476,7 @@ void C_MidPrint (const char *msg, player_t *p, int msgtime)
 		Printf (PRINT_HIGH, "%s\n", newmsg);
 		midprinting = false;
 
-		if ( (MidMsg = V_BreakLines(screen->width / V_TextScaleXAmount(), (byte *)newmsg)) )
+		if ( (MidMsg = V_BreakLines(screen->width / 1, (byte *)newmsg)) )
 		{
 			MidTicker = (int)(msgtime * TICRATE) + gametic;
 
@@ -1501,8 +1498,8 @@ void C_DrawMid (void)
 	{
 		int i, line, x, y, xscale, yscale;
 
-		xscale = V_TextScaleXAmount();
-		yscale = V_TextScaleYAmount();
+		xscale = 1;
+		yscale = 1;
 
 		y = 8 * yscale;
 		x = screen->width >> 1;
@@ -1552,7 +1549,7 @@ void C_GMidPrint(const char* msg, int color, int msgtime)
 
 		char *newmsg = strdup(str.c_str());
 
-		if ((GameMsg = V_BreakLines(screen->width / V_TextScaleXAmount(), (byte *)newmsg)) )
+		if ((GameMsg = V_BreakLines(screen->width / 1, (byte *)newmsg)) )
 		{
 			GameTicker = (int)(msgtime * TICRATE) + gametic;
 
@@ -1578,8 +1575,8 @@ void C_DrawGMid()
 	{
 		int i, line, x, y, xscale, yscale;
 
-		xscale = V_TextScaleXAmount();
-		yscale = V_TextScaleYAmount();
+		xscale = 1;
+		yscale = 1;
 
 		y = 8 * yscale;
 		x = screen->width >> 1;

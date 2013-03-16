@@ -1,109 +1,74 @@
-// Emacs style mode select   -*- C++ -*-
-//-----------------------------------------------------------------------------
-//
-// $Id$
-//
-// Copyright (C) 1998-2006 by Randy Heit (ZDoom 1.22).
-// Copyright (C) 2006-2012 by The Odamex Team.
-//
-// This program is free software; you can redistribute it and/or
-// modify it under the terms of the GNU General Public License
-// as published by the Free Software Foundation; either version 2
-// of the License, or (at your option) any later version.
-//
-// This program is distributed in the hope that it will be useful,
-// but WITHOUT ANY WARRANTY; without even the implied warranty of
-// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-// GNU General Public License for more details.
-//
-// DESCRIPTION:
-//	V_TEXT
-//
-//-----------------------------------------------------------------------------
-
+/*
+** v_text.h
+**
+**---------------------------------------------------------------------------
+** Copyright 1998-2001 Randy Heit
+** All rights reserved.
+**
+** Redistribution and use in source and binary forms, with or without
+** modification, are permitted provided that the following conditions
+** are met:
+**
+** 1. Redistributions of source code must retain the above copyright
+**    notice, this list of conditions and the following disclaimer.
+** 2. Redistributions in binary form must reproduce the above copyright
+**    notice, this list of conditions and the following disclaimer in the
+**    documentation and/or other materials provided with the distribution.
+** 3. The name of the author may not be used to endorse or promote products
+**    derived from this software without specific prior written permission.
+**
+** THIS SOFTWARE IS PROVIDED BY THE AUTHOR ``AS IS'' AND ANY EXPRESS OR
+** IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES
+** OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED.
+** IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY DIRECT, INDIRECT,
+** INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT
+** NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+** DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+** THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+** (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
+** THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+**---------------------------------------------------------------------------
+**
+*/
 
 #ifndef __V_TEXT_H__
 #define __V_TEXT_H__
 
 #include "doomtype.h"
+#include "v_font.h"
 
-struct brokenlines_s {
-	int width;
-	char *string;
+struct brokenlines_s
+{
+	short width;
+	byte nlterminated;
+	byte pad;
+	char* string;
 };
 typedef struct brokenlines_s brokenlines_t;
 
-enum EColorRange
+#define TEXTCOLOR_ESCAPE    '\x1c'
+
+#define TEXTCOLOR_BRICK     "\x1c""A"
+#define TEXTCOLOR_TAN       "\x1c""B"
+#define TEXTCOLOR_GRAY      "\x1c""C"
+#define TEXTCOLOR_GREY      "\x1c""C"
+#define TEXTCOLOR_GREEN     "\x1c""D"
+#define TEXTCOLOR_BROWN     "\x1c""E"
+#define TEXTCOLOR_GOLD      "\x1c""F"
+#define TEXTCOLOR_RED       "\x1c""G"
+#define TEXTCOLOR_BLUE      "\x1c""H"
+#define TEXTCOLOR_ORANGE    "\x1c""I"
+#define TEXTCOLOR_WHITE     "\x1c""J"
+#define TEXTCOLOR_YELLOW    "\x1c""k"
+
+#define TEXTCOLOR_NORMAL    "\x1c-"
+#define TEXTCOLOR_BOLD      "\x1c+"
+
+brokenlines_t* V_BreakLines(int maxwidth, const byte* str, bool keepspace=false);
+void V_FreeBrokenLines(brokenlines_t* lines);
+inline brokenlines_t* V_BreakLines(int maxwidth, const char* str, bool keepspace=false)
 {
-	CR_BRICK,
-	CR_TAN,
-	CR_GRAY,
-	CR_GREY = CR_GRAY,
-	CR_GREEN,
-	CR_BROWN,
-	CR_GOLD,
-	CR_RED,
-	CR_BLUE,
-	CR_ORANGE,
-	CR_WHITE,
-	CR_YELLOW,
-
-	// [AM] Extended ZDoom colors.  Not all of these actually work yet.
-	CR_UNTRANSLATED,
-	CR_BLACK,
-	CR_LIGHTBLUE,
-	CR_CREAM,
-	CR_OLIVE,
-	CR_DARKGREEN,
-	CR_DARKRED,
-	CR_DARKBROWN,
-	CR_PURPLE,
-	CR_DARKGRAY,
-	CR_DARKGREY = CR_DARKGRAY,
-	CR_CYAN,
-	NUM_TEXT_COLORS
-};
-
-#define TEXTCOLOR_ESCAPE	'\x8a'
-
-#define TEXTCOLOR_BRICK		"\x8aA"
-#define TEXTCOLOR_TAN		"\x8aB"
-#define TEXTCOLOR_GRAY		"\x8aC"
-#define TEXTCOLOR_GREY		"\x8aC"
-#define TEXTCOLOR_GREEN		"\x8aD"
-#define TEXTCOLOR_BROWN		"\x8aE"
-#define TEXTCOLOR_GOLD		"\x8aF"
-#define TEXTCOLOR_RED		"\x8aG"
-#define TEXTCOLOR_BLUE		"\x8aH"
-#define TEXTCOLOR_ORANGE	"\x8aI"
-#define TEXTCOLOR_WHITE		"\x8aJ"
-#define TEXTCOLOR_YELLOW	"\x8aK"
-
-// [AM] Extended ZDoom colors.  Not all of these actually work yet.
-#define TEXTCOLOR_UNTRANSLATED	"\x8aL"
-#define TEXTCOLOR_BLACK		"\x8aM"
-#define TEXTCOLOR_LIGHTBLUE	"\x8aN"
-#define TEXTCOLOR_CREAM		"\x8aO"
-#define TEXTCOLOR_OLIVE		"\x8aP"
-#define TEXTCOLOR_DARKGREEN	"\x8aQ"
-#define TEXTCOLOR_DARKRED	"\x8aR"
-#define TEXTCOLOR_DARKBROWN	"\x8aS"
-#define TEXTCOLOR_PURPLE	"\x8aT"
-#define TEXTCOLOR_DARKGRAY	"\x8aU"
-#define TEXTCOLOR_DARKGREY	"\x8aU"
-#define TEXTCOLOR_CYAN		"\x8aV"
-
-#define TEXTCOLOR_NORMAL	"\x8a-"
-#define TEXTCOLOR_BOLD		"\x8a+"
-
-int V_StringWidth (const byte *str);
-inline int V_StringWidth (const char *str) { return V_StringWidth ((const byte *)str); }
-
-brokenlines_t *V_BreakLines (int maxwidth, const byte *str);
-void V_FreeBrokenLines (brokenlines_t *lines);
-inline brokenlines_t *V_BreakLines (int maxwidth, const char *str) { return V_BreakLines (maxwidth, (const byte *)str); }
-
-void V_InitConChars (byte transcolor);
+	return V_BreakLines(maxwidth, (const byte*)str, keepspace);
+}
 
 #endif //__V_TEXT_H__
-
