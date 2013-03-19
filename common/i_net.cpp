@@ -581,10 +581,6 @@ void SV_SendPackets(void);
 
 void MSG_WriteMarker (buf_t *b, svc_t c)
 {
-    //[Spleen] final check to prevent huge packets from being sent to players
-    if (b->cursize > 600)
-        SV_SendPackets();
-
 	b->WriteByte((byte)c);
 }
 
@@ -668,6 +664,19 @@ void MSG_WriteString (buf_t *b, const char *s)
 	if (simulated_connection)
 		return;
 	b->WriteString(s);
+}
+
+/**
+ * Add a delimitor to the buffer that signals a complete message.
+ * 
+ * @param b Buffer to delimit.
+ */
+void MSG_EndMessage(buf_t* b)
+{
+	if (simulated_connection)
+		return;
+
+	b->EndMessage();
 }
 
 int MSG_BytesLeft(void)

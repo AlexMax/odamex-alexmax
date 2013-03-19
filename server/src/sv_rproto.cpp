@@ -98,7 +98,7 @@ bool SV_SendPacket(player_t &pl)
 	client_t *cl = &pl.client;
 
 	if (cl->reliablebuf.overflowed)
-	{ 
+	{
 		SZ_Clear(&cl->netbuf);
 		SZ_Clear(&cl->reliablebuf);
 	    SV_DropClient(pl);

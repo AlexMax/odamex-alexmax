@@ -32,6 +32,7 @@
 
 // Max packet size to send and receive, in bytes
 #define	MAX_UDP_PACKET 8192
+#define MAX_SAFE_UDP_PACKET 576
 
 #define SERVERPORT  10666
 #define CLIENTPORT  10667
@@ -210,6 +211,7 @@ typedef struct
 
 extern  netadr_t  net_from;  // address of who sent the packet
 
+#define MAX_BUFFER_MESSAGES 64
 
 class buf_t
 {
@@ -217,6 +219,8 @@ public:
 	byte	*data;
 	size_t	allocsize, cursize, readpos;
 	bool	overflowed;  // set to true if the buffer size failed
+	size_t	msgdelim[MAX_BUFFER_MESSAGES]; // contains cursize after complete message
+	byte	msgindex; // contains the number of complete messages in buffer
 
     // Buffer seeking flags
     typedef enum
@@ -286,6 +290,15 @@ public:
 		{
 			memcpy(buf, c + startpos, l);
 		}
+	}
+
+	void EndMessage()
+	{
+		// No more room to delimit the message?
+		if (msgindex >= MAX_BUFFER_MESSAGES)
+			return;
+
+		msgdelim[msgindex++] = cursize;
 	}
 
 	int ReadByte()
@@ -438,6 +451,7 @@ public:
 	{
 		cursize = 0;
 		readpos = 0;
+		msgindex = 0;
 		overflowed = false;
 	}
 
@@ -554,6 +568,7 @@ void MSG_WriteBool(buf_t *b, bool);
 void MSG_WriteFloat(buf_t *b, float);
 void MSG_WriteString (buf_t *b, const char *s);
 void MSG_WriteChunk (buf_t *b, const void *p, unsigned l);
+void MSG_EndMessage (buf_t *b);
 
 int MSG_BytesLeft(void);
 int MSG_NextByte (void);
