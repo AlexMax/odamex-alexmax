@@ -13,11 +13,6 @@ if(WIN32)
   set(SERVER_WIN32_RESOURCES ${SERVER_WIN32_DIR}/server.rc)
 endif()
 
-# JsonCpp
-set(JSONCPP_DIR ../jsoncpp)
-file(GLOB JSONCPP_HEADERS ${JSONCPP_DIR}/json/*.h)
-set(JSONCPP_SOURCE ${JSONCPP_DIR}/jsoncpp.cpp)
-
 # Platform definitions
 define_platform()
 
@@ -26,7 +21,22 @@ add_definitions(-DJSON_IS_AMALGAMATION)
 if(WIN32 AND NOT MSVC)
   add_definitions(-DWINVER=0x0500)
 endif()
-include_directories(${JSONCPP_DIR} ${COMMON_DIR} ${SERVER_DIR} ${SERVER_WIN32_DIR})
+include_directories(${COMMON_DIR} ${SERVER_DIR} ${SERVER_WIN32_DIR})
+
+# Angelscript
+set(ANGELSCRIPT_DIR ../angelscript)
+set(ANGELSCRIPT_INCLUDE_DIR ${ANGELSCRIPT_DIR}/include)
+file(GLOB ANGELSCRIPT_HEADERS ${ANGELSCRIPT_INCLUDE_DIR}/*.h)
+set(ANGELSCRIPT_LIBRARY angelscript)
+
+include_directories(${ANGELSCRIPT_INCLUDE_DIR})
+
+# JsonCpp
+set(JSONCPP_DIR ../jsoncpp)
+file(GLOB JSONCPP_HEADERS ${JSONCPP_DIR}/json/*.h)
+set(JSONCPP_SOURCE ${JSONCPP_DIR}/jsoncpp.cpp)
+
+include_directories(${JSONCPP_DIR})
 
 # MiniUPnPc
 find_package(MiniUPnPc)
@@ -42,6 +52,8 @@ add_executable(odasrv
   ${COMMON_SOURCES} ${COMMON_HEADERS}
   ${SERVER_SOURCES} ${SERVER_HEADERS}
   ${SERVER_WIN32_HEADERS} ${SERVER_WIN32_RESOURCES})
+
+target_link_libraries(odasrv ${ANGELSCRIPT_LIBRARY})
 
 if(MINIUPNPC_FOUND)
   if(MINIUPNPC_STATIC_LIBRARIES)

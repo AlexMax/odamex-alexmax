@@ -59,6 +59,9 @@ add_subdirectory(server)
 add_subdirectory(master)
 add_subdirectory(odalaunch)
 
+# Subdirectories for libraries that will be built at compile-time
+add_subdirectory(angelscript)
+
 # Disable the ag-odalaunch target completely: -DNO_AG-ODALAUNCH_TARGET
 # This is only really useful when setting up a universal build.
 if(NOT NO_AG-ODALAUNCH_TARGET)

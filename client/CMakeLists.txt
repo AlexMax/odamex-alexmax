@@ -20,6 +20,14 @@ define_platform()
 # Client definitions
 include_directories(${COMMON_DIR} ${CLIENT_DIR})
 
+# Angelscript
+set(ANGELSCRIPT_DIR ../angelscript)
+set(ANGELSCRIPT_INCLUDE_DIR ${ANGELSCRIPT_DIR}/include)
+file(GLOB ANGELSCRIPT_HEADERS ${ANGELSCRIPT_INCLUDE_DIR}/*.h)
+set(ANGELSCRIPT_LIBRARY angelscript)
+
+include_directories(${ANGELSCRIPT_INCLUDE_DIR})
+
 # Textscreen
 set(TEXTSCREEN_LIBRARY "textscreen")
 set(TEXTSCREEN_DIR ../textscreen)
@@ -91,6 +99,8 @@ if(SDL_FOUND AND SDLMIXER_FOUND)
     ${COMMON_SOURCES} ${COMMON_HEADERS}
     ${CLIENT_SOURCES} ${CLIENT_HEADERS} ${CLIENT_WIN32_RESOURCES}
     ${CLIENT_MAC_OBJC_SOURCES})
+
+  target_link_libraries(odamex ${ANGELSCRIPT_LIBRARY})
   target_link_libraries(odamex ${TEXTSCREEN_LIBRARY})
   target_link_libraries(odamex ${SDL_LIBRARY})
   target_link_libraries(odamex ${SDLMIXER_LIBRARY})
@@ -146,7 +156,7 @@ if(SDL_FOUND AND SDLMIXER_FOUND)
     # Install the SDL framework into the bundle
     if(IS_DIRECTORY ${SDL_DIR})
       install(DIRECTORY ${SDL_DIR} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/odamex.app/Contents/Frameworks)
-      install(CODE "execute_process(COMMAND 
+      install(CODE "execute_process(COMMAND
         install_name_tool -change @rpath/SDL.framework/Versions/A/SDL
         @executable_path/../Frameworks/SDL.framework/Versions/A/SDL
         ${CMAKE_CURRENT_BINARY_DIR}/odamex.app/Contents/MacOS/odamex)
@@ -161,7 +171,7 @@ if(SDL_FOUND AND SDLMIXER_FOUND)
     # If PortMidi was built in install the PortMidi library into the bundle
     if(PortMidi_FOUND)
       install(FILES ${PORTMIDI_LIBRARIES} DESTINATION ${CMAKE_CURRENT_BINARY_DIR}/odamex.app/Contents/Frameworks/)
-      install(CODE "execute_process(COMMAND 
+      install(CODE "execute_process(COMMAND
         install_name_tool -change libportmidi.dylib
         @executable_path/../Frameworks/libportmidi.dylib
         ${CMAKE_CURRENT_BINARY_DIR}/odamex.app/Contents/MacOS/odamex)
