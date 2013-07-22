@@ -26,4 +26,9 @@ if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64" AND NOT APPLE)
   add_definitions(-fPIC)
 endif()
 
+# No strict aliasing in GNU
+if(CMAKE_COMPILER_IS_GNUCXX)
+  add_definitions("-fno-strict-aliasing")
+endif()
+
 add_library(${ANGELSCRIPT_LIBRARY} STATIC ${ANGELSCRIPT_SOURCES} ${ANGELSCRIPT_HEADERS})

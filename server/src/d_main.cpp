@@ -73,6 +73,7 @@
 #include "gi.h"
 #include "sv_main.h"
 #include "sv_banlist.h"
+#include "as_main.h"
 
 EXTERN_CVAR (sv_timelimit)
 EXTERN_CVAR (sv_nomonsters)
@@ -332,6 +333,7 @@ void D_DoomMain (void)
 	srand(time(NULL));
 
 	gamestate = GS_STARTUP;
+	AS_Init();
 	SetLanguageIDs ();
 	M_FindResponseFile();		// [ML] 23/1/07 - Add Response file support back in
 
@@ -370,6 +372,9 @@ void D_DoomMain (void)
 	}
 
 	I_Init ();
+
+	// [AM] Build our Game Scripts
+	AS_ParseScripts();
 
 	// Base systems have been inited; enable cvar callbacks
 	cvar_t::EnableCallbacks ();

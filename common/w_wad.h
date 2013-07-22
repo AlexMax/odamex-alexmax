@@ -1,4 +1,4 @@
-// Emacs style mode select   -*- C++ -*- 
+// Emacs style mode select   -*- C++ -*-
 //-----------------------------------------------------------------------------
 //
 // $Id$
@@ -83,6 +83,7 @@ typedef enum {
 	ns_sprites,
 	ns_flats,
 	ns_colormaps,
+	ns_scripts,
 	ns_skinbase = 0x80000000	// Each skin's status bar face gets own namespace
 } namespace_t;
 

@@ -543,6 +543,7 @@ std::vector<std::string> W_InitMultipleFiles (std::vector<std::string> &filename
 	W_MergeLumps ("S_START", "S_END", ns_sprites); // denis - fixme - security
 	W_MergeLumps ("F_START", "F_END", ns_flats);
 	W_MergeLumps ("C_START", "C_END", ns_colormaps);
+	W_MergeLumps ("AS_START", "AS_END", ns_scripts);
 
     // set up caching
 	M_Free(lumpcache);

@@ -87,6 +87,7 @@
 #include "stats.h"
 #include "p_ctf.h"
 #include "cl_main.h"
+#include "as_main.h"
 
 #ifdef GEKKO
 #include "i_wii.h"
@@ -684,6 +685,7 @@ void D_DoomMain (void)
 	M_ClearRandom();
 
 	gamestate = GS_STARTUP;
+	AS_Init();
 	SetLanguageIDs ();
 	M_FindResponseFile();		// [ML] 23/1/07 - Add Response file support back in
 
@@ -723,6 +725,9 @@ void D_DoomMain (void)
 
     // SDL needs video mode set up first before input code can be used
     I_InitInput();
+
+	// [AM] Build our Game Scripts
+	AS_ParseScripts();
 
 	// Base systems have been inited; enable cvar callbacks
 	cvar_t::EnableCallbacks ();
