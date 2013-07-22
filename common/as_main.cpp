@@ -21,6 +21,10 @@
 //
 //-----------------------------------------------------------------------------
 
+#include <map>
+#include <sstream>
+#include <string>
+
 #include "angelscript.h"
 
 #include "i_system.h"
@@ -31,6 +35,9 @@ asIScriptEngine* ScriptEngine = NULL;
 
 // Global module isntance
 asIScriptModule* ScriptModule = NULL;
+
+// Debug buffers
+std::map<std::string, std::string> DebugBuffers;
 
 void AS_Message(const asSMessageInfo* msg, void* param)
 {
@@ -54,7 +61,43 @@ void AS_Message(const asSMessageInfo* msg, void* param)
 
 	Printf(PRINT_HIGH, "%s:%d:%d %s: %s\n", msg->section, msg->row, msg->col, type, msg->message);
 
-	// [AM] TODO: Show the line and position where the error occurred.
+	// Dig the proper line out of the script
+	size_t index = 0;
+	std::string buffer = DebugBuffers[msg->section];
+	for (int row = 1; row < msg->row; row++)
+		index = buffer.find("\n", index);
+	size_t length = buffer.find("\n", index + 1) - index - 2;
+	std::string line = buffer.substr(index + 1, length);
+	Printf(PRINT_HIGH, "%s\n", line.c_str());
+
+	// Move the cursor into position.
+	int count = 1;
+	std::ostringstream cursor;
+	for (std::string::iterator it = line.begin();it != line.end();++it)
+	{
+		if (count == msg->col)
+		{
+			cursor << "^";
+			break;
+		}
+		else if (*it == '\t')
+			cursor << '\t';
+		else
+			cursor << ' ';
+		count++;
+	}
+	Printf(PRINT_HIGH, "%s\n", cursor.str().c_str());
+}
+
+void AS_ParseScript(const char* lumpname)
+{
+	int lump = W_CheckNumForName(lumpname, ns_scripts);
+	if (lump >= 0)
+	{
+		const char* buffer = static_cast<const char*>(W_CacheLumpNum(lump, PU_STATIC));
+		ScriptModule->AddScriptSection(lumpname, buffer);
+		DebugBuffers[lumpname] = buffer;
+	}
 }
 
 void AS_ParseScripts()
@@ -65,17 +108,7 @@ void AS_ParseScripts()
 	while ((lump = W_FindLump("ASINFO", lump)) != -1)
 	{
 		const char* entryname = static_cast<const char*>(W_CacheLumpNum(lump, PU_STATIC));
-		int entrylump = W_CheckNumForName(entryname, ns_scripts);
-		if (entrylump >= 0)
-		{
-			const char* buffer = static_cast<const char*>(W_CacheLumpNum(entrylump, PU_STATIC));
-			ScriptModule->AddScriptSection(entryname, buffer);
-		}
-		else
-		{
-			Printf(PRINT_HIGH, "Game script lump %s does not exist.\n", entryname);
-			continue;
-		}
+		AS_ParseScript(entryname);
 	}
 
 	int retval = asSUCCESS;
