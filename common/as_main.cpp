@@ -66,7 +66,7 @@ void AS_Message(const asSMessageInfo* msg, void* param)
 	size_t index = 0;
 	std::string buffer = DebugBuffers[msg->section];
 	for (int row = 1; row < msg->row; row++)
-		index = buffer.find("\n", index);
+		index = buffer.find("\n", index + 1);
 	size_t length = buffer.find("\n", index + 1) - index - 2;
 	std::string line = buffer.substr(index + 1, length);
 	Printf(PRINT_HIGH, "%s\n", line.c_str());
