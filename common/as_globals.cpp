@@ -31,9 +31,9 @@ struct GlobalFunction {
 	asDWORD callConv;
 };
 
-static void ASAPI_print(const char* str)
+static void ASAPI_print(const std::string &str)
 {
-	Printf(PRINT_HIGH, "%s", str);
+	Printf(PRINT_HIGH, "%s", str.c_str());
 }
 
 static GlobalFunction globalFunctions[] = {
