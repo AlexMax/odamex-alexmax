@@ -17,19 +17,37 @@
 // GNU General Public License for more details.
 //
 // DESCRIPTION:
-//   Angelscript
+//   Global Angelscript functions
 //
 //-----------------------------------------------------------------------------
 
-#ifndef __AS_MAIN__
-#define __AS_MAIN__
-
 #include "angelscript.h"
 
-extern asIScriptEngine* ScriptEngine;
-extern asIScriptModule* ScriptModule;
+#include "i_system.h"
 
-void AS_ParseScripts();
-void AS_Init();
+struct GlobalFunction {
+	const char* declaration;
+	const asSFuncPtr& funcPointer;
+	asDWORD callConv;
+};
 
-#endif
+static void ASAPI_print(const char* str)
+{
+	Printf(PRINT_HIGH, "%s", str);
+}
+
+static GlobalFunction globalFunctions[] = {
+	{"void print(const string &in)", asFUNCTION(ASAPI_print), asCALL_CDECL}
+};
+
+bool AS_RegisterGlobals(asIScriptEngine* se)
+{
+	int retval;
+	for (int i = 0;i < 1;i++)
+	{
+		retval = se->RegisterGlobalFunction(globalFunctions[i].declaration, globalFunctions[i].funcPointer, globalFunctions[i].callConv);
+		if (retval < asSUCCESS)
+			return false;
+	}
+	return true;
+}

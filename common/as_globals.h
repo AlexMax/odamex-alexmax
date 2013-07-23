@@ -17,19 +17,13 @@
 // GNU General Public License for more details.
 //
 // DESCRIPTION:
-//   Angelscript
+//   Global Angelscript functions
 //
 //-----------------------------------------------------------------------------
 
-#ifndef __AS_MAIN__
-#define __AS_MAIN__
+#ifndef __AS_GLOBALS__
+#define __AS_GLOBALS__
 
-#include "angelscript.h"
-
-extern asIScriptEngine* ScriptEngine;
-extern asIScriptModule* ScriptModule;
-
-void AS_ParseScripts();
-void AS_Init();
+bool AS_RegisterGlobals(asIScriptEngine* se);
 
 #endif

@@ -29,6 +29,8 @@
 
 #include "i_system.h"
 #include "w_wad.h"
+#include "as_stdstring.h"
+#include "as_globals.h"
 
 // Global engine instance
 asIScriptEngine* ScriptEngine = NULL;
@@ -43,20 +45,19 @@ void AS_Message(const asSMessageInfo* msg, void* param)
 {
 	const char* type;
 
-	switch (msg->type)
-	{
-	case asMSGTYPE_ERROR:
+	if (msg->type == asMSGTYPE_ERROR)
 		type = "error";
-		break;
-	case asMSGTYPE_WARNING:
+	else if (msg->type == asMSGTYPE_WARNING)
 		type = "warning";
-		break;
-	case asMSGTYPE_INFORMATION:
+	else
 		type = "info";
-		break;
-	default:
-		type = "???";
-		break;
+
+	if (msg->section == 0 || msg->row == 0 || msg->col == 0)
+	{
+		// We're missing a row, column or section, so we
+		// just need to return the type and error.
+		Printf(PRINT_HIGH, "%s: %s\n", type, msg->message);
+		return;
 	}
 
 	Printf(PRINT_HIGH, "%s:%d:%d %s: %s\n", msg->section, msg->row, msg->col, type, msg->message);
@@ -139,6 +140,13 @@ void AS_Init()
 	retval = ScriptEngine->SetMessageCallback(asFUNCTION(AS_Message), 0, asCALL_CDECL);
 	if (retval != asSUCCESS)
 		I_FatalError("AS_Init: Cannot set message handler.");
+
+	// Load string library
+	RegisterStdString(ScriptEngine);
+
+	// Load standard libraries
+	if (!AS_RegisterGlobals(ScriptEngine))
+		I_FatalError("AS_Init: Cannot register script globals.");
 
 	Printf(PRINT_HIGH, "AS_Init: AngelScript %s initialized.\n", ANGELSCRIPT_VERSION_STRING);
 }
