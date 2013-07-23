@@ -25,16 +25,39 @@
 
 #include "i_system.h"
 
+struct GlobalTypedef {
+	const char* type;
+	const char* decl;
+};
+
+struct GlobalProperty {
+	const char* declaration;
+	void* pointer;
+};
+
 struct GlobalFunction {
 	const char* declaration;
 	const asSFuncPtr& funcPointer;
 	asDWORD callConv;
 };
 
+static fixed_t fracbits = FRACBITS;
+static fixed_t fracunit = FRACUNIT;
+
 static void ASAPI_print(const std::string &str)
 {
 	Printf(PRINT_HIGH, "%s", str.c_str());
 }
+
+static GlobalTypedef globalTypedefs[] = {
+	{"angle", "uint"},
+	{"fixed", "int"}
+};
+
+static GlobalProperty globalProperties[] = {
+	{"const fixed FRACBITS", &fracbits},
+	{"const fixed FRACUNIT", &fracunit}
+};
 
 static GlobalFunction globalFunctions[] = {
 	{"void print(const string &in)", asFUNCTION(ASAPI_print), asCALL_CDECL}
@@ -43,7 +66,29 @@ static GlobalFunction globalFunctions[] = {
 bool AS_RegisterGlobals(asIScriptEngine* se)
 {
 	int retval;
-	for (int i = 0;i < 1;i++)
+	size_t count;
+
+	// Initialize global typedefs
+	count = sizeof(globalTypedefs) / sizeof(GlobalTypedef);
+	for (size_t i = 0;i < count;i++)
+	{
+		retval = se->RegisterTypedef(globalTypedefs[i].type, globalTypedefs[i].decl);
+		if (retval < asSUCCESS)
+			return false;
+	}
+
+	// Initialize global properties
+	count = sizeof(globalProperties) / sizeof(GlobalProperty);
+	for (size_t i = 0;i < count;i++)
+	{
+		retval = se->RegisterGlobalProperty(globalProperties[i].declaration, globalProperties[i].pointer);
+		if (retval < asSUCCESS)
+			return false;
+	}
+
+	// Initialize global functions
+	count = sizeof(globalFunctions) / sizeof(GlobalFunction);
+	for (size_t i = 0;i < count;i++)
 	{
 		retval = se->RegisterGlobalFunction(globalFunctions[i].declaration, globalFunctions[i].funcPointer, globalFunctions[i].callConv);
 		if (retval < asSUCCESS)
