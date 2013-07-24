@@ -69,7 +69,7 @@ elseif(SOLARIS)
   target_link_libraries(odasrv socket nsl)
 endif()
 
-if(UNIX)
-	target_link_libraries(odasrv rt)
+if(UNIX AND NOT APPLE)
+  target_link_libraries(odasrv rt)
 endif()
 
