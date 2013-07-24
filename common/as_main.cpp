@@ -63,6 +63,11 @@ void AS_Message(const asSMessageInfo* msg, void* param)
 	Printf(PRINT_HIGH, "%s:%d:%d %s: %s\n", msg->section, msg->row, msg->col, type, msg->message);
 
 	// Dig the proper line out of the script
+	// [AM] FIXME: This must handle both line-ending styles, currently it only
+	//             works correctly with CRLF.
+	//      FIXME: We should suppress multiple instances of the same section,
+	//             line, and column one right after the other until the last
+	//             instance.
 	size_t index = 0;
 	std::string buffer = DebugBuffers[msg->section];
 	for (int row = 1; row < msg->row; row++)

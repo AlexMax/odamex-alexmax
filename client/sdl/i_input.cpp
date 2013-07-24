@@ -550,9 +550,9 @@ void I_GetEvent()
 
 	// Force SDL to gather events from input devices. This is called
 	// implicitly from SDL_PollEvent but since we're using SDL_PeepEvents to
-	// process only mouse events, SDL_PumpEvents is necessary.
+	// process only non-mouse events, SDL_PumpEvents is necessary.
 	SDL_PumpEvents();
-	int num_events = SDL_PeepEvents(sdl_events, MAX_EVENTS, SDL_GETEVENT, SDL_ALLEVENTS);
+	int num_events = SDL_PeepEvents(sdl_events, MAX_EVENTS, SDL_GETEVENT, SDL_ALLEVENTS & ~SDL_MOUSEEVENTMASK); 
 
 	for (int i = 0; i < num_events; i++)
 	{
@@ -782,6 +782,20 @@ void I_ShutdownMouseDriver()
 	mouse_input = NULL;
 }
 
+static void I_SetSDLIgnoreMouseEvents()
+{
+	SDL_EventState(SDL_MOUSEMOTION, SDL_IGNORE);
+	SDL_EventState(SDL_MOUSEBUTTONDOWN, SDL_IGNORE);
+	SDL_EventState(SDL_MOUSEBUTTONUP, SDL_IGNORE);
+}
+
+static void I_UnsetSDLIgnoreMouseEvents()
+{
+	SDL_EventState(SDL_MOUSEMOTION, SDL_ENABLE);
+	SDL_EventState(SDL_MOUSEBUTTONDOWN, SDL_ENABLE);
+	SDL_EventState(SDL_MOUSEBUTTONUP, SDL_ENABLE);
+}
+
 //
 // I_InitMouseDriver
 //
@@ -795,6 +809,8 @@ void I_InitMouseDriver()
 	if (nomouse)
 		return;
 
+	bool using_sdl_mouse = true;
+
 	// try to initialize the user's preferred mouse driver
 	MouseDriverInfo_t* info = I_FindMouseDriverInfo(mouse_driver_id);
 	if (info)
@@ -805,6 +821,9 @@ void I_InitMouseDriver()
 			Printf(PRINT_HIGH, "I_InitMouseDriver: Initializing %s input.\n", info->name);
 		else
 			Printf(PRINT_HIGH, "I_InitMouseDriver: Unable to initalize %s input.\n", info->name);
+
+		if (mouse_driver_id != SDL_MOUSE_DRIVER && mouse_input != NULL)
+			using_sdl_mouse = false;
 	}
 
 	// fall back on SDLMouse if the preferred driver failed to initialize
@@ -817,6 +836,14 @@ void I_InitMouseDriver()
 			Printf(PRINT_HIGH, "I_InitMouseDriver: Unable to initialize SDL Mouse input as a fallback.\n");
 	}
 
+	// tell SDL to ignore mouse events when using a non-SDL mouse driver
+	// otherwise mouse events are never cleared out of SDL's event queue
+	if (using_sdl_mouse)
+		I_UnsetSDLIgnoreMouseEvents();
+	else
+		I_SetSDLIgnoreMouseEvents();
+
+	I_FlushInput();
 	I_ResumeMouse();
 }
 
