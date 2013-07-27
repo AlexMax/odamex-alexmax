@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -904,7 +904,6 @@ void C_FullConsole (void)
 		S_Start ();
  		SN_StopAllSequences ();
 		V_SetBlend (0,0,0,0);
-		I_PauseMouse ();
 		I_EnableKeyRepeat();
 	} else
 		C_AdjustBottom ();
@@ -920,7 +919,6 @@ void C_ToggleConsole (void)
 			ConsoleState = c_falling;
 		HistPos = NULL;
 		TabbedLast = false;
-		I_PauseMouse ();
 		I_EnableKeyRepeat();
 	}
 	else if (gamestate != GS_FULLCONSOLE && gamestate != GS_STARTUP
@@ -931,7 +929,6 @@ void C_ToggleConsole (void)
 		else
 			ConsoleState = c_rising;
 		C_FlushDisplay ();
-		I_ResumeMouse ();
 		I_DisableKeyRepeat();
 	}
 }
@@ -947,7 +944,6 @@ void C_HideConsole (void)
 		HistPos = NULL;
 		if (!menuactive)
 		{
-			I_ResumeMouse ();
 			I_DisableKeyRepeat();
 		}
 	}

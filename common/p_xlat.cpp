@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -438,6 +438,13 @@ void P_TranslateLineDef (line_t *ld, maplinedef_t *mld)
 		for (i = 0; i < 5; i++)
 			ld->args[i] = SpecialTranslation[special].args[i] == TAG ? tag :
 						  SpecialTranslation[special].args[i];
+	}
+	else if (special == 337)
+	{
+		ld->special = Line_Horizon;
+		ld->flags = flags;
+		ld->id = tag;
+		memset(ld->args, 0, sizeof(ld->args));
 	}
 	else if (special >= 340 && special <= 347)
 	{

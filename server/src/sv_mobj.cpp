@@ -4,7 +4,7 @@
 // $Id: sv_mobj.cpp 1832 2010-09-01 23:59:33Z mike $
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -80,13 +80,7 @@ void P_SpawnPlayer (player_t &player, mapthing2_t *mthing)
 		return;
 
 	if (p->playerstate == PST_REBORN || p->playerstate == PST_ENTER)
-	{
 		G_PlayerReborn (*p);
-		// [AM] If we're "reborn" as a spectator, don't touch the keepinventory
-		//      flag, but otherwise turn it off.
-		if (!p->spectator)
-			p->keepinventory = false;
-	}
 
 	AActor *mobj = new AActor (mthing->x << FRACBITS, mthing->y << FRACBITS, ONFLOORZ, MT_PLAYER);
 
@@ -95,7 +89,7 @@ void P_SpawnPlayer (player_t &player, mapthing2_t *mthing)
 	//		  mobj->translation = translationtables + 256*playernum;
 
 	mobj->angle = ANG45 * (mthing->angle/45);
-	mobj->pitch = mobj->roll = 0;
+	mobj->pitch = 0;
 	mobj->player = p;
 	mobj->health = p->health;
 
@@ -157,6 +151,11 @@ void P_SpawnPlayer (player_t &player, mapthing2_t *mthing)
 		SV_SpawnMobj(mobj);
 	}
 }
+
+/**
+ * Stub
+ */
+void P_ShowSpawns(mapthing2_t* mthing) { }
 
 VERSION_CONTROL (sv_mobj_cpp, "$Id: sv_mobj.cpp 1832 2010-09-01 23:59:33Z mike $")
 

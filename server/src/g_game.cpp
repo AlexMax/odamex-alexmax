@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -87,9 +87,9 @@ BOOL 			usergame;				// ok to save / end game
 BOOL			sendcenterview;			// send a center view event next tic
 BOOL			menuactive;				// only to make sure p_tick doesn't bitch
 
-BOOL			timingdemo; 			// if true, exit with report on completion
-BOOL 			nodrawers;				// for comparative timing purposes
-BOOL 			noblit; 				// for comparative timing purposes
+bool			timingdemo; 			// if true, exit with report on completion
+bool 			nodrawers;				// for comparative timing purposes
+bool 			noblit; 				// for comparative timing purposes
 
 BOOL	 		viewactive;
 
@@ -549,39 +549,34 @@ void G_PlayerFinishLevel (player_t &player)
 void G_PlayerReborn (player_t &p) // [Toke - todo] clean this function
 {
 	size_t i;
-	if (!p.keepinventory)
+	for (i = 0; i < NUMAMMO; i++)
 	{
-		for (i = 0; i < NUMAMMO; i++)
-		{
-			p.maxammo[i] = maxammo[i];
-			p.ammo[i] = 0;
-		}
-		for (i = 0; i < NUMWEAPONS; i++)
-			p.weaponowned[i] = false;
-
-		p.backpack = false;
-		p.health = deh.StartHealth;		// [RH] Used to be MAXHEALTH
-		p.armortype = 0;
-		p.armorpoints = 0;
-		p.readyweapon = p.pendingweapon = wp_pistol;
-		p.weaponowned[wp_fist] = true;
-		p.weaponowned[wp_pistol] = true;
-		p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
+		p.maxammo[i] = maxammo[i];
+		p.ammo[i] = 0;
 	}
-
+	for (i = 0; i < NUMWEAPONS; i++)
+		p.weaponowned[i] = false;
 	if (!sv_keepkeys)
 	{
 		for (i = 0; i < NUMCARDS; i++)
 			p.cards[i] = false;
 	}
-
 	for (i = 0; i < NUMPOWERS; i++)
 		p.powers[i] = false;
 	for (i = 0; i < NUMFLAGS; i++)
 		p.flags[i] = false;
+	p.backpack = false;
 
 	p.usedown = p.attackdown = true;	// don't do anything immediately
 	p.playerstate = PST_LIVE;
+	p.health = deh.StartHealth;		// [RH] Used to be MAXHEALTH
+	p.armortype = 0;
+	p.armorpoints = 0;
+	p.readyweapon = p.pendingweapon = wp_pistol;
+	p.weaponowned[wp_fist] = true;
+	p.weaponowned[wp_pistol] = true;
+	p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
+
 	p.death_time = 0;
 	p.tic = 0;
 }

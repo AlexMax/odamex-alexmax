@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -71,8 +71,6 @@
 bool G_CheckSpot (player_t &player, mapthing2_t *mthing);
 void P_SpawnPlayer (player_t &player, mapthing2_t *mthing);
 
-extern int timingdemo;
-
 extern int shotclock;
 
 EXTERN_CVAR(sv_fastmonsters)
@@ -81,7 +79,7 @@ EXTERN_CVAR(sv_gravity)
 EXTERN_CVAR(sv_aircontrol)
 
 // Start time for timing demos
-int starttime;
+uint64_t starttime;
 
 // ACS variables with world scope
 int ACS_WorldVars[NUM_WORLDVARS];
@@ -473,6 +471,8 @@ void G_DoLoadLevel (int position)
 	else
 		lastposition = position;
 
+	cvar_t::UnlatchCVars();
+
 	G_InitLevelLocals ();
 
     Printf_Bold ("\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36"
@@ -596,16 +596,18 @@ void G_DoLoadLevel (int position)
 	mousex = mousey = 0;
 	sendpause = sendsave = paused = sendcenterview = false;
 
-	if (timingdemo) {
+	if (timingdemo)
+	{
 		static BOOL firstTime = true;
 
-		if (firstTime) {
-			starttime = I_GetTimePolled ();
+		if (firstTime)
+		{
+			starttime = I_MSTime();
 			firstTime = false;
 		}
 	}
 
-	level.starttime = I_GetTime ();
+	level.starttime = I_MSTime() * TICRATE / 1000;
 	G_UnSnapshotLevel (!savegamerestore);	// [RH] Restore the state of the level.
     P_DoDeferedScripts ();	// [RH] Do script actions that were triggered on another map.
 

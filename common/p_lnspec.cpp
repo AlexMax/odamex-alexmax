@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -1948,24 +1948,21 @@ BOOL CheckIfExitIsGood (AActor *self)
 
 	// [Toke - dmflags] Old location of DF_NO_EXIT
 
-    if (sv_gametype != GM_COOP && self)
-    {
+	if (sv_gametype != GM_COOP && self)
+	{
         if (!sv_allowexit)
         {
-            if (sv_fragexitswitch && serverside)
-            {
-                //while (self->player->health > 0)
-                    P_DamageMobj (self->player->mo, NULL, NULL, 10000, MOD_SUICIDE);
-            }
+			if (sv_fragexitswitch && serverside)
+				P_DamageMobj(self, NULL, NULL, 10000, MOD_SUICIDE);
 
-            return false;
-        }
-    }
+			return false;
+		}
+	}
 
 	if (self->player)
-		Printf (PRINT_HIGH, "%s exited the level.\n", self->player->userinfo.netname);
+		Printf (PRINT_HIGH, "%s exited the level.\n", self->player->userinfo.netname.c_str());
 
-    return true;
+	return true;
 }
 
 VERSION_CONTROL (p_lnspec_cpp, "$Id$")

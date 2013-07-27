@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1997-2000 by id Software Inc.
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -28,12 +28,9 @@
 #include <sstream>
 #include <functional>
 
+#include "win32inc.h"
 #ifdef WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifndef _XBOX
-#include <windows.h>
-#endif // !_XBOX
-#include "win32time.h"
+    #include "win32time.h"
 #endif // WIN32
 
 #include "doomtype.h"
@@ -214,16 +211,9 @@ BOOL IsNum (char *str)
 
 // [Russell] Returns 0 if strings are the same, optional parameter for case
 // sensitivity
-int StdStringCompare(const std::string &s1, const std::string &s2,
-    bool CIS = false)
+bool iequals(const std::string &s1, const std::string &s2)
 {
-	// Convert to upper case
-	if (CIS)
-	{
-		return StdStringToUpper(s1).compare(StdStringToUpper(s2));
-	}
-
-    return s1.compare(s2);
+	return StdStringToUpper(s1).compare(StdStringToUpper(s2)) == 0;
 }
 
 size_t StdStringFind(const std::string& haystack, const std::string& needle,
@@ -462,7 +452,7 @@ bool StrToTime(std::string str, time_t &tim) {
 	return true;
 }
 
-// [SL] Reimplement std::isspace 
+// [SL] Reimplement std::isspace
 static int _isspace(int c)
 {
 	return (c == ' ' || c == '\n' || c == '\t' || c == '\v' || c == '\f' || c == '\r');
@@ -474,14 +464,14 @@ std::string &TrimStringStart(std::string &s)
 	s.erase(s.begin(), std::find_if(s.begin(), s.end(), std::not1(std::ptr_fun<int, int>(_isspace))));
 	return s;
 }
- 
+
 // Trim whitespace from the end of a string
 std::string &TrimStringEnd(std::string &s)
 {
 	s.erase(std::find_if(s.rbegin(), s.rend(), std::not1(std::ptr_fun<int, int>(_isspace))).base(), s.end());
 	return s;
 }
- 
+
 // Trim whitespace from the start and end of a string
 std::string &TrimString(std::string &s)
 {

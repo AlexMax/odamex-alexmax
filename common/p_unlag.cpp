@@ -4,7 +4,7 @@
 // $Id: p_unlag.cpp $
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -48,6 +48,7 @@ void SV_SendDestroyActor(AActor *mo);
 #endif	// _UNLAG_DEBUG_
 
 EXTERN_CVAR(sv_unlag)
+EXTERN_CVAR(sv_maxunlagtime)
 
 Unlag::SectorHistoryRecord::SectorHistoryRecord()
 	:	sector(NULL), history_size(0),
@@ -398,9 +399,6 @@ void Unlag::unregisterPlayer(byte player_id)
 	if (!Unlag::enabled())
 		return;
 
-	if (!validplayer(idplayer(player_id)))
-		return;
-
 	size_t history_index = player_id_map[player_id];
 	if (history_index >= player_history.size())
 		return;
@@ -557,11 +555,15 @@ void Unlag::setRoundtripDelay(byte player_id, byte svgametic)
 {
 	if (!Unlag::enabled())
 		return;
-	
+
+	size_t maxdelay = TICRATE * sv_maxunlagtime;
+	if (maxdelay > Unlag::MAX_HISTORY_TICS)
+		maxdelay = Unlag::MAX_HISTORY_TICS;
+
 	size_t delay = ((gametic & 0xFF) + 256 - svgametic) & 0xFF;
 	
 	size_t player_index = player_id_map[player_id];
-	player_history[player_index].current_lag = delay;
+	player_history[player_index].current_lag = MIN(delay, maxdelay);
 	
 	#ifdef _UNLAG_DEBUG_
 	DPrintf("Unlag (%03d): received gametic %d from player %d, lag = %d\n",
@@ -590,6 +592,38 @@ void Unlag::getReconciliationOffset(	byte target_id,
 	x = player_history[target_index].offset_x;
 	y = player_history[target_index].offset_y;
 	z = player_history[target_index].offset_z;
+}
+
+
+//
+// Unlag::getCurrentPlayerPosition
+//
+// Changes the x, y, z parameters to the position of a player that
+// was saved prior to reconciliation.
+//
+void Unlag::getCurrentPlayerPosition(	byte player_id,
+										fixed_t &x, fixed_t &y, fixed_t &z)
+{
+	x = y = z = 0;
+
+	size_t cur = player_id_map[player_id];
+	player_t* player = player_history[cur].player;
+
+	if (!player || !player->mo || player->spectator)
+		return;
+
+	if (Unlag::enabled() && reconciled)
+	{
+		x = player_history[cur].backup_x;
+		y = player_history[cur].backup_y;
+		z = player_history[cur].backup_z;
+	}
+	else
+	{
+		x = player->mo->x;
+		y = player->mo->y;
+		z = player->mo->z;
+	}
 }
 
 

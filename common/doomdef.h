@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -228,21 +228,6 @@ enum weapontype_t
 
 	// No pending weapon change.
 	wp_nochange
-};
-
-// The default preference ordering when the player runs out of one type of ammo
-// Vanilla Doom compatible
-const byte default_weaponprefs[NUMWEAPONS] =
-{
-	0,		// wp_fist
-	4,		// wp_pistol
-	5,		// wp_shotgun
-	6,		// wp_chaingun
-	1,		// wp_missile
-	8,		// wp_plasma
-	2,		// wp_bfg
-	3,		// wp_chainsaw
-	7		// wp_supershotgun
 };
 
 inline FArchive &operator<< (FArchive &arc, weapontype_t i)

@@ -6,7 +6,7 @@
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -131,9 +131,28 @@ void NetDemo::cleanUp()
 	state = oldstate = NetDemo::st_stopped;
 }
 
-
-
+/**
+ * Error handler.
+ *
+ * Generic error handler for netdemo issues.
+ * 
+ * @param message Error message.
+ */
 void NetDemo::error(const std::string &message)
+{
+	cleanUp();
+	Printf(PRINT_HIGH, "%s\n", message.c_str());
+}
+
+/**
+ * Fatal error hendler.
+ *
+ * Error handler for netdemo issues that should blank out the view of
+ * the game.  Generally used for issues that come up during playback.
+ * 
+ * @param message Error message.
+ */
+void NetDemo::fatalError(const std::string &message)
 {
 	cleanUp();
 	gameaction = ga_nothing;
@@ -141,7 +160,6 @@ void NetDemo::error(const std::string &message)
 
 	Printf(PRINT_HIGH, "%s\n", message.c_str());
 }
-
 
 //
 // writeHeader()
@@ -851,7 +869,7 @@ void NetDemo::readMessageBody(buf_t *netbuffer, uint32_t len)
 	if (cnt < len)
 	{
 		delete[] msgdata;
-		error("Can not read netdemo message.");
+		fatalError("Can not read netdemo message.");
 		return;
 	}
 
@@ -1115,7 +1133,7 @@ void NetDemo::writeConnectionSequence(buf_t *netbuffer)
 	// our userinfo
 	MSG_WriteMarker	(netbuffer, svc_userinfo);
 	MSG_WriteByte	(netbuffer, consoleplayer().id);
-	MSG_WriteString	(netbuffer, consoleplayer().userinfo.netname);
+	MSG_WriteString	(netbuffer, consoleplayer().userinfo.netname.c_str());
 	MSG_WriteByte	(netbuffer, consoleplayer().userinfo.team);
 	MSG_WriteLong	(netbuffer, consoleplayer().userinfo.gender);
 	MSG_WriteLong	(netbuffer, consoleplayer().userinfo.color);
@@ -1351,14 +1369,14 @@ void NetDemo::readSnapshot(const netdemo_index_entry_t *snap)
 
 	if (len > NetDemo::MAX_SNAPSHOT_SIZE)
 	{
-		error("Snapshot too large to read");
+		fatalError("Snapshot too large to read");
 		return;
 	}
 		
 	size_t cnt = fread(snapbuf, 1, len, demofp);
 	if (cnt < len)
 	{
-		error("Unable to read snapshot from data file");
+		fatalError("Unable to read snapshot from data file");
 		return;
 	}
 
@@ -1608,7 +1626,7 @@ void NetDemo::readSnapshotData(byte *buf, size_t length)
 	arc.Close();
 
 	if (check != 0x1d)
-		error("Bad snapshot");
+		fatalError("Bad snapshot");
 	
 	consoleplayer_id = cid;
 	

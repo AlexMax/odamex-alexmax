@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -114,12 +114,12 @@ typedef struct menuitem_s {
 		int				  flagmask;
 	} a;
 	union {
-		float			  min;		/* aka numvalues aka invflag */
+		float			  leftval;		/* aka numvalues aka invflag */
 		int				  key1;
 		const char			 *res1;
 	} b;
 	union {
-		float			  max;
+		float			  rightval;
 		int				  key2;
 		const char			 *res2;
 	} c;

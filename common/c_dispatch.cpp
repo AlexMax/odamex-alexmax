@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -770,6 +770,17 @@ void DConsoleAlias::C_ArchiveAliases (FILE *f)
 
 		if (alias->IsAlias())
 			static_cast<DConsoleAlias *>(alias)->Archive (f);
+	}
+}
+
+void DConsoleAlias::DestroyAll()
+{
+	for (command_map_t::iterator i = Commands().begin(), e = Commands().end(); i != e; ++i)
+	{
+		DConsoleCommand *alias = i->second;
+
+		if (alias->IsAlias())
+			delete alias;
 	}
 }
 

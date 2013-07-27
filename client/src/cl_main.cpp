@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -30,6 +30,7 @@
 #include "g_game.h"
 #include "d_net.h"
 #include "p_local.h"
+#include "p_tick.h"
 #include "s_sound.h"
 #include "gi.h"
 #include "i_net.h"
@@ -148,6 +149,9 @@ EXTERN_CVAR (cl_skin)
 EXTERN_CVAR (cl_gender)
 EXTERN_CVAR (cl_interp)
 EXTERN_CVAR (cl_predictsectors)
+
+EXTERN_CVAR (mute_spectators)
+EXTERN_CVAR (mute_enemies)
 
 CVAR_FUNC_IMPL (cl_autoaim)
 {
@@ -273,7 +277,6 @@ EXTERN_CVAR (cl_autorecord)
 EXTERN_CVAR (cl_splitnetdemos)
 EXTERN_CVAR (st_scale)
 
-void CL_RunTics (void);
 void CL_PlayerTimes (void);
 void CL_GetServerSettings(void);
 void CL_RequestDownload(std::string filename, std::string filehash = "");
@@ -291,6 +294,12 @@ void CL_SimulateWorld();
 void CalcTeamFrags (void);
 
 // some doom functions (not csDoom)
+void D_Display(void);
+void D_DoAdvanceDemo(void);
+void M_Ticker(void);
+
+void R_InterpolationTicker();
+
 size_t P_NumPlayersInGame();
 void G_PlayerReborn (player_t &player);
 void CL_SpawnPlayer ();
@@ -394,6 +403,9 @@ void CL_QuitNetGame(void)
 	sv_allowjump = 1;
 	sv_allowexit = 1;
 	sv_allowredscreen = 1;
+
+	mute_spectators = 0.f;
+	mute_enemies = 0.f;
 
 	P_ClearAllNetIds();
 	players.clear();
@@ -600,18 +612,121 @@ void CL_DisconnectClient(void)
 	CL_CheckDisplayPlayer();
 }
 
+extern BOOL advancedemo;
+QWORD nextstep = 0;
+int canceltics = 0;
+
+void CL_StepTics(unsigned int count)
+{
+	DObject::BeginFrame ();
+	
+	// run the realtics tics
+	while (count--)
+	{
+		if (canceltics && canceltics--)
+			continue;
+
+		NetUpdate();
+
+		if (advancedemo)
+			D_DoAdvanceDemo();
+		
+		C_Ticker ();
+		M_Ticker ();
+
+		if (P_AtInterval(TICRATE))
+			CL_PlayerTimes();
+
+		if (sv_gametype == GM_CTF)
+			CTF_RunTics ();
+
+		Maplist_Runtic();
+
+		R_InterpolationTicker();
+
+		G_Ticker ();
+		gametic++;
+		if (netdemo.isPlaying() && !netdemo.isPaused())
+			netdemo.ticker();
+	}
+	
+	DObject::EndFrame ();
+}
+
+//
+// CL_RenderTics
+//
+void CL_RenderTics()
+{
+	D_Display();
+}
+
+//
+// CL_RunTics
+//
+void CL_RunTics()
+{
+	std::string cmd = I_ConsoleInput();
+	if (cmd.length())
+		AddCommandString(cmd);
+
+	if (CON.is_open())
+	{
+		CON.clear();
+		if (!CON.eof())
+		{
+			std::getline(CON, cmd);
+			AddCommandString(cmd);
+		}
+	}
+
+	if (step_mode)
+	{
+		NetUpdate();
+
+		if (nextstep)
+		{
+			canceltics = 0;
+			CL_StepTics(nextstep);
+			nextstep = 0;
+
+			// debugging output
+			extern unsigned char prndindex;
+			if (players.size() && players[0].mo)
+				Printf(PRINT_HIGH, "level.time %d, prndindex %d, %d %d %d\n",
+						level.time, prndindex, players[0].mo->x, players[0].mo->y, players[0].mo->z);
+			else
+ 				Printf(PRINT_HIGH, "level.time %d, prndindex %d\n", level.time, prndindex);
+		}
+	}
+	else
+	{
+		CL_StepTics(1);
+	}
+
+	if (!connected)
+		CL_RequestConnectInfo();
+
+	// [RH] Use the consoleplayer's camera to update sounds
+	S_UpdateSounds(listenplayer().camera);	// move positional sounds
+	S_UpdateMusic();	// play another chunk of music
+
+	D_DisplayTicker();
+}
+
 /////// CONSOLE COMMANDS ///////
 
 BEGIN_COMMAND (stepmode)
 {
-    if (step_mode)
-        step_mode = false;
-    else
-        step_mode = true;
-        
-    return;
+	step_mode = !step_mode;
 }
 END_COMMAND (stepmode)
+
+BEGIN_COMMAND (step)
+{
+	nextstep = argc > 1 ? atoi(argv[1]) : 1;
+}
+END_COMMAND (step)
 
 BEGIN_COMMAND (connect)
 {
@@ -722,7 +837,7 @@ BEGIN_COMMAND (playerinfo)
 	}
 
 	Printf (PRINT_HIGH, "---------------[player info]----------- \n");
-	Printf (PRINT_HIGH, " userinfo.netname     - %s \n",	player->userinfo.netname);
+	Printf (PRINT_HIGH, " userinfo.netname     - %s \n",	player->userinfo.netname.c_str());
 	Printf (PRINT_HIGH, " userinfo.team        - %d \n",	player->userinfo.team);
 	Printf (PRINT_HIGH, " userinfo.color       - #%06x \n",	player->userinfo.color);
 	Printf (PRINT_HIGH, " userinfo.skin        - %s \n",	skins[player->userinfo.skin].name);
@@ -946,7 +1061,7 @@ void STACK_ARGS call_terms (void);
 void CL_QuitCommand()
 {
 	call_terms();
-	exit (0);
+	exit(EXIT_SUCCESS);
 }
 
 BEGIN_COMMAND (quit)
@@ -1169,11 +1284,11 @@ void CL_MoveThing(AActor *mobj, fixed_t x, fixed_t y, fixed_t z)
 //
 void CL_SendUserInfo(void)
 {
-	userinfo_t *coninfo = &consoleplayer().userinfo;
+	UserInfo* coninfo = &consoleplayer().userinfo;
 	D_SetupUserInfo();
 
 	MSG_WriteMarker	(&net_buffer, clc_userinfo);
-	MSG_WriteString	(&net_buffer, coninfo->netname);
+	MSG_WriteString	(&net_buffer, coninfo->netname.c_str());
 	MSG_WriteByte	(&net_buffer, coninfo->team); // [Toke]
 	MSG_WriteLong	(&net_buffer, coninfo->gender);
 	MSG_WriteLong	(&net_buffer, coninfo->color);
@@ -1226,8 +1341,7 @@ void CL_SetupUserInfo(void)
 	byte who = MSG_ReadByte();
 	player_t *p = &CL_FindPlayer(who);
 
-	strncpy(p->userinfo.netname, MSG_ReadString(), sizeof(p->userinfo.netname));
-
+	p->userinfo.netname = MSG_ReadString();
 	p->userinfo.team	= (team_t)MSG_ReadByte();
 	p->userinfo.gender	= (gender_t)MSG_ReadLong();
 	p->userinfo.color	= MSG_ReadLong();
@@ -1298,8 +1412,24 @@ void CL_MoveMobj(void)
 	if (!mo)
 		return;
 
-	CL_MoveThing (mo, x, y, z);
-	mo->rndindex = rndindex;
+	if (mo->player)
+	{
+		// [SL] 2013-07-21 - Save the position information to a snapshot
+		int snaptime = last_svgametic;
+		PlayerSnapshot newsnap(snaptime);
+		newsnap.setAuthoritative(true);
+		
+		newsnap.setX(x);
+		newsnap.setY(y);
+		newsnap.setZ(z);
+		
+		mo->player->snapshots.addSnapshot(newsnap);
+	}
+	else
+	{
+		CL_MoveThing (mo, x, y, z);
+		mo->rndindex = rndindex;
+	}
 }
 
 //
@@ -1537,7 +1667,6 @@ bool CL_Connect(void)
     network_game = true;
 	serverside = false;
 	simulated_connection = netdemo.isPlaying();
-	gamestate = GS_CONNECTED;
 
 	CL_Decompress(0);
 	CL_ParseCommands();
@@ -1553,6 +1682,9 @@ bool CL_Connect(void)
 
 	noservermsgs = false;
 	last_received = gametic;
+	
+	if (gamestate != GS_DOWNLOAD)
+        gamestate = GS_CONNECTED;
 
 	return true;
 }
@@ -1693,9 +1825,21 @@ void CL_Say()
 	const char* name;
 
 	if (!validplayer(player))
-		name = "???";
-	else
-		name = player.userinfo.netname;
+		return;
+
+	if (consoleplayer().id != player.id)
+	{
+		if (mute_spectators && player.spectator)
+			return;
+
+		if (mute_enemies && !player.spectator &&
+		    (sv_gametype == GM_DM ||
+		    ((sv_gametype == GM_TEAMDM || sv_gametype == GM_CTF) &&
+		     player.userinfo.team != consoleplayer().userinfo.team)))
+			return;
+	}
+
+	name = player.userinfo.netname.c_str();
 
 	switch (who)
 	{
@@ -1753,31 +1897,15 @@ void CL_UpdatePlayer()
 	fixed_t y = MSG_ReadLong();
 	fixed_t z = MSG_ReadLong();
 
-	angle_t angle = 0, pitch = 0;
-
-	// [SL] 2012-06-15 - Netdemo compatibility with 0.6.0 and prior
-	if (gameversion <= 60)
-	{
-		angle = MSG_ReadLong();
-	}
-	else
-	{
-		angle = MSG_ReadShort() << FRACBITS;
-		pitch = MSG_ReadShort() << FRACBITS;
-	}
+	angle_t angle = MSG_ReadShort() << FRACBITS;
+	angle_t pitch = MSG_ReadShort() << FRACBITS;
 
 	int frame = MSG_ReadByte();
 	fixed_t momx = MSG_ReadLong();
 	fixed_t momy = MSG_ReadLong();
 	fixed_t momz = MSG_ReadLong();
 
-	int invisibility = 0;
-	
-	// [SL] 2012-06-15 - Netdemo compatibility with 0.6.0 and prior
-	if (gameversion <= 60)
-		invisibility = MSG_ReadLong();
-	else
-		invisibility = MSG_ReadByte();
+	int invisibility = MSG_ReadByte();
 
 	if	(!validplayer(*p) || !p->mo)
 		return;
@@ -2141,11 +2269,7 @@ void CL_SpawnPlayer()
 		p->mo->health = 0;
 	}
 
-	G_PlayerReborn(*p);
-	// [AM] If we're "reborn" as a spectator, don't touch the keepinventory
-	//      flag, but otherwise turn it off.
-	if (!p->spectator)
-		p->keepinventory = false;
+	G_PlayerReborn (*p);
 
 	mobj = new AActor (x, y, z, MT_PLAYER);
 	
@@ -2154,7 +2278,7 @@ void CL_SpawnPlayer()
 	// set color translations for player sprites
 	mobj->translation = translationtables + 256*playernum;
 	mobj->angle = angle;
-	mobj->pitch = mobj->roll = 0;
+	mobj->pitch = 0;
 	mobj->player = p;
 	mobj->health = p->health;
 	P_SetThingId(mobj, netid);
@@ -2223,13 +2347,18 @@ void CL_PlayerInfo(void)
 {
 	player_t *p = &consoleplayer();
 
-	for (size_t j = 0; j < NUMWEAPONS; j++)
-		p->weaponowned[j] = MSG_ReadBool();
+	uint16_t booleans = MSG_ReadShort();
 
-	for (size_t j = 0; j < NUMAMMO; j++)
+	for (int i = 0; i < NUMWEAPONS; i++)
+		p->weaponowned[i] = booleans & 1 << i;
+	for (int i = 0; i < NUMCARDS; i++)
+		p->cards[i] = booleans & 1 << (i + NUMWEAPONS);
+	p->backpack = booleans & 1 << (NUMWEAPONS + NUMCARDS);
+
+	for (int i = 0; i < NUMAMMO; i++)
 	{
-		p->maxammo[j] = MSG_ReadShort();
-		p->ammo[j] = MSG_ReadShort();
+		p->maxammo[i] = MSG_ReadShort();
+		p->ammo[i] = MSG_ReadShort();
 	}
 
 	p->health = MSG_ReadByte();
@@ -2243,10 +2372,8 @@ void CL_PlayerInfo(void)
 	if (newweapon != p->readyweapon)
 		p->pendingweapon = newweapon;
 
-	p->backpack = MSG_ReadBool();
-
-	// [AM] Determine if we should be keeping our inventory on next spawn.
-	p->keepinventory = MSG_ReadBool();
+	for (int i = 0; i < NUMPOWERS; i++)
+		p->powers[i] = MSG_ReadShort();
 }
 
 //
@@ -2260,17 +2387,34 @@ void CL_SetMobjSpeedAndAngle(void)
 	netid = MSG_ReadShort();
 	mo = P_FindThingById(netid);
 
-	if (!mo)
-	{
-		for (int i=0; i<4; i++)
-			MSG_ReadLong();
-		return;
-	}
+	angle_t angle = MSG_ReadLong();
+	fixed_t momx = MSG_ReadLong();
+	fixed_t momy = MSG_ReadLong();
+	fixed_t momz = MSG_ReadLong();
 
-	mo->angle = MSG_ReadLong();
-	mo->momx = MSG_ReadLong();
-	mo->momy = MSG_ReadLong();
-	mo->momz = MSG_ReadLong();
+	if (!mo)
+		return;
+	
+	if (mo->player)
+	{
+		// [SL] 2013-07-21 - Save the position information to a snapshot
+		int snaptime = last_svgametic;
+		PlayerSnapshot newsnap(snaptime);
+		newsnap.setAuthoritative(true);
+		
+		newsnap.setMomX(momx);
+		newsnap.setMomY(momy);
+		newsnap.setMomZ(momz);
+		
+		mo->player->snapshots.addSnapshot(newsnap);
+	}
+	else
+	{
+		mo->angle = angle; 
+		mo->momx = momx;
+		mo->momy = momy;
+		mo->momz = momz; 
+	}
 }
 
 //
@@ -3254,7 +3398,8 @@ void CL_ReadyState() {
 void CL_WarmupState()
 {
 	warmup.set_client_status(static_cast<Warmup::status_t>(MSG_ReadByte()));
-	if (warmup.get_status() == Warmup::COUNTDOWN)
+	if (warmup.get_status() == Warmup::COUNTDOWN ||
+	    warmup.get_status() == Warmup::FORCE_COUNTDOWN)
 	{
 		// Read an extra countdown number off the wire
 		short count = MSG_ReadShort();
@@ -3262,9 +3407,9 @@ void CL_WarmupState()
 		buffer << "Match begins in " << count << "...";
 		C_GMidPrint(buffer.str().c_str(), CR_GREEN, 0);
 	}
-	else if (warmup.get_status() == Warmup::INGAME)
+	else
 	{
-		// Clear the midprint when the game starts
+		// Clear the midprint in other cases.
 		C_GMidPrint("", CR_GREY, 0);
 	}
 }
@@ -3480,26 +3625,6 @@ void CL_PlayerTimes (void)
 		if (players[i].ingame())
 			players[i].GameTime++;
 	}
-}
-
-//
-//	CL_RunTics
-//
-void CL_RunTics (void)
-{
-	static char TicCount = 0;
-
-	// Only do this once a second.
-	if ( TicCount++ >= 35 )
-	{
-		CL_PlayerTimes ();
-		TicCount = 0;
-	}
-
-	if (sv_gametype == GM_CTF)
-		CTF_RunTics ();
-
-	Maplist_Runtic();
 }
 
 void PickupMessage (AActor *toucher, const char *message)
@@ -3731,6 +3856,14 @@ void CL_SimulatePlayers()
 			
 			if (snap.isContinuous())
 			{
+				// [SL] Save the position prior to the new update so it can be
+				// used for rendering interpolation
+				player->mo->prevx = player->mo->x;
+				player->mo->prevy = player->mo->y;
+				player->mo->prevz = player->mo->z;
+				player->mo->prevangle = player->mo->angle;
+				player->mo->prevpitch = player->mo->pitch;
+
 				PlayerSnapshot prevsnap = player->snapshots.getSnapshot(world_index - 1);
 
 				v3fixed_t offset;
@@ -3756,7 +3889,22 @@ void CL_SimulatePlayers()
 				}
 			}
 
+			int oldframe = player->mo->frame;
 			snap.toPlayer(player);
+
+			if (player->playerstate != PST_LIVE)
+				player->mo->frame = oldframe;
+
+			if (!snap.isContinuous())
+			{
+				// [SL] Save the position after to the new update so this position
+				// won't be interpolated.
+				player->mo->prevx = player->mo->x;
+				player->mo->prevy = player->mo->y;
+				player->mo->prevz = player->mo->z;
+				player->mo->prevangle = player->mo->angle;
+				player->mo->prevpitch = player->mo->pitch;
+			}
 		}
 	}
 }

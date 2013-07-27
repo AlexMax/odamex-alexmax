@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -37,7 +37,7 @@
 #include "c_dispatch.h"
 #include "c_cvars.h"
 #include "v_text.h"
-#include "v_video.h"
+
 #include "cl_main.h"
 #include "p_ctf.h"
 #include "i_video.h"
@@ -47,6 +47,8 @@
 
 #include "hu_drawers.h"
 #include "hu_elements.h"
+
+#include "v_video.h"
 
 #define QUEUESIZE		128
 #define HU_INPUTX		0
@@ -193,7 +195,6 @@ BOOL HU_Responder (event_t *ev)
 			else
 				ShoveChatStr (chat_macros[ev->data2 - '0']->cstring(), headsupactive - 1);
 
-			I_ResumeMouse();
 			I_DisableKeyRepeat();
 			headsupactive = 0;
 			return true;
@@ -202,14 +203,12 @@ BOOL HU_Responder (event_t *ev)
 	if (ev->data3 == KEY_ENTER)
 	{
 		ShoveChatStr (input_text, headsupactive - 1);
-        I_ResumeMouse();
 		I_DisableKeyRepeat();
 		headsupactive = 0;
 		return true;
 	}
 	else if (ev->data1 == KEY_ESCAPE || ev->data1 == KEY_JOY2)
 	{
-        I_ResumeMouse();
 		I_DisableKeyRepeat();
 		headsupactive = 0;
 		return true;
@@ -359,6 +358,20 @@ static void ShoveChatStr (std::string str, byte who)
 	MSG_WriteString (&net_buffer, str.c_str());
 }
 
+static void ShovePrivMsg(byte pid, std::string str)
+{
+	// Do not send this chat message if the chat string is empty
+	if (str.length() == 0)
+		return;
+
+	if (str.length() > MAX_CHATSTR_LEN)
+		str.resize(MAX_CHATSTR_LEN);
+
+	MSG_WriteMarker(&net_buffer, clc_privmsg);
+	MSG_WriteByte(&net_buffer, pid);
+	MSG_WriteString(&net_buffer, str.c_str());
+}
+
 BEGIN_COMMAND (messagemode)
 {
 	if(!connected)
@@ -367,7 +380,6 @@ BEGIN_COMMAND (messagemode)
 	headsupactive = 1;
 	C_HideConsole ();
 	I_EnableKeyRepeat();
-    I_PauseMouse();
 	input_text = "";
 	C_ReleaseKeys();
 }
@@ -391,7 +403,6 @@ BEGIN_COMMAND (messagemode2)
 	headsupactive = 2;
 	C_HideConsole ();
 	I_EnableKeyRepeat();
-	I_PauseMouse();
 	input_text = "";
 	C_ReleaseKeys();
 }
@@ -406,6 +417,23 @@ BEGIN_COMMAND (say_team)
 	}
 }
 END_COMMAND (say_team)
+
+BEGIN_COMMAND (say_to)
+{
+	if (argc > 2)
+	{
+		player_t &player = nameplayer(argv[1]);
+		if (!validplayer(player))
+		{
+			Printf(PRINT_HIGH, "%s isn't the name of anybody on the server.\n", argv[1]);
+			return;
+		}
+
+		std::string chat = C_ArgCombine(argc - 2, (const char **)(argv + 2));
+		ShovePrivMsg(player.id, chat);
+	}
+}
+END_COMMAND (say_to)
 
 static bool STACK_ARGS compare_player_frags (const player_t *arg1, const player_t *arg2)
 {
@@ -1392,7 +1420,7 @@ void HU_ConsoleScores (player_t *player)
                 && sortedplayers[i]->playerstate != PST_CONTACT && sortedplayers[i]->playerstate != PST_DOWNLOAD) {
                     if (sortedplayers[i] != player)
                         Printf(PRINT_HIGH, "%-15s %-6d N/A  %-5d %4d\n",
-                            sortedplayers[i]->userinfo.netname,
+                            sortedplayers[i]->userinfo.netname.c_str(),
                             sortedplayers[i]->points,
                             //sortedplayers[i]->captures,
                             sortedplayers[i]->fragcount,
@@ -1400,7 +1428,7 @@ void HU_ConsoleScores (player_t *player)
 
                     else
                         Printf_Bold("%-15s %-6d N/A  %-5d %4d\n",
-                            player->userinfo.netname,
+                            player->userinfo.netname.c_str(),
                             player->points,
                             //player->captures,
                             player->fragcount,
@@ -1413,9 +1441,9 @@ void HU_ConsoleScores (player_t *player)
             for (i = 0; i < sortedplayers.size(); i++) {
                 if (sortedplayers[i]->spectator) {
                     if (sortedplayers[i] != player)
-                        Printf(PRINT_HIGH, "%-15s\n", sortedplayers[i]->userinfo.netname);
+                        Printf(PRINT_HIGH, "%-15s\n", sortedplayers[i]->userinfo.netname.c_str());
                     else
-                        Printf_Bold("%-15s\n", player->userinfo.netname);
+                        Printf_Bold("%-15s\n", player->userinfo.netname.c_str());
                 }
             }
     } else if (sv_gametype == GM_TEAMDM) {
@@ -1458,7 +1486,7 @@ void HU_ConsoleScores (player_t *player)
 
                     if (sortedplayers[i] != player)
                         Printf(PRINT_HIGH, "%-15s %-5d %-6d %4s %4d\n",
-                            sortedplayers[i]->userinfo.netname,
+                            sortedplayers[i]->userinfo.netname.c_str(),
                             sortedplayers[i]->fragcount,
                             sortedplayers[i]->deathcount,
                             str,
@@ -1466,7 +1494,7 @@ void HU_ConsoleScores (player_t *player)
 
                     else
                         Printf_Bold("%-15s %-5d %-6d %4s %4d\n",
-                            player->userinfo.netname,
+                            player->userinfo.netname.c_str(),
                             player->fragcount,
                             player->deathcount,
                             str,
@@ -1479,9 +1507,9 @@ void HU_ConsoleScores (player_t *player)
             for (i = 0; i < sortedplayers.size(); i++) {
                 if (sortedplayers[i]->spectator) {
                     if (sortedplayers[i] != player)
-                        Printf(PRINT_HIGH, "%-15s\n", sortedplayers[i]->userinfo.netname);
+                        Printf(PRINT_HIGH, "%-15s\n", sortedplayers[i]->userinfo.netname.c_str());
                     else
-                        Printf_Bold("%-15s\n", player->userinfo.netname);
+                        Printf_Bold("%-15s\n", player->userinfo.netname.c_str());
                 }
             }
     } else if (sv_gametype == GM_DM) {
@@ -1519,7 +1547,7 @@ void HU_ConsoleScores (player_t *player)
 
 				if (sortedplayers[i] != player)
 					Printf(PRINT_HIGH, "%-15s %-5d %-6d %4s %4d\n",
-						sortedplayers[i]->userinfo.netname,
+						sortedplayers[i]->userinfo.netname.c_str(),
 						sortedplayers[i]->fragcount,
 						sortedplayers[i]->deathcount,
 						str,
@@ -1527,7 +1555,7 @@ void HU_ConsoleScores (player_t *player)
 
 				else
 					Printf_Bold("%-15s %-5d %-6d %4s %4d\n",
-						player->userinfo.netname,
+						player->userinfo.netname.c_str(),
 						player->fragcount,
 						player->deathcount,
 						str,
@@ -1539,9 +1567,9 @@ void HU_ConsoleScores (player_t *player)
             for (i = 0; i < sortedplayers.size(); i++) {
                 if (sortedplayers[i]->spectator) {
                     if (sortedplayers[i] != player)
-                        Printf(PRINT_HIGH, "%-15s\n", sortedplayers[i]->userinfo.netname);
+                        Printf(PRINT_HIGH, "%-15s\n", sortedplayers[i]->userinfo.netname.c_str());
                     else
-                        Printf_Bold("%-15s\n", player->userinfo.netname);
+                        Printf_Bold("%-15s\n", player->userinfo.netname.c_str());
                 }
             }
     } else if (multiplayer) {
@@ -1564,7 +1592,7 @@ void HU_ConsoleScores (player_t *player)
 
 				if (sortedplayers[i] != player)
 					Printf(PRINT_HIGH, "%-15s %-5d %-6d %4s %4d\n",
-						sortedplayers[i]->userinfo.netname,
+						sortedplayers[i]->userinfo.netname.c_str(),
 						sortedplayers[i]->killcount,
 						sortedplayers[i]->deathcount,
 						str,
@@ -1572,7 +1600,7 @@ void HU_ConsoleScores (player_t *player)
 
 				else
 					Printf_Bold("%-15s %-5d %-6d %4s %4d\n",
-						player->userinfo.netname,
+						player->userinfo.netname.c_str(),
 						player->killcount,
 						player->deathcount,
 						str,
@@ -1584,9 +1612,9 @@ void HU_ConsoleScores (player_t *player)
             for (i = 0; i < sortedplayers.size(); i++) {
                 if (sortedplayers[i]->spectator) {
                     if (sortedplayers[i] != player)
-                        Printf(PRINT_HIGH, "%-15s\n", sortedplayers[i]->userinfo.netname);
+                        Printf(PRINT_HIGH, "%-15s\n", sortedplayers[i]->userinfo.netname.c_str());
                     else
-                        Printf_Bold("%-15s\n", player->userinfo.netname);
+                        Printf_Bold("%-15s\n", player->userinfo.netname.c_str());
                 }
             }
     } else {

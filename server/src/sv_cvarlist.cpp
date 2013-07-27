@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -52,16 +52,16 @@ CVAR (sv_waddownload,	"0", "Allow downloading of WAD files from this server",
       CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERINFO)
 // Enables WAD file download cap
 CVAR (sv_waddownloadcap, "200", "Cap wad file downloading to a specific rate",
-      CVARTYPE_INT, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
+      CVARTYPE_INT, CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 // Reset the current map when the last player leaves
 CVAR (sv_emptyreset,   "0", "Reloads the current map when all players leave",
-      CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERINFO)
+      CVARTYPE_BOOL, CVAR_ARCHIVE)
 // Allow spectators talk to show to ingame players
 CVAR (sv_globalspectatorchat, "1", "Players can see spectator chat",
-      CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERINFO)
+      CVARTYPE_BOOL, CVAR_ARCHIVE)
 // Maximum corpses that can appear on a map
 CVAR (sv_maxcorpses, "200", "Maximum corpses to appear on map",
-      CVARTYPE_WORD, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
+      CVARTYPE_WORD, CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
 // Unused (tracks number of connected players for scripting)
 CVAR (sv_clientcount,	"0", "Don't use",
       CVARTYPE_BYTE, CVAR_NOSET | CVAR_NOENABLEDISABLE)
@@ -70,7 +70,7 @@ CVAR (sv_cleanmaps, "", "Deprecated",
       CVARTYPE_NONE, CVAR_NULL)
 // Anti-wall hack code
 CVAR (sv_antiwallhack,	"0", "Experimental anti-wallkhack code",
-      CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
+      CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_LATCH)
 // Maximum number of clients that can connect to the server
 CVAR_FUNC_DECL (sv_maxclients, "4", "Maximum clients that can connect to a server",
       CVARTYPE_BYTE, CVAR_ARCHIVE | CVAR_SERVERINFO | CVAR_LATCH | CVAR_NOENABLEDISABLE)
@@ -116,7 +116,7 @@ CVAR_FUNC_DECL (sv_shufflemaplist,	"0", "Randomly shuffle the maplist",
 
 // Network compression (experimental)
 CVAR (sv_networkcompression, "1", "Network compression",
-      CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERINFO)
+      CVARTYPE_BOOL, CVAR_ARCHIVE)
 // NAT firewall workaround port number
 CVAR (sv_natport,	"0", "NAT firewall workaround, this is a port number",
       CVARTYPE_INT, CVAR_ARCHIVE | CVAR_NOENABLEDISABLE)
@@ -229,9 +229,9 @@ CVAR (sv_callvote_timelimit, "0", "Clients can vote a new timelimit.",
 // Warmup mode
 CVAR (sv_warmup, "0", "Enable a 'warmup mode' before the match starts.",
       CVARTYPE_BOOL, CVAR_SERVERARCHIVE | CVAR_LATCH)
-CVAR (sv_warmup_autostart, "1.0", "Ratio of players needed for warmup to automatically end.",
+CVAR (sv_warmup_autostart, "1.0", "Ratio of players needed for warmup to automatically start the game.",
       CVARTYPE_FLOAT, CVAR_SERVERARCHIVE | CVAR_LATCH | CVAR_NOENABLEDISABLE)
-CVAR (sv_warmup_countdown, "5", "Number of seconds the countdown should wait before the game starts.",
+CVAR (sv_countdown, "5", "Number of seconds to wait before starting the game from warmup or restarting the game.",
       CVARTYPE_BYTE, CVAR_SERVERARCHIVE | CVAR_LATCH | CVAR_NOENABLEDISABLE)
 
 // Experimental settings (all categories)
@@ -239,7 +239,7 @@ CVAR (sv_warmup_countdown, "5", "Number of seconds the countdown should wait bef
 
 // Do not run ticker functions when there are no players
 CVAR (sv_emptyfreeze,  "0", "Experimental: Does not progress the game when there are no players",
-      CVARTYPE_BOOL, CVAR_ARCHIVE | CVAR_SERVERINFO)
+      CVARTYPE_BOOL, CVAR_ARCHIVE)
 
 VERSION_CONTROL (sv_cvarlist_cpp, "$Id$")
 

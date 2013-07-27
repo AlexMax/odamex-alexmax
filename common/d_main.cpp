@@ -4,7 +4,7 @@
 // $Id: d_main.cpp 3426 2012-11-19 17:25:28Z dr_sean $
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -29,15 +29,9 @@
 #include <vector>
 #include <algorithm>
 
-#ifdef WIN32
-#define WIN32_LEAN_AND_MEAN
-#ifdef _XBOX
-#include <xtl.h>
-#else
-#include <windows.h>
-#endif // _XBOX
-#else
-#include <sys/stat.h>
+#include "win32inc.h"
+#ifndef WIN32
+    #include <sys/stat.h>
 #endif
 
 #ifdef UNIX
@@ -61,6 +55,7 @@
 #include "g_game.h"
 #include "p_setup.h"
 #include "r_local.h"
+#include "r_main.h"
 #include "d_main.h"
 #include "d_dehacked.h"
 #include "s_sound.h"
@@ -89,11 +84,14 @@ extern gameinfo_t CommercialBFGGameInfo;
 
 bool lastWadRebootSuccess = true;
 
+bool capfps = true;
+float maxfps = 35.0f;
+
 #if defined(WIN32) && !defined(_XBOX)
 
 #define arrlen(array) (sizeof(array) / sizeof(*array))
 
-typedef struct 
+typedef struct
 {
 	HKEY root;
 	const char* path;
@@ -102,17 +100,17 @@ typedef struct
 
 static const char* uninstaller_string = "\\uninstl.exe /S ";
 
-// Keys installed by the various CD editions.  These are actually the 
+// Keys installed by the various CD editions.  These are actually the
 // commands to invoke the uninstaller and look like this:
 //
 // C:\Program Files\Path\uninstl.exe /S C:\Program Files\Path
 //
 // With some munging we can find where Doom was installed.
-static registry_value_t uninstall_values[] = 
+static registry_value_t uninstall_values[] =
 {
 	// Ultimate Doom, CD version (Depths of Doom trilogy)
 	{
-		HKEY_LOCAL_MACHINE, 
+		HKEY_LOCAL_MACHINE,
 		"Software\\Microsoft\\Windows\\CurrentVersion\\"
 			"Uninstall\\Ultimate Doom for Windows 95",
 		"UninstallString",
@@ -120,7 +118,7 @@ static registry_value_t uninstall_values[] =
 
 	// Doom II, CD version (Depths of Doom trilogy)
 	{
-		HKEY_LOCAL_MACHINE, 
+		HKEY_LOCAL_MACHINE,
 		"Software\\Microsoft\\Windows\\CurrentVersion\\"
 			"Uninstall\\Doom II for Windows 95",
 		"UninstallString",
@@ -128,7 +126,7 @@ static registry_value_t uninstall_values[] =
 
 	// Final Doom
 	{
-		HKEY_LOCAL_MACHINE, 
+		HKEY_LOCAL_MACHINE,
 		"Software\\Microsoft\\Windows\\CurrentVersion\\"
 			"Uninstall\\Final Doom for Windows 95",
 		"UninstallString",
@@ -136,7 +134,7 @@ static registry_value_t uninstall_values[] =
 
 	// Shareware version
 	{
-		HKEY_LOCAL_MACHINE, 
+		HKEY_LOCAL_MACHINE,
 		"Software\\Microsoft\\Windows\\CurrentVersion\\"
 			"Uninstall\\Doom Shareware for Windows 95",
 		"UninstallString",
@@ -152,7 +150,7 @@ static registry_value_t collectors_edition_value =
 };
 
 // Subdirectories of the above install path, where IWADs are installed.
-static const char* collectors_edition_subdirs[] = 
+static const char* collectors_edition_subdirs[] =
 {
 	"Doom2",
 	"Final Doom",
@@ -454,7 +452,7 @@ static void D_AddPlatformSearchDirs(std::vector<std::string> &dirs)
 	D_AddSearchDir(dirs, "/usr/share/games/doom", separator);
 	D_AddSearchDir(dirs, "/usr/local/share/games/doom", separator);
 	D_AddSearchDir(dirs, "/usr/local/share/doom", separator);
-    
+
 	#endif
 }
 
@@ -690,8 +688,10 @@ static bool CheckIWAD (std::string suggestion, std::string &titlestring)
 			{
 				if (lumpsfound[2])
 				{
-					if (!StdStringCompare(iwad_file,"chex.wad",true))	// [ML] 1/7/10: HACK - There's no unique lumps in the chex quest
-					{													// iwad.  It's ultimate doom with their stuff replacing most things.
+					// [ML] 1/7/10: HACK - There's no unique lumps in the chex quest
+					// iwad.  It's ultimate doom with their stuff replacing most things.
+					if (iequals(iwad_file, "chex.wad"))
+					{
 						gamemission = chex;
 						gamemode = retail_chex;
 						gameinfo = RetailGameInfo;
@@ -845,7 +845,7 @@ void D_DoDefDehackedPatch (const std::vector<std::string> &newpatchfiles)
                         M_ExtractFileName(f, Filename);
                         patchfiles.push_back(Filename);
                     }
-  
+
 					if (!strncmp(files.GetArg(i),"chex.deh", 8))
 						chexLoaded = true;
 
@@ -910,7 +910,7 @@ std::string D_CleanseFileName(const std::string &filename, const std::string &ex
 		newname = newname.substr(slash + 1, newname.length() - slash);
 
 	std::transform(newname.begin(), newname.end(), newname.begin(), toupper);
-	
+
 	return newname;
 }
 
@@ -924,12 +924,25 @@ static bool VerifyFile(
 	M_ExtractFileExtension(filename, ext);
 
 	base_filename = D_CleanseFileName(filename);
-	full_filename = BaseFileSearch(base_filename, "." + ext, hash);
-
-	if (base_filename.length() && full_filename.length())
-		return true;
-	else
+	if (base_filename.empty())
 		return false;
+
+	// is there an exact match for the filename and hash?
+	full_filename = BaseFileSearch(base_filename, "." + ext, hash);
+	if (!full_filename.empty())
+		return true;
+
+	// is there a file with matching name even if the hash is incorrect?
+	full_filename = BaseFileSearch(base_filename, "." + ext);
+	if (full_filename.empty())
+		return false;
+
+	// if it's an IWAD, check if we have a valid alternative hash
+	std::string found_hash = W_MD5(full_filename);
+	if (W_IsIWAD(base_filename, found_hash))
+		return true;
+
+	return false;
 }
 
 void D_NewWadInit();
@@ -1096,5 +1109,81 @@ void D_AddCmdParameterFiles(void)
 	}
 }
 
+
+//
+// D_RunTics
+//
+// The core of the main game loop.
+// This loop allows the game logic timing to be decoupled from the renderer
+// timing. If the the user selects a capped framerate and isn't using the
+// -timedemo parameter, both the logic and render functions will be called
+// TICRATE times a second. If the framerate is uncapped, the logic function
+// will still be called TICRATE times a second but the render function will
+// be called as often as possible. After each iteration through the loop,
+// the program yields briefly to the operating system. 
+//
+void D_RunTics(void (*logic_func)(), void(*render_func)())
+{
+	static const uint64_t logic_dt = 1000LL * 1000LL * 1000LL / TICRATE;
+
+	static uint64_t previous_time = I_GetTime();
+	static uint64_t accumulator = logic_dt;
+
+	// should the physics run at 35Hz?
+	const bool fixed_logic_ticrate = !timingdemo;
+	// should the renderer run at vid_maxfs (35Hz by default)?
+	const bool fixed_render_ticrate = !timingdemo && capfps;
+
+	uint64_t current_time = I_GetTime();
+	uint64_t frame_time = current_time - previous_time;
+	previous_time = current_time;
+
+	// prevent trying to run too many logic frames when we're already behind
+	frame_time = MIN(frame_time, 4 * logic_dt);
+
+	accumulator += frame_time;
+
+	if (fixed_logic_ticrate)
+	{
+		while (accumulator >= logic_dt)
+		{
+			logic_func();
+			accumulator -= logic_dt;
+		} 
+	}
+	else
+	{
+		logic_func();
+	}
+
+	// [SL] use linear interpolation for rendering entities if the renderer
+	// framerate is not synced with the physics frequency
+	if (!fixed_render_ticrate || maxfps != TICRATE)
+		render_lerp_amount = clamp((fixed_t)(accumulator * FRACUNIT / logic_dt), 0, FRACUNIT);
+	else
+		render_lerp_amount = FRACUNIT;
+
+	// disable interpolation while paused to avoid jackhammering since the physics aren't
+	// updated while paused
+	if (paused || menuactive)
+		render_lerp_amount = FRACUNIT;
+
+	render_func();
+
+	if (fixed_render_ticrate)
+	{
+		const uint64_t render_dt = 1000LL * 1000LL * 1000LL / maxfps;
+		int64_t sleep_time = render_dt - I_GetTime() + current_time;
+		
+		// sleep if it will be for at least 1ms
+		if (sleep_time > 1000LL * 1000LL)
+			I_Sleep(sleep_time);
+	}
+	else if (!timingdemo)
+	{
+		// sleep for 1ms to allow the operating system some time
+		I_Yield();
+	}
+}
 
 VERSION_CONTROL (d_main_cpp, "$Id: d_main.cpp 3426 2012-11-19 17:25:28Z dr_sean $")

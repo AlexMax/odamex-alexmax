@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -91,8 +91,6 @@ void	G_DoVictory (void);
 void	G_DoWorldDone (void);
 void	G_DoSaveGame (void);
 
-void	CL_RunTics (void);
-
 bool	C_DoNetDemoKey(event_t *ev);
 bool	C_DoSpectatorKey(event_t *ev);
 
@@ -117,9 +115,9 @@ BOOL			sendsave;				// send a save event next tic
 BOOL 			usergame;				// ok to save / end game
 BOOL			sendcenterview;			// send a center view event next tic
 
-BOOL			timingdemo; 			// if true, exit with report on completion
-BOOL 			nodrawers;				// for comparative timing purposes
-BOOL 			noblit; 				// for comparative timing purposes
+bool			timingdemo; 			// if true, exit with report on completion
+bool 			nodrawers;				// for comparative timing purposes
+bool 			noblit; 				// for comparative timing purposes
 
 BOOL	 		viewactive;
 
@@ -166,7 +164,6 @@ EXTERN_CVAR(co_fixweaponimpacts)
 EXTERN_CVAR(co_blockmapfix)
 EXTERN_CVAR (dynresval) // [Toke - Mouse] Dynamic Resolution Value
 EXTERN_CVAR (dynres_state) // [Toke - Mouse] Dynamic Resolution on/off
-EXTERN_CVAR (mouse_type) // [Toke - Mouse] Zdoom or standard mouse code
 EXTERN_CVAR (m_filter)
 EXTERN_CVAR (hud_mousegraph)
 EXTERN_CVAR (cl_predictpickup)
@@ -220,13 +217,16 @@ int				lookspeed[2] = {450, 512};
 #define SLOWTURNTICS	6
 
 EXTERN_CVAR (cl_run)
+
+EXTERN_CVAR (mouse_type)
 EXTERN_CVAR (invertmouse)
 EXTERN_CVAR (lookstrafe)
+EXTERN_CVAR (mouse_acceleration)
+EXTERN_CVAR (mouse_threshold)
 EXTERN_CVAR (m_pitch)
 EXTERN_CVAR (m_yaw)
 EXTERN_CVAR (m_forward)
 EXTERN_CVAR (m_side)
-EXTERN_CVAR (displaymouse)
 
 int 			turnheld;								// for accelerative turning
 
@@ -634,74 +634,82 @@ void G_ConvertMouseSettings(int old_type, int new_type)
 	}
 }
 
-int G_DoomMouseScaleX(int x)
+float G_DoomMouseScaleX(float x)
 {
-	return int(x * (mouse_sensitivity + 5.0f) / 10.0f);
+	return (x * (mouse_sensitivity + 5.0f) / 10.0f);
 }
 
-int G_DoomMouseScaleY(int y)
+float G_DoomMouseScaleY(float y)
 {
 	return G_DoomMouseScaleX(y); // identical scaling for x and y
 }
 
-int G_ZDoomDIMouseScaleX(int x)
+float G_ZDoomDIMouseScaleX(float x)
 {
-	return int(x * 4.0f * mouse_sensitivity);
+	return (x * 4.0f * mouse_sensitivity);
 }
 
-int G_ZDoomDIMouseScaleY(int y)
+float G_ZDoomDIMouseScaleY(float y)
 {
-	return int(y * mouse_sensitivity);
+	return (y * mouse_sensitivity);
 }
 
 void G_ProcessMouseMovementEvent(const event_t *ev)
 {
-	static int prevx = 0, prevy = 0;
-	int evx = ev->data2;
-	int evy = ev->data3;
+	static float fprevx = 0.0f, fprevy = 0.0f;
+	float fmousex = (float)ev->data2;
+	float fmousey = (float)ev->data3;
+
+	if (mouse_acceleration > 0.0f)
+	{
+		// apply mouse acceleration (from Chocolate Doom)
+		if (fmousex > mouse_threshold)
+			fmousex = (fmousex - mouse_threshold) * mouse_acceleration + mouse_threshold;
+		else if (fmousex < -mouse_threshold)
+			fmousex = (fmousex + mouse_threshold) * mouse_acceleration - mouse_threshold;
+		if (fmousey > mouse_threshold)
+			fmousey = (fmousey - mouse_threshold) * mouse_acceleration + mouse_threshold;
+		else if (fmousey < -mouse_threshold)
+			fmousey = (fmousey + mouse_threshold) * mouse_acceleration - mouse_threshold;
+	}
 
 	if (m_filter)
 	{
 		// smooth out the mouse input
-		evx = (evx + prevx) / 2;
-		evy = (evy + prevy) / 2;
+		fmousex = (fmousex + fprevx) / 2.0f;
+		fmousey = (fmousey + fprevy) / 2.0f;
 	}
-	prevx = evx;
-	prevy = evy;
 
-	int (*scalexfunc)(int) = NULL;
-	int (*scaleyfunc)(int) = NULL;
+	fprevx = fmousex;
+	fprevy = fmousey;
 
-	if (mouse_type == MOUSE_DOOM)
+	if (mouse_type == MOUSE_ZDOOM_DI)
 	{
-		scalexfunc = &G_DoomMouseScaleX;
-		scaleyfunc = &G_DoomMouseScaleY;
-	}
-	else if (mouse_type == MOUSE_ZDOOM_DI)
-	{
-		scalexfunc = &G_ZDoomDIMouseScaleX;
-		scaleyfunc = &G_ZDoomDIMouseScaleY;
+		fmousex = G_ZDoomDIMouseScaleX(fmousex);
+		fmousey = G_ZDoomDIMouseScaleY(fmousey);
 	}
 	else
-		return;	// invalid mouse type
+	{
+		fmousex = G_DoomMouseScaleX(fmousex);
+		fmousey = G_DoomMouseScaleY(fmousey);
+	}
 
 	if (dynres_state)
 	{
-		if (evx < 0)
-			mousex = -int(pow((double)(*scalexfunc)(-evx), (double)dynresval));
+		// add some funky exponential sensitivity
+		if (fmousex < 0.0f)
+			fmousex = -pow(-fmousex, dynresval);
 		else
-			mousex = int(pow((double)(*scalexfunc)(evx), (double)dynresval));
+			fmousex = pow(fmousex, dynresval);
 
-		if (evy < 0)
-			mousey = -int(pow((double)(*scaleyfunc)(-evy), (double)dynresval));
+		if (fmousey < 0.0f)
+			fmousey = -pow(-fmousey, dynresval);
 		else
-			mousey = int(pow((double)(*scaleyfunc)(evy), (double)dynresval));
+			fmousey = pow(fmousey, dynresval);
 	}
-	else
-	{
-		mousex = (*scalexfunc)(evx);
-		mousey = (*scaleyfunc)(evy);
-	}
+
+	mousex = (int)fmousex;
+	mousey = (int)fmousey;
 }
 
 //
@@ -848,12 +856,7 @@ extern int connecttimeout;
 void G_Ticker (void)
 {
 	int 		buf;
-	gamestate_t	oldgamestate;
 	size_t i;
-
-
-	// Run client tics;
-	CL_RunTics ();
 
 	// do player reborns if needed
 	if(serverside)
@@ -862,7 +865,6 @@ void G_Ticker (void)
 				G_DoReborn (players[i]);
 
 	// do things to change the game state
-	oldgamestate = gamestate;
 	while (gameaction != ga_nothing)
 	{
 		switch (gameaction)
@@ -1113,39 +1115,34 @@ void G_PlayerFinishLevel (player_t &player)
 void G_PlayerReborn (player_t &p) // [Toke - todo] clean this function
 {
 	size_t i;
-	if (!p.keepinventory)
+	for (i = 0; i < NUMAMMO; i++)
 	{
-		for (i = 0; i < NUMAMMO; i++)
-		{
-			p.maxammo[i] = maxammo[i];
-			p.ammo[i] = 0;
-		}
-		for (i = 0; i < NUMWEAPONS; i++)
-			p.weaponowned[i] = false;
-
-		p.backpack = false;
-		p.health = deh.StartHealth;		// [RH] Used to be MAXHEALTH
-		p.armortype = 0;
-		p.armorpoints = 0;
-		p.readyweapon = p.pendingweapon = wp_pistol;
-		p.weaponowned[wp_fist] = true;
-		p.weaponowned[wp_pistol] = true;
-		p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
+		p.maxammo[i] = maxammo[i];
+		p.ammo[i] = 0;
 	}
-
+	for (i = 0; i < NUMWEAPONS; i++)
+		p.weaponowned[i] = false;
 	if (!sv_keepkeys)
 	{
 		for (i = 0; i < NUMCARDS; i++)
 			p.cards[i] = false;
 	}
-
 	for (i = 0; i < NUMPOWERS; i++)
 		p.powers[i] = false;
 	for (i = 0; i < NUMFLAGS; i++)
 		p.flags[i] = false;
+	p.backpack = false;
 
 	p.usedown = p.attackdown = true;	// don't do anything immediately
 	p.playerstate = PST_LIVE;
+	p.health = deh.StartHealth;		// [RH] Used to be MAXHEALTH
+	p.armortype = 0;
+	p.armorpoints = 0;
+	p.readyweapon = p.pendingweapon = wp_pistol;
+	p.weaponowned[wp_fist] = true;
+	p.weaponowned[wp_pistol] = true;
+	p.ammo[am_clip] = deh.StartBullets; // [RH] Used to be 50
+
 	p.death_time = 0;
 	p.tic = 0;
 }
@@ -1497,7 +1494,6 @@ void G_DoLoadGame (void)
 {
     unsigned int i;
 	char text[16];
-	size_t res;
 
 	gameaction = ga_nothing;
 
@@ -1509,7 +1505,7 @@ void G_DoLoadGame (void)
 	}
 
 	fseek (stdfile, SAVESTRINGSIZE, SEEK_SET);	// skip the description field
-	res = fread (text, 16, 1, stdfile);
+	fread (text, 16, 1, stdfile);
 	if (strncmp (text, SAVESIG, 16))
 	{
 		Printf (PRINT_HIGH, "Savegame '%s' is from a different version\n", savename);
@@ -1518,7 +1514,7 @@ void G_DoLoadGame (void)
 
 		return;
 	}
-	res = fread (text, 8, 1, stdfile);
+	fread (text, 8, 1, stdfile);
 	text[8] = 0;
 
 	/*bglobal.RemoveAllBots (true);*/
@@ -1610,7 +1606,6 @@ void G_DoSaveGame (void)
 {
 	std::string name;
 	char *description;
-	size_t res;
 	int i;
 
 	G_SnapshotLevel ();
@@ -1631,9 +1626,9 @@ void G_DoSaveGame (void)
 
 	Printf (PRINT_HIGH, "Saving game to '%s'...\n", name.c_str());
 
-	res = fwrite (description, SAVESTRINGSIZE, 1, stdfile);
-	res = fwrite (SAVESIG, 16, 1, stdfile);
-	res = fwrite (level.mapname, 8, 1, stdfile);
+	fwrite (description, SAVESTRINGSIZE, 1, stdfile);
+	fwrite (SAVESIG, 16, 1, stdfile);
+	fwrite (level.mapname, 8, 1, stdfile);
 
 	FLZOFile savefile (stdfile, FFile::EWriting, true);
 	FArchive arc (savefile);
@@ -1807,7 +1802,7 @@ void G_WriteDemoTiccmd ()
 
         *demo_p++ = cmd->buttons;
 
-        size_t res = fwrite(demo_tmp, demostep, 1, recorddemo_fp);
+        fwrite(demo_tmp, demostep, 1, recorddemo_fp);
     }
 }
 
@@ -1888,7 +1883,7 @@ void G_BeginRecording (void)
     *demo_p++ = 0;
     *demo_p++ = 0;
 
-    size_t res = fwrite(demo_tmp, 13, 1, recorddemo_fp);
+    fwrite(demo_tmp, 13, 1, recorddemo_fp);
 }
 
 //
@@ -1996,7 +1991,6 @@ END_COMMAND(streamdemo)
 //		until a BODY chunk is entered.
 BOOL G_ProcessIFFDemo (char *mapname)
 {
-	BOOL headerHit = false;
 	BOOL bodyHit = false;
 	int numPlayers = 0;
 	int id, len;
@@ -2032,8 +2026,6 @@ BOOL G_ProcessIFFDemo (char *mapname)
 
 		switch (id) {
 			case ZDHD_ID:
-				headerHit = true;
-
 				iffdemover = ReadWord (&demo_p);	// ZDoom version demo was created with
 				if (ReadWord (&demo_p) > GAMEVER) {		// Minimum ZDoom version
 					Printf (PRINT_HIGH, "Demo requires newer software version\n");
@@ -2293,7 +2285,7 @@ void G_DoPlayDemo (bool justStreamInput)
 //
 // G_TimeDemo
 //
-void G_TimeDemo (char* name)
+void G_TimeDemo(const char* name)
 {
 	nodrawers = Args.CheckParm ("-nodraw");
 	noblit = Args.CheckParm ("-noblit");
@@ -2318,15 +2310,6 @@ BOOL G_CheckDemoStatus (void)
 {
 	if (demoplayback)
 	{
-		extern int starttime;
-		int endtime = 0;
-		extern bool demotest;
-
-		if (timingdemo)
-			endtime = I_GetTimePolled () - starttime;
-
-		cvar_t::C_RestoreCVars ();		// [RH] Restore cvars demo might have changed
-
 		Z_Free (demobuffer);
 
 		demoplayback = false;
@@ -2334,7 +2317,11 @@ BOOL G_CheckDemoStatus (void)
 		multiplayer = false;
 		serverside = false;
 
-		if (demotest) {
+		cvar_t::C_RestoreCVars ();		// [RH] Restore cvars demo might have changed
+
+		extern bool demotest;
+		if (demotest)
+		{
 			AActor *mo = idplayer(1).mo;
 
 			if (mo)
@@ -2343,23 +2330,29 @@ BOOL G_CheckDemoStatus (void)
 				Printf(PRINT_HIGH, "demotest:no player\n");
 		}
 
-
-		if (singledemo || timingdemo) {
+		if (singledemo || timingdemo)
+		{
 			if (timingdemo)
+			{
+				extern uint64_t starttime;
+				uint64_t endtime = I_MSTime() - starttime;
+				int realtics = endtime * TICRATE / 1000;
+
 				// Trying to get back to a stable state after timing a demo
 				// seems to cause problems. I don't feel like fixing that
 				// right now.
 				I_FatalError ("timed %i gametics in %i realtics (%.1f fps)", gametic,
-							  endtime, (float)gametic/(float)endtime*(float)TICRATE);
+							  realtics, (float)gametic/(float)realtics*(float)TICRATE);
+			}
 			else
 				Printf (PRINT_HIGH, "Demo ended.\n");
+
 			gameaction = ga_fullconsole;
 			timingdemo = false;
 			return false;
-		} else {
-			D_AdvanceDemo ();
 		}
 
+		D_AdvanceDemo ();
 		return true;
 	}
 

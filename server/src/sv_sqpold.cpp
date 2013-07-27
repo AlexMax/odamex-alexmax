@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 2000-2006 by Sergey Makovkin (CSDoom .62).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -96,7 +96,7 @@ static std::vector<token_t> connect_tokens;
 //
 DWORD SV_NewToken()
 {
-	QWORD now = I_GetTime();
+	QWORD now = I_MSTime() * TICRATE / 1000;
 
 	token_t token;
 	token.id = rand()*time(0);
@@ -123,7 +123,7 @@ DWORD SV_NewToken()
 //
 bool SV_IsValidToken(DWORD token)
 {
-	QWORD now = I_GetTime();
+	QWORD now = I_MSTime() * TICRATE / 1000;
 
 	for(size_t i = 0; i < connect_tokens.size(); i++)
 	{
@@ -189,7 +189,7 @@ void SV_SendServerInfo()
 	{
 		if (players[i].ingame())
 		{
-			MSG_WriteString(&ml_message, players[i].userinfo.netname);
+			MSG_WriteString(&ml_message, players[i].userinfo.netname.c_str());
 			MSG_WriteShort(&ml_message, players[i].fragcount);
 			MSG_WriteLong(&ml_message, players[i].ping);
 

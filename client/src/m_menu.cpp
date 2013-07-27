@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -607,27 +607,6 @@ BEGIN_COMMAND (menu_player)
 }
 END_COMMAND (menu_player)
 
-BEGIN_COMMAND (bumpgamma)
-{
-    // F11
-	// [RH] Gamma correction tables are now generated
-	// on the fly for *any* gamma level.
-	// Q: What are reasonable limits to use here?
-
-	float newgamma = gammalevel + 1;
-
-	if (newgamma > 8.0)
-		newgamma = 1.0;
-
-	gammalevel.Set (newgamma);
-
-	if (gammalevel.value() == 1.0)
-        Printf (PRINT_HIGH, "Gamma correction off\n");
-    else
-        Printf (PRINT_HIGH, "Gamma correction level %g\n", gammalevel.value() - 1);
-}
-END_COMMAND (bumpgamma)
-
 /*
 void M_LoadSaveResponse(int choice)
 {
@@ -997,7 +976,7 @@ void M_NewGame(int choice)
     {
         M_SetupNextMenu(&NewDef);
     }
-    else if (gameinfo.flags & GI_MENUHACK_RETAIL)
+    else if (gamemode == retail)
 	{
 	    EpiDef.numitems = ep_end;
 	    M_SetupNextMenu(&EpiDef);
@@ -1051,7 +1030,7 @@ void M_StartGame(int choice)
             // Check for nerve.wad, if it's loaded re-load with just iwad (DOOM 2 BFG)
             for (unsigned int i = 2; i < wadfiles.size(); i++)
             {
-                if (StdStringCompare(str, M_ExtractFileName(wadfiles[i]), true) == 0)
+                if (iequals(str, M_ExtractFileName(wadfiles[i])))
                 {
                     G_LoadWad(wadfiles[1]);
                 }
@@ -1107,24 +1086,7 @@ void M_Expansion (int choice)
 void M_DrawReadThis1 (void)
 {
 	patch_t *p = W_CachePatch(gameinfo.info.infoPage[0]);
-
-	if (screen->isProtectedRes())
-    {
-        screen->DrawPatchIndirect (p, 0, 0);
-    }
-    else
-    {
-        screen->Clear(0, 0, screen->width, screen->height, 0);
-
-        if ((float)screen->width/screen->height < (float)4.0f/3.0f)
-        {
-            screen->DrawPatchStretched(p, 0, (screen->height / 2) - ((p->height() * RealYfac) / 2), screen->width, (p->height() * RealYfac));
-        }
-        else
-        {
-            screen->DrawPatchStretched(p,(screen->width / 2) - ((p->width() * RealXfac) / 2), 0, (p->width() * RealXfac), screen->height);
-        }
-    }
+	screen->DrawPatchFullScreen(p);
 }
 
 //
@@ -1133,24 +1095,7 @@ void M_DrawReadThis1 (void)
 void M_DrawReadThis2 (void)
 {
 	patch_t *p = W_CachePatch(gameinfo.info.infoPage[1]);
-
-	if (screen->isProtectedRes())
-    {
-        screen->DrawPatchIndirect (p, 0, 0);
-    }
-    else
-    {
-        screen->Clear(0, 0, screen->width, screen->height, 0);
-
-        if ((float)screen->width/screen->height < (float)4.0f/3.0f)
-        {
-            screen->DrawPatchStretched(p, 0, (screen->height / 2) - ((p->height() * RealYfac) / 2), screen->width, (p->height() * RealYfac));
-        }
-        else
-        {
-            screen->DrawPatchStretched(p,(screen->width / 2) - ((p->width() * RealXfac) / 2), 0, (p->width() * RealXfac), screen->height);
-        }
-    }
+	screen->DrawPatchFullScreen(p);
 }
 
 //
@@ -1159,24 +1104,7 @@ void M_DrawReadThis2 (void)
 void M_DrawReadThis3 (void)
 {
 	patch_t *p = W_CachePatch(gameinfo.info.infoPage[2]);
-
-	if (screen->isProtectedRes())
-    {
-        screen->DrawPatchIndirect (p, 0, 0);
-    }
-    else
-    {
-        screen->Clear(0, 0, screen->width, screen->height, 0);
-
-        if ((float)screen->width/screen->height < (float)4.0f/3.0f)
-        {
-            screen->DrawPatchStretched(p, 0, (screen->height / 2) - ((p->height() * RealYfac) / 2), screen->width, (p->height() * RealYfac));
-        }
-        else
-        {
-            screen->DrawPatchStretched(p,(screen->width / 2) - ((p->width() * RealXfac) / 2), 0, (p->width() * RealXfac), screen->height);
-        }
-    }
+	screen->DrawPatchFullScreen(p);
 }
 
 //
@@ -1246,7 +1174,7 @@ void M_QuitResponse(int ch)
 
     call_terms();
 
-	exit (0);
+	exit(EXIT_SUCCESS);
 }
 
 void M_QuitDOOM (int choice)
@@ -1959,10 +1887,7 @@ bool M_Responder (event_t* ev)
 			break;
 
 		  default:
-			ch = toupper(ev->data3);	// [RH] Use user keymap
-			if (ch != 32)
-				if (ch-HU_FONTSTART < 0 || ch-HU_FONTSTART >= HU_FONTSIZE)
-					break;
+			ch = ev->data3;	// [RH] Use user keymap
 			if (ch >= 32 && ch <= 127 &&
 				saveCharIndex < genStringLen &&
 				screen->StringWidth(savegamestrings[saveSlot]) <
@@ -2165,7 +2090,6 @@ void M_StartControlPanel (void)
 	currentMenu = &MainDef;
 	itemOn = currentMenu->lastOn;
 	OptionsActive = false;			// [RH] Make sure none of the options menus appear.
-	I_PauseMouse ();				// [RH] Give the mouse back in windowed modes.
 	I_EnableKeyRepeat();
 }
 
@@ -2250,7 +2174,6 @@ void M_ClearMenus (void)
 	M_DemoNoPlay = false;
 	if (gamestate != GS_FULLCONSOLE)
 	{
-		I_ResumeMouse ();	// [RH] Recapture the mouse in windowed modes.
 		I_DisableKeyRepeat();
 	}
 }
@@ -2277,7 +2200,6 @@ void M_PopMenuStack (void)
 {
 	M_DemoNoPlay = false;
 	if (MenuStackDepth > 1) {
-		I_PauseMouse ();
 		MenuStackDepth -= 2;
 		if (MenuStack[MenuStackDepth].isNewStyle) {
 			OptionsActive = true;

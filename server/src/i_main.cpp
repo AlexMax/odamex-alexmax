@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -26,9 +26,10 @@
 #include <map>
 #include <string>
 
+#include "win32inc.h"
 #ifdef WIN32
-#include <windows.h>
-#include "resource.h"
+    #include "resource.h"
+	#include "mmsystem.h"
 #endif
 
 #ifdef UNIX
@@ -164,7 +165,7 @@ int __cdecl main(int argc, char *argv[])
             MessageBox(NULL, error.GetMsg().c_str(), "Odasrv Error", MB_OK);
         }
 
-		exit (-1);
+		exit(EXIT_FAILURE);
     }
     catch (...)
     {
@@ -206,16 +207,16 @@ void daemon_init(void)
     if ((pid = fork()) != 0)
     {
     	call_terms();
-    	exit(0);
+    	exit(EXIT_SUCCESS);
     }
 
 	const char *forkargs = Args.CheckValue("-fork");
-	if (forkargs)    
+	if (forkargs)
 		pidfile = string(forkargs);
 
     if(!pidfile.size() || pidfile[0] == '-')
     	pidfile = "doomsv.pid";
-	
+
     pid = getpid();
     fpid = fopen(pidfile.c_str(), "w");
     fprintf(fpid, "%d\n", pid);
@@ -283,7 +284,7 @@ int main (int argc, char **argv)
         }
 
 	call_terms();
-	exit (-1);
+	exit(EXIT_FAILURE);
     }
     catch (...)
     {

@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -140,9 +140,11 @@ cvar_t::~cvar_t ()
 
 void cvar_t::ForceSet (const char *val)
 {
-	if (m_Flags & CVAR_LATCH &&
-		 !(m_Flags & CVAR_SERVERINFO && baseapp != server) &&
-		 !(m_Flags & CVAR_CLIENTINFO && baseapp != client))
+	// [SL] 2013-04-16 - Latched CVARs do not change values until the next map.
+	// Servers and single-player games should abide by this behavior but
+	// multiplayer clients should just do what the server tells them.
+	if (m_Flags & CVAR_LATCH && serverside && 
+		(gamestate == GS_LEVEL || gamestate == GS_INTERMISSION))
 	{
 		m_Flags |= CVAR_MODIFIED;
 		if(val)
@@ -444,6 +446,7 @@ void cvar_t::C_RestoreCVars (void)
 		backup->name = backup->string = "";
 	}
 	numbackedup = 0;
+	UnlatchCVars();
 }
 
 cvar_t *cvar_t::FindCVar (const char *var_name, cvar_t **prev)
@@ -457,7 +460,7 @@ cvar_t *cvar_t::FindCVar (const char *var_name, cvar_t **prev)
 	*prev = NULL;
 	while (var)
 	{
-		if (StdStringCompare(var->m_Name, var_name, true) == 0)
+		if (iequals(var->m_Name, var_name))
 			break;
 		*prev = var;
 		var = var->m_Next;
@@ -472,9 +475,7 @@ void cvar_t::UnlatchCVars (void)
 	var = ad.GetCVars();
 	while (var)
 	{
-		if (var->m_Flags & (CVAR_MODIFIED | CVAR_LATCH) &&
-		 !(var->m_Flags & CVAR_SERVERINFO && baseapp != server) &&
-		 !(var->m_Flags & CVAR_CLIENTINFO && baseapp != client))
+		if (var->m_Flags & (CVAR_MODIFIED | CVAR_LATCH))
 		{
 			unsigned oldflags = var->m_Flags & ~CVAR_MODIFIED;
 			var->m_Flags &= ~(CVAR_LATCH);
@@ -544,8 +545,7 @@ void cvar_t::cvarlist()
 					flags & CVAR_CLIENTARCHIVE ? 'C' :
 					flags & CVAR_SERVERARCHIVE ? 'S' : ' ',
 				flags & CVAR_USERINFO ? 'U' : ' ',
-				flags & CVAR_SERVERINFO ? 'S' :
-					flags & CVAR_CLIENTINFO ? 'C' : ' ',
+				flags & CVAR_SERVERINFO ? 'S' : ' ',
 				flags & CVAR_NOSET ? '-' :
 					flags & CVAR_LATCH ? 'L' :
 					flags & CVAR_UNSETTABLE ? '*' : ' ',
@@ -577,12 +577,7 @@ BEGIN_COMMAND (set)
 		}
 		else if (multiplayer && baseapp == client && (var->flags() & CVAR_SERVERINFO))
 		{
-			Printf (PRINT_HIGH, "%s is under server control and hasn't been changed.\n", argv[1]);
-			return;
-		}
-		else if (baseapp == server && (var->flags() & CVAR_CLIENTINFO))
-		{
-			Printf (PRINT_HIGH, "%s is under client control and hasn't been changed.\n", argv[1]);
+			Printf (PRINT_HIGH, "%s is under server control.\n", argv[1]);
 			return;
 		}
 
@@ -634,8 +629,6 @@ BEGIN_COMMAND (get)
 		std::string control;
 		if (multiplayer && baseapp == client && (var->flags() & CVAR_SERVERINFO))
 			control = " (server)";
-		else if (baseapp == server && (var->flags() & CVAR_CLIENTINFO))
-			control = " (client)";
 
 		// [Russell] - Don't make the user feel inadequate, tell
 		// them its either enabled, disabled or its other value

@@ -4,7 +4,7 @@
 // $Id: p_unlag.h $
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -53,11 +53,11 @@ public:
 	void setRoundtripDelay(byte player_id, byte svgametic);
 	void getReconciliationOffset(	byte target_id,
 									fixed_t &x, fixed_t &y, fixed_t &z);
+	void getCurrentPlayerPosition(	byte player_id,
+									fixed_t &x, fixed_t &y, fixed_t &z);
 	static bool enabled();
 private:
-	// keep as a power of 2 so the compiler can optimize: n % MAX_HISTORY_TICS
-	// into: n & (MAX_HISTORY_TICS - 1)
-	static const size_t MAX_HISTORY_TICS = 32;
+	static const size_t MAX_HISTORY_TICS = TICRATE;
 		
 	typedef struct {
 		byte		player_id;

@@ -5,7 +5,7 @@
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -85,13 +85,11 @@ EXTERN_CVAR (sv_loopepisode)
 EXTERN_CVAR (sv_intermissionlimit)
 EXTERN_CVAR (sv_warmup)
 
-extern int timingdemo;
-
 extern int mapchange;
 extern int shotclock;
 
 // Start time for timing demos
-int starttime;
+uint64_t starttime;
 
 // ACS variables with world scope
 int ACS_WorldVars[NUM_WORLDVARS];
@@ -164,7 +162,6 @@ BEGIN_COMMAND (wad) // denis - changes wads
 	}
 
 	std::string str = JoinStrings(VectorArgs(argc, argv), " ");
-	unnatural_level_progression = true;
 	G_LoadWad(str);
 }
 END_COMMAND (wad)
@@ -191,7 +188,7 @@ std::string G_NextMap(void) {
 	if (!strncmp(next.c_str(), "EndGame", 7) ||
 		(gamemode == retail_chex && !strncmp (level.nextmap, "E1M6", 4))) {
 		if (gameinfo.flags & GI_MAPxx || gamemode == shareware ||
-			(!sv_loopepisode && (((gameinfo.flags & GI_MENUHACK_RETAIL) && level.cluster == 3) || (gamemode == retail && level.cluster == 4)))) {
+			(!sv_loopepisode && ((gamemode == registered && level.cluster == 3) || ((gameinfo.flags & GI_MENUHACK_RETAIL) && level.cluster == 4)))) {
 			next = CalcMapName(1, 1);
 		} else if (sv_loopepisode) {
 			next = CalcMapName(level.cluster, 1);
@@ -238,7 +235,6 @@ void G_ChangeMap(size_t index) {
 		return;
 	}
 
-	unnatural_level_progression = true;
 	G_LoadWad(JoinStrings(maplist_entry.wads, " "), maplist_entry.map);
 
 	// Set the new map as the current map
@@ -274,7 +270,7 @@ BEGIN_COMMAND (forcenextmap) {
 } END_COMMAND (forcenextmap)
 
 BEGIN_COMMAND (restart) {
-	G_RestartMap();
+	warmup.restart();
 } END_COMMAND (restart)
 
 void SV_ClientFullUpdate(player_t &pl);
@@ -352,26 +348,27 @@ void G_InitNew (const char *mapname)
 
 	cvar_t::UnlatchCVars ();
 
-	if (old_gametype != sv_gametype || sv_gametype != GM_COOP)
+	if(old_gametype != sv_gametype || sv_gametype != GM_COOP) {
 		unnatural_level_progression = true;
 
-	// [AM] Force all players to be spectators online.
-	for (i = 0; i < players.size(); i++) {
-		// [SL] 2011-07-30 - Don't force downloading players to become spectators
-		// it stops their downloading
-		if (!players[i].ingame())
-			continue;
-
-		for (size_t j = 0; j < players.size(); j++) {
-			if (!players[j].ingame())
+		// Nes - Force all players to be spectators when the sv_gametype is not now or previously co-op.
+		for (i = 0; i < players.size(); i++) {
+			// [SL] 2011-07-30 - Don't force downloading players to become spectators
+			// it stops their downloading
+			if (!players[i].ingame())
 				continue;
-			MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
-			MSG_WriteByte (&(players[j].client.reliablebuf), players[i].id);
-			MSG_WriteByte (&(players[j].client.reliablebuf), true);
+
+			for (size_t j = 0; j < players.size(); j++) {
+				if (!players[j].ingame())
+					continue;
+				MSG_WriteMarker (&(players[j].client.reliablebuf), svc_spectate);
+				MSG_WriteByte (&(players[j].client.reliablebuf), players[i].id);
+				MSG_WriteByte (&(players[j].client.reliablebuf), true);
+			}
+			players[i].spectator = true;
+			players[i].playerstate = PST_LIVE;
+			players[i].joinafterspectatortime = -(TICRATE*5);
 		}
-		players[i].spectator = true;
-		players[i].playerstate = PST_LIVE;
-		players[i].joinafterspectatortime = -(TICRATE*5);
 	}
 
 	// [SL] 2011-09-01 - Change gamestate here so SV_ServerSettingChange will
@@ -441,10 +438,7 @@ void G_InitNew (const char *mapname)
 
 			// denis - dead players should have their stuff looted, otherwise they'd take their ammo into their afterlife!
 			if(players[i].playerstate == PST_DEAD)
-			{
-				players[i].keepinventory = false;
 				G_PlayerReborn(players[i]);
-			}
 
 			players[i].playerstate = PST_ENTER; // [BC]
 
@@ -836,16 +830,18 @@ void G_DoLoadLevel (int position)
 	mousex = mousey = 0;
 	sendpause = sendsave = paused = sendcenterview = false;
 
-	if (timingdemo) {
+	if (timingdemo)
+	{
 		static BOOL firstTime = true;
 
-		if (firstTime) {
-			starttime = I_GetTimePolled ();
+		if (firstTime)
+		{
+			starttime = I_MSTime();
 			firstTime = false;
 		}
 	}
 
-	level.starttime = I_GetTime ();
+	level.starttime = I_MSTime() * TICRATE / 1000;
 	// [RH] Restore the state of the level.
 	G_UnSnapshotLevel (!savegamerestore);
 	// [RH] Do script actions that were triggered on another map.

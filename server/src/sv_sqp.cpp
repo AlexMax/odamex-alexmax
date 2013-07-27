@@ -3,7 +3,7 @@
 //
 // $Id$
 //
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -205,7 +205,7 @@ static void IntQryBuildInformation(const DWORD &EqProtocolVersion,
     // Player info
     for (size_t i = 0; i < players.size(); ++i)
     {
-        MSG_WriteString(&ml_message, players[i].userinfo.netname);
+        MSG_WriteString(&ml_message, players[i].userinfo.netname.c_str());
         QRYNEWINFO(2)
         {
             MSG_WriteLong(&ml_message, players[i].userinfo.color);

@@ -4,7 +4,7 @@
 // $Id: d_player.h 1870 2010-09-06 21:00:47Z mike $
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -141,12 +141,13 @@ public:
 	std::queue<NetCommand> cmdqueue;	// all received ticcmds
 
 	// [RH] who is this?
-	userinfo_t	userinfo;
+	UserInfo	userinfo;
 
 	// FOV in degrees
 	float		fov;
 	// Focal origin above r.z
 	fixed_t		viewz;
+	fixed_t		prevviewz;
 	// Base height above floor for viewz.
 	fixed_t		viewheight;
     // Bob/squat speed.
@@ -175,9 +176,6 @@ public:
 	int			fragcount;
 	int			deathcount;
 	int			killcount, itemcount, secretcount;		// for intermission
-
-	// [AM] Determine if we should keep our inventory on next spawn
-	bool		keepinventory;
 
     // Is wp_nochange if not changing.
 	weapontype_t	pendingweapon;
@@ -386,6 +384,7 @@ player_t		&consoleplayer();
 player_t		&displayplayer();
 player_t		&listenplayer();
 player_t		&idplayer(byte id);
+player_t		&nameplayer(const std::string &netname);
 bool			validplayer(player_t &ref);
 
 extern byte consoleplayer_id;

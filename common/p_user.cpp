@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1993-1996 by id Software, Inc.
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -23,6 +23,7 @@
 //
 //-----------------------------------------------------------------------------
 
+#include "cmdlib.h"
 #include "doomdef.h"
 #include "d_event.h"
 #include "p_local.h"
@@ -51,7 +52,7 @@ EXTERN_CVAR (co_zdoomphys)
 EXTERN_CVAR (cl_deathcam)
 EXTERN_CVAR (sv_forcerespawn)
 EXTERN_CVAR (sv_forcerespawntime)
-EXTERN_CVAR (co_zdoomspawndelay)
+EXTERN_CVAR (sv_spawndelaytime)
 
 extern bool predicting, step_mode;
 
@@ -78,6 +79,24 @@ player_t &idplayer(byte id)
 		translation[players[i].id] = i;
 		if (players[i].id == id)
  			return players[i];
+	}
+
+	return nullplayer;
+}
+
+/**
+ * Find player by netname.  Note that this search is case-insensitive.
+ * 
+ * @param  netname Name of player to look for.
+ * @return         Player reference of found player, or nullplayer.
+ */
+player_t &nameplayer(const std::string &netname)
+{
+	std::vector<player_t>::iterator it;
+	for (it = players.begin(); it != players.end(); ++it)
+	{
+		if (iequals(netname, it->userinfo.netname))
+			return *it;
 	}
 
 	return nullplayer;
@@ -339,42 +358,27 @@ void P_MovePlayer (player_t *player)
 		return;
 	}
 
-	if (co_zdoomphys)
+	if (cmd->ucmd.upmove == -32768)
 	{
-		if (cmd->ucmd.upmove &&
-			(player->mo->waterlevel >= 2 || player->mo->flags2 & MF2_FLY))
+		// Only land if in the air
+		if ((player->mo->flags2 & MF2_FLY) && player->mo->waterlevel < 2)
 		{
-			player->mo->momz = cmd->ucmd.upmove << 8;
+			player->mo->flags2 &= ~MF2_FLY;
+			player->mo->flags &= ~MF_NOGRAVITY;
 		}
 	}
-	else
+	else if (cmd->ucmd.upmove != 0)
 	{
-		if (cmd->ucmd.upmove == -32768)
-		{ // Only land if in the air
-			if ((player->mo->flags2 & MF2_FLY) && player->mo->waterlevel < 2)
-			{
-				player->mo->flags2 &= ~MF2_FLY;
-				player->mo->flags &= ~MF_NOGRAVITY;
-			}
-		}
-		else if (cmd->ucmd.upmove != 0)
+		if (player->mo->waterlevel >= 2 || player->mo->flags2 & MF2_FLY)
 		{
-			if (player->mo->waterlevel >= 2 || (player->mo->flags2 & MF2_FLY))
-			{
-				player->mo->momz = cmd->ucmd.upmove << 8;
-			}
-			else if (player->mo->waterlevel < 2 && !(player->mo->flags2 & MF2_FLY))
+			player->mo->momz = cmd->ucmd.upmove << 9;
+
+			if (player->mo->waterlevel < 2 && !(player->mo->flags2 & MF2_FLY))
 			{
 				player->mo->flags2 |= MF2_FLY;
 				player->mo->flags |= MF_NOGRAVITY;
 				if (player->mo->momz <= -39*FRACUNIT)
-				{ // Stop falling scream
-					S_StopSound (player->mo, CHAN_VOICE);
-				}
-			}
-			else if (cmd->ucmd.upmove > 0)
-			{
-				//P_PlayerUseArtifact (player, arti_fly);
+					S_StopSound(player->mo, CHAN_VOICE);	// Stop falling scream
 			}
 		}
 	}
@@ -585,9 +589,8 @@ void P_DeathThink (player_t *player)
 								level.time >= player->death_time + sv_forcerespawntime * TICRATE);
 
 		// [SL] Can we respawn yet?
-		// Delay respawn by 1 second like ZDoom if co_zdoomspawndelay is enabled
-		bool delay_respawn =	(!clientside && co_zdoomspawndelay &&
-								(level.time < player->death_time + TICRATE));
+		int respawn_time = player->death_time + sv_spawndelaytime * TICRATE;
+		bool delay_respawn =	(!clientside && level.time < respawn_time);
 
 		// [Toke - dmflags] Old location of DF_FORCE_RESPAWN
 		if (player->ingame() && ((player->cmd.ucmd.buttons & BT_USE && !delay_respawn) || force_respawn))
@@ -632,13 +635,16 @@ void P_PlayerThink (player_t *player)
 	if (!player->mo && clientside && multiplayer)
 	{
 		DPrintf("Warning: P_PlayerThink called for player %s without a valid Actor.\n",
-				player->userinfo.netname);
+				player->userinfo.netname.c_str());
 		return;
 	}
 	else if (!player->mo)
 		I_Error ("No player %d start\n", player->id);
 
 	player->xviewshift = 0;		// [RH] Make sure view is in right place
+	player->prevviewz = player->viewz;
+	player->mo->prevangle = player->mo->angle;
+	player->mo->prevpitch = player->mo->pitch;
 
 	// fixme: do this in the cheat code
 	if (player->cheats & CF_NOCLIP)
@@ -826,7 +832,6 @@ void player_s::Serialize (FArchive &arc)
 			<< damagecount
 			<< bonuscount
 			<< points
-			<< keepinventory
 			/*<< attacker->netid*/
 			<< extralight
 			<< fixedcolormap
@@ -849,7 +854,7 @@ void player_s::Serialize (FArchive &arc)
 	}
 	else
 	{ // Restoring from archive
-		userinfo_t dummyuserinfo;
+		UserInfo dummyuserinfo;
 
 		arc >> id
 			>> playerstate
@@ -877,7 +882,6 @@ void player_s::Serialize (FArchive &arc)
 			>> damagecount
 			>> bonuscount
 			>> points
-			>> keepinventory
 			/*>> attacker->netid*/
 			>> extralight
 			>> fixedcolormap
@@ -933,7 +937,6 @@ player_s::player_s()
 	fragcount = 0;
 	deathcount = 0;
 	killcount = 0;
-	keepinventory = false;
 	pendingweapon = wp_nochange;
 	readyweapon = wp_nochange;
 	for (i = 0; i < NUMWEAPONS; i++)
@@ -1022,7 +1025,6 @@ player_s &player_s::operator =(const player_s &other)
 	fragcount = other.fragcount;
 	deathcount = other.deathcount;
 	killcount = other.killcount;
-	keepinventory = other.keepinventory;
 
 	pendingweapon = other.pendingweapon;
 	readyweapon = other.readyweapon;

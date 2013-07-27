@@ -2,8 +2,8 @@
 project(Odamex)
 cmake_minimum_required(VERSION 2.8)
 
-set(PROJECT_VERSION 0.6.2)
-set(PROJECT_COPYRIGHT "2006-2012")
+set(PROJECT_VERSION 0.6.3)
+set(PROJECT_COPYRIGHT "2006-2013")
 
 # Default build type
 if(NOT MSVC)
@@ -18,6 +18,20 @@ endif()
 if(NOT MSVC)
   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -Wall")
   set(CMAKE_CXX_FLAGS_RELEASE "-O2")
+
+  set(STATIC_STDLIB "No" CACHE STRING
+    "Statically link against the C and C++ Standard Library.")
+  set_property(CACHE STATIC_STDLIB PROPERTY STRINGS Yes No)
+  if(STATIC_STDLIB)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static-libgcc -static-libstdc++")
+  endif()
+
+  set(SANITIZE_ADDRESS "No" CACHE STRING
+    "Turn on Address Sanitizer in Debug builds, requires GCC >= 4.8 or Clang >= 3.1")
+  set_property(CACHE SANITIZE_ADDRESS PROPERTY STRINGS Yes No)
+  if(SANITIZE_ADDRESS)
+    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -fsanitize=address -O1 -fno-omit-frame-pointer -fno-optimize-sibling-calls")
+  endif()
 endif()
 
 if( ${CMAKE_SYSTEM_NAME} MATCHES SunOS )

@@ -4,7 +4,7 @@
 // $Id$
 //
 // Copyright (C) 1998-2006 by Randy Heit (ZDoom).
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -126,6 +126,8 @@ CVAR(sv_keepkeys, "0", "Keep keys on death",
 // [SL] 2011-05-11 - Allow reconciliation for players on lagged connections
 CVAR (sv_unlag,            "1", "Allow reconciliation for players on lagged connections",
       CVARTYPE_BOOL, CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_LATCH)
+CVAR (sv_maxunlagtime,	"1.0", "Cap the maxiumum time allowed for player reconciliation",
+      CVARTYPE_FLOAT, CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
 // [ML] allow weapon & view bob changing
 CVAR (sv_allowmovebob, "0", "Allow weapon & view bob changing",
       CVARTYPE_BOOL, CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
@@ -139,7 +141,11 @@ CVAR (sv_allowpwo, "0", "Allow clients to set their preferences for automatic we
    CVARTYPE_BOOL, CVAR_SERVERINFO | CVAR_SERVERARCHIVE)
 
 // [AM] Allow true widescreen usage
-CVAR (sv_allowwidescreen, "1", "Allow clients to use true widescreen",
+CVAR_FUNC_DECL (sv_allowwidescreen, "1", "Allow clients to use true widescreen",
+      CVARTYPE_BOOL, CVAR_SERVERINFO | CVAR_SERVERARCHIVE | CVAR_LATCH)
+
+// [AM] Allow players to see the spawns on the map
+CVAR (sv_allowshowspawns, "1", "Allow clients to see spawn points as particle fountains",
       CVARTYPE_BOOL, CVAR_SERVERINFO | CVAR_SERVERARCHIVE | CVAR_LATCH)
 
 // Compatibility options for vanilla
@@ -206,7 +212,7 @@ CVAR (cl_predictpickup, "1", "Predict weapon pickups", CVARTYPE_BOOL, CVAR_ARCHI
 
 // Movebob
 CVAR_FUNC_DECL (cl_movebob, "1.0", "Adjust weapon and movement bobbing",
-      CVARTYPE_BOOL, CVAR_CLIENTARCHIVE | CVAR_NOENABLEDISABLE | CVAR_CLIENTINFO)
+      CVARTYPE_BOOL, CVAR_CLIENTARCHIVE | CVAR_NOENABLEDISABLE)
 
 CVAR (cl_rockettrails, "0", "Rocket trails on/off (currently unused)", CVARTYPE_BOOL,  CVAR_ARCHIVE)
 
@@ -216,8 +222,8 @@ CVAR (sv_forcerespawn, "0", "Force a player to respawn.",
 // [AM] Force a player to respawn after a set amount of time
 CVAR (sv_forcerespawntime, "30", "Force a player to respawn after a set amount of time",
       CVARTYPE_WORD, CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
-CVAR (co_zdoomspawndelay, "0", "Force a player to wait a second before respawning",
-      CVARTYPE_BOOL, CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
+CVAR (sv_spawndelaytime, "0.0", "Force a player to wait a period (in seconds) before respawning",
+      CVARTYPE_FLOAT, CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
 
 CVAR_FUNC_DECL (sv_gravity, "800", "Gravity of the environment",
       CVARTYPE_INT, CVAR_ARCHIVE | CVAR_SERVERARCHIVE | CVAR_SERVERINFO | CVAR_NOENABLEDISABLE)
@@ -260,6 +266,6 @@ CVAR (sv_hostname,      "Untitled Odamex Server", "Server name to appear on mast
 
 // Speedhack code (server related)
 CVAR (sv_speedhackfix,     "0", "Experimental anti-speedhack code",
-      CVARTYPE_BOOL, CVAR_SERVERARCHIVE | CVAR_SERVERINFO)
+      CVARTYPE_BOOL, CVAR_SERVERARCHIVE)
 
 VERSION_CONTROL (c_cvarlist_cpp, "$Id$")

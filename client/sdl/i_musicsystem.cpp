@@ -3,7 +3,7 @@
 //
 // $Id: i_musicsystem.cpp 2541 2011-10-27 02:36:31Z dr_sean $
 //
-// Copyright (C) 2006-2012 by The Odamex Team.
+// Copyright (C) 2006-2013 by The Odamex Team.
 //
 // This program is free software; you can redistribute it and/or
 // modify it under the terms of the GNU General Public License
@@ -948,7 +948,7 @@ PortMidiMusicSystem::PortMidiMusicSystem() :
 	MidiMusicSystem(), mIsInitialized(false),
 	mOutputDevice(-1), mStream(NULL)
 {
-	const int output_buffer_size = 100;
+	const int output_buffer_size = 1024;
 	
 	if (Pm_Initialize() != pmNoError)
 	{
@@ -967,7 +967,7 @@ PortMidiMusicSystem::PortMidiMusicSystem() :
 			continue;
 			
 		std::string curdevicename(info->name);
-		if (!prefdevicename.empty() && StdStringCompare(prefdevicename, curdevicename, true) == 0)
+		if (!prefdevicename.empty() && iequals(prefdevicename, curdevicename))
 			mOutputDevice = i;
 
 		Printf(PRINT_HIGH, "%d: %s, %s\n", i, info->interf, info->name);
