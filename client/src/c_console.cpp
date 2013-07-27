@@ -23,6 +23,7 @@
 
 
 #include <stdarg.h>
+#include <list>
 
 #include "m_alloc.h"
 #include "version.h"
@@ -112,6 +113,120 @@ static struct History *HistHead = NULL, *HistTail = NULL, *HistPos = NULL;
 static int HistSize;
 
 #define NUMNOTIFIES 4
+
+typedef std::list<std::string>::iterator ConsoleIterator;
+
+class ConsoleHistory {
+private:
+	std::list<std::string> history;
+	size_t history_size;
+	size_t history_max_size;
+public:
+	ConsoleHistory();
+	bool setSize(size_t);
+	void append(const std::string&);
+	ConsoleIterator getLastLine();
+	ConsoleIterator getFirstLine();
+};
+
+class ConsoleHistoryView {
+private:
+	ConsoleHistory* consoleHistory;
+public:
+	ConsoleHistoryView(ConsoleHistory*);
+};
+
+static ConsoleHistory consoleHistory;
+static ConsoleHistoryView consoleHistoryView(&consoleHistory);
+
+/**
+ * Constructor.
+ */
+ConsoleHistory::ConsoleHistory() : history_size(0), history_max_size(CONSOLEBUFFER)
+{
+	if (!this->setSize(this->history_max_size))
+		this->setSize(1000);
+}
+
+/**
+ * Set the number of lines of history to save.
+ *
+ * @param size Number of lines of history to save.
+ * @return True if the resize went through, otherwise false if the size
+ *         was too big.
+ */
+bool ConsoleHistory::setSize(size_t size)
+{
+	if (size > history.max_size())
+		return false;
+
+	this->history.resize(size);
+
+	if (this->history_max_size < this->history_size)
+		this->history_size = size;
+
+	this->history_max_size = size;
+
+	return true;
+}
+
+/**
+ * Add a line to the console history.
+ *
+ * @param message Message to add to the console history.
+ */
+void ConsoleHistory::append(const std::string& message)
+{
+	size_t pos = 0;
+	size_t end = std::string::npos;
+
+	// Split the string along newlines.
+	while (true)
+	{
+		end = message.find('\n', pos);
+		if (end == std::string::npos)
+			break;
+		this->history.push_front(message.substr(pos, end - pos));
+		pos = end + 1;
+	}
+
+	// Handle missing newlines at the end.
+	if ((*message.rbegin()) != '\n')
+		this->history.push_front(message.substr(pos));
+
+	// Handle overflowing the maximum history size.
+	if (history_max_size < history_size)
+		this->history.pop_back();
+	else
+		this->history_size += 1;
+}
+
+/**
+ * Get an iterator that points to the last line of the console.
+ *
+ * @return The last line iterator.
+ */
+ConsoleIterator ConsoleHistory::getLastLine()
+{
+	return this->history.begin();
+}
+
+/**
+ * Get an iterator that points to the first line of the console.
+ *
+ * @return The first line iterator.
+ */
+ConsoleIterator ConsoleHistory::getFirstLine()
+{
+	return this->history.end();
+}
+
+/**
+ * Constructor
+ */
+ConsoleHistoryView::ConsoleHistoryView(ConsoleHistory* console_history) : consoleHistory(console_history)
+{
+}
 
 EXTERN_CVAR (con_notifytime)
 CVAR_FUNC_IMPL (hud_scaletext)
@@ -449,6 +564,9 @@ int PrintString (int printlevel, const char *outline)
 	else
 		mask = printxormask;
 
+	consoleHistory.append(outline);
+
+	/*
 	cp = outline;
 	while (*cp)
 	{
@@ -531,7 +649,7 @@ int PrintString (int printlevel, const char *outline)
 		}
 	}
 
-	printxormask = 0;
+	printxormask = 0;*/
 
 	return strlen (outline);
 }
@@ -845,11 +963,22 @@ void C_DrawConsole (void)
 	if (menuactive)
 		return;
 
+	ConsoleIterator it = consoleHistory.getLastLine();
+	ConsoleIterator it_end = consoleHistory.getFirstLine();
+
 	if (lines > 0)
 	{
 		for (; lines > 1; lines--)
 		{
-			// screen->PrintStr (left, offset + lines * 8, (char*)&zap[2], zap[1]);
+			screen->SetFont(ConFont);
+			screen->DrawText(CR_GREY, left, offset + lines * 8, (*it).c_str());
+			screen->SetFont(SmallFont);
+			it++;
+		}
+
+		for (; lines > 1; lines--)
+		{
+			// screen->DrawText(CR_GREY, left, offset + lines * 8, (char*)&zap[2]);
 			zap -= ConCols + 2;
 		}
 		if (ConBottom >= 20)
@@ -1252,7 +1381,7 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 			// Close console, clear command line, but if we're in the
 			// fullscreen console mode, there's nothing to fall back on
 			// if it's closed.
-			if (gamestate == GS_FULLCONSOLE || gamestate == GS_CONNECTING 
+			if (gamestate == GS_FULLCONSOLE || gamestate == GS_CONNECTING
                 || gamestate == GS_DOWNLOAD || gamestate == GS_CONNECTED)
 			{
 				C_HideConsole();
@@ -1667,3 +1796,13 @@ static void C_TabComplete (void)
 }
 
 VERSION_CONTROL (c_console_cpp, "$Id$")
+
+BEGIN_COMMAND (consoletest)
+{
+	Printf(PRINT_HIGH, "ABCDEFGHIJKLMNOPQRSTUVWXYZ\n");
+	Printf(PRINT_HIGH, "abcdefghijklmnopqrstuvwxyz\n");
+	Printf(PRINT_HIGH, "\n");
+	Printf(PRINT_HIGH, "This line has no newline at the end");
+	Printf(PRINT_HIGH, "This line has a newline\nsplitting the two lines.");
+}
+END_COMMAND (consoletest)
