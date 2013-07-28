@@ -135,8 +135,6 @@ class ConsoleHistoryView
 {
 private:
 	ConsoleHistory* consoleHistory;
-	DCanvas* canvas;
-
 	std::list<std::string> consoleView;
 	int viewWidth;
 	size_t view_size;
@@ -145,7 +143,8 @@ private:
 	ConsoleIterator currentLine;
 	ConsoleIterator currentIteratedLine;
 public:
-	ConsoleHistoryView(ConsoleHistory*, DCanvas* canvas);
+	ConsoleHistoryView(ConsoleHistory*, int);
+	void setWidth(int);
 	bool setSize(size_t);
 	std::string getLine();
 	void getLineReset();
@@ -245,14 +244,22 @@ ConsoleIterator ConsoleHistory::end()
 /**
  * Constructor
  */
-ConsoleHistoryView::ConsoleHistoryView(ConsoleHistory* console_history, DCanvas* canvas) : consoleHistory(console_history), canvas(canvas), view_max_size(CONSOLEBUFFER)
+ConsoleHistoryView::ConsoleHistoryView(ConsoleHistory* console_history, int width) : consoleHistory(console_history), viewWidth(width), view_max_size(CONSOLEBUFFER)
 {
-	this->viewWidth = canvas->width - 16;
-
 	if (!this->setSize(this->view_max_size))
 		this->setSize(1000);
 
-	this->latest = console_history->end();
+	this->latest = this->consoleHistory->end();
+
+	this->currentLine = this->consoleView.begin();
+	this->currentIteratedLine = this->consoleView.begin();
+}
+
+void ConsoleHistoryView::setWidth(int width)
+{
+	this->viewWidth = width;
+
+	this->latest = this->consoleHistory->end();
 
 	this->currentLine = this->consoleView.begin();
 	this->currentIteratedLine = this->consoleView.begin();
@@ -296,11 +303,16 @@ void ConsoleHistoryView::getLineReset()
 
 void ConsoleHistoryView::readHistory()
 {
-	// There is no history to add
+	// There is no history to add.
 	if (this->consoleHistory->empty())
 		return;
 
-	this->canvas->SetFont(ConFont);
+	// No canvas, so we can't figure out how long the line needs to be right
+	// now.  We're due for a full history refresh anyway.
+	if (screen == NULL)
+		return;
+
+	screen->SetFont(ConFont);
 
 	// If we're on the ending sentinel, skip past it.
 	if (this->latest == this->consoleHistory->end())
@@ -311,7 +323,7 @@ void ConsoleHistoryView::readHistory()
 	while (this->latest != begin)
 	{
 		--(this->latest);
-		int width = this->canvas->StringWidth(this->latest->c_str());
+		int width = screen->StringWidth(this->latest->c_str());
 		if (width > this->viewWidth)
 		{
 			brokenlines_t* lines = V_BreakLines(this->viewWidth, this->latest->c_str());
@@ -325,7 +337,7 @@ void ConsoleHistoryView::readHistory()
 		}
 	}
 
-	this->canvas->SetFont(SmallFont);
+	screen->SetFont(SmallFont);
 
 	// Stick to the bottom for now
 	this->currentLine = this->consoleView.begin();
@@ -432,7 +444,9 @@ void C_InitConsole (int width, int height, BOOL ingame)
 	if ( (vidactive = ingame) )
 	{
 		if (consoleHistoryView == NULL)
-			consoleHistoryView = new ConsoleHistoryView(&consoleHistory, screen);
+			consoleHistoryView = new ConsoleHistoryView(&consoleHistory, screen->width - 16);
+		else
+			consoleHistoryView->setWidth(screen->width - 16);
 
 		if (!gotconback)
 		{
