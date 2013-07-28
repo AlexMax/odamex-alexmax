@@ -116,7 +116,8 @@ static int HistSize;
 
 typedef std::list<std::string>::iterator ConsoleIterator;
 
-class ConsoleHistory {
+class ConsoleHistory
+{
 private:
 	std::list<std::string> history;
 	size_t history_size;
@@ -124,24 +125,30 @@ private:
 public:
 	ConsoleHistory();
 	bool setSize(size_t);
-	void append(const std::string&);
+	void append(const std::string &);
+	bool empty();
 	ConsoleIterator begin();
 	ConsoleIterator end();
 };
 
-class ConsoleHistoryView {
+class ConsoleHistoryView
+{
 private:
 	ConsoleHistory* consoleHistory;
 	DCanvas* canvas;
 
-	ConsoleIterator savedLine;
-	ConsoleIterator line;
-	brokenlines_t* lines;
-	size_t lines_index;
+	std::list<std::string> consoleView;
+	size_t view_size;
+	size_t view_max_size;
+	ConsoleIterator latest;
+	ConsoleIterator currentLine;
+	ConsoleIterator currentIteratedLine;
 public:
 	ConsoleHistoryView(ConsoleHistory*, DCanvas* canvas);
-	std::string getLineFromView();
-	void resetView();
+	bool setSize(size_t);
+	std::string getLine();
+	void getLineReset();
+	void readHistory();
 };
 
 static ConsoleHistory consoleHistory;
@@ -183,7 +190,7 @@ bool ConsoleHistory::setSize(size_t size)
  *
  * @param message Message to add to the console history.
  */
-void ConsoleHistory::append(const std::string& message)
+void ConsoleHistory::append(const std::string &message)
 {
 	size_t pos = 0;
 	size_t end = std::string::npos;
@@ -209,6 +216,11 @@ void ConsoleHistory::append(const std::string& message)
 		this->history_size += 1;
 }
 
+bool ConsoleHistory::empty()
+{
+	return this->history.empty();
+}
+
 /**
  * Get an iterator that points to the last line of the console.
  *
@@ -222,7 +234,7 @@ ConsoleIterator ConsoleHistory::begin()
 /**
  * Get an iterator that points to the ending sentinel.
  *
- * @return The first line iterator.
+ * @return The ending sentinel iterator.
  */
 ConsoleIterator ConsoleHistory::end()
 {
@@ -232,10 +244,30 @@ ConsoleIterator ConsoleHistory::end()
 /**
  * Constructor
  */
-ConsoleHistoryView::ConsoleHistoryView(ConsoleHistory* console_history, DCanvas* canvas) : consoleHistory(console_history), canvas(canvas), lines(NULL)
+ConsoleHistoryView::ConsoleHistoryView(ConsoleHistory* console_history, DCanvas* canvas) : consoleHistory(console_history), canvas(canvas), view_max_size(CONSOLEBUFFER)
 {
-	this->savedLine = console_history->begin();
-	this->resetView();
+	if (!this->setSize(this->view_max_size))
+		this->setSize(1000);
+
+	this->latest = console_history->end();
+
+	this->currentLine = this->consoleView.begin();
+	this->currentIteratedLine = this->consoleView.begin();
+}
+
+bool ConsoleHistoryView::setSize(size_t size)
+{
+	if (size > consoleView.max_size())
+		return false;
+
+	this->consoleView.resize(size);
+
+	if (this->view_max_size < this->view_size)
+		this->view_size = size;
+
+	this->view_max_size = size;
+
+	return true;
 }
 
 /**
@@ -244,55 +276,42 @@ ConsoleHistoryView::ConsoleHistoryView(ConsoleHistory* console_history, DCanvas*
  *
  * @return
  */
-std::string ConsoleHistoryView::getLineFromView()
+std::string ConsoleHistoryView::getLine()
 {
-	if (this->line == this->consoleHistory->end())
-		// We're at the end, so return a blank line.
+	if (this->currentIteratedLine == this->consoleView.end())
 		return "";
 
-	std::string line = *(this->line);
-
-	canvas->SetFont(ConFont);
-	if (this->lines == NULL) {
-		if (canvas->StringWidth(line.c_str()) <= canvas->width)
-		{
-			// The entire line can fit in the console.
-			++(this->line);
-			return line;
-		}
-
-		// Break lines up if we haven't already done so.
-		this->lines = V_BreakLines(canvas->width, line.c_str(), true);
-
-		// Since we just broke the lines, find the last line and return it.
-		short width;
-		size_t index = 0;
-		while (this->lines[index].width != -1)
-			index++;
-
-		this->lines_index = index - 1;
-		return this->lines[this->lines_index].string;
-	}
-
-	// Return the next line
-	(this->lines_index) -= 1;
-	const char* ret = this->lines[this->lines_index].string;
-
-	if (this->lines_index == 0) {
-		// We encountered the last line, so free our broken lines and
-		// advance to the next line.
-		V_FreeBrokenLines(this->lines);
-		this->lines = NULL;
-
-		++(this->line);
-	}
-
-	return ret;
+	std::string line = *(this->currentIteratedLine);
+	++(this->currentIteratedLine);
+	return line;
 }
 
-void ConsoleHistoryView::resetView()
+void ConsoleHistoryView::getLineReset()
 {
-	this->line = this->consoleHistory->begin();
+	this->currentIteratedLine = this->currentLine;
+}
+
+void ConsoleHistoryView::readHistory()
+{
+	// There is no history to add
+	if (this->consoleHistory->empty())
+		return;
+
+	// If we're on the ending sentinel, skip past it.
+	if (this->latest == this->consoleHistory->end())
+		--(this->latest);
+
+	// Dump any history that we don't already have in the view.
+	ConsoleIterator begin = this->consoleHistory->begin();
+	while (this->latest != begin)
+	{
+		--(this->latest);
+		this->consoleView.push_front(*(this->latest));
+	}
+
+	// Stick to the bottom for now
+	this->currentLine = this->consoleView.begin();
+	this->currentIteratedLine = this->consoleView.begin();
 }
 
 EXTERN_CVAR (con_notifytime)
@@ -640,7 +659,12 @@ int PrintString (int printlevel, const char *outline)
 	else
 		mask = printxormask;
 
+	// Append to console history
 	consoleHistory.append(outline);
+
+	// If we have an active view of the history, update that too.
+	if (consoleHistoryView != NULL)
+		consoleHistoryView->readHistory();
 
 	/*
 	cp = outline;
@@ -1044,10 +1068,10 @@ void C_DrawConsole (void)
 		for (; lines > 1; lines--)
 		{
 			screen->SetFont(ConFont);
-			screen->DrawText(CR_GREY, left, offset + lines * 8, consoleHistoryView->getLineFromView().c_str());
+			screen->DrawText(CR_GREY, left, offset + lines * 8, consoleHistoryView->getLine().c_str());
 			screen->SetFont(SmallFont);
 		}
-		consoleHistoryView->resetView();
+		consoleHistoryView->getLineReset();
 
 		for (; lines > 1; lines--)
 		{
