@@ -138,6 +138,7 @@ private:
 	DCanvas* canvas;
 
 	std::list<std::string> consoleView;
+	int viewWidth;
 	size_t view_size;
 	size_t view_max_size;
 	ConsoleIterator latest;
@@ -246,6 +247,8 @@ ConsoleIterator ConsoleHistory::end()
  */
 ConsoleHistoryView::ConsoleHistoryView(ConsoleHistory* console_history, DCanvas* canvas) : consoleHistory(console_history), canvas(canvas), view_max_size(CONSOLEBUFFER)
 {
+	this->viewWidth = canvas->width - 16;
+
 	if (!this->setSize(this->view_max_size))
 		this->setSize(1000);
 
@@ -309,9 +312,9 @@ void ConsoleHistoryView::readHistory()
 	{
 		--(this->latest);
 		int width = this->canvas->StringWidth(this->latest->c_str());
-		if (width > this->canvas->width)
+		if (width > this->viewWidth)
 		{
-			brokenlines_t* lines = V_BreakLines(this->canvas->width, this->latest->c_str());
+			brokenlines_t* lines = V_BreakLines(this->viewWidth, this->latest->c_str());
 			for (int i = 0; lines[i].width != -1; i++)
 				this->consoleView.push_front(lines[i].string);
 			V_FreeBrokenLines(lines);
