@@ -125,19 +125,27 @@ public:
 	ConsoleHistory();
 	bool setSize(size_t);
 	void append(const std::string&);
-	ConsoleIterator getLastLine();
-	ConsoleIterator getFirstLine();
+	ConsoleIterator begin();
+	ConsoleIterator end();
 };
 
 class ConsoleHistoryView {
 private:
 	ConsoleHistory* consoleHistory;
+	DCanvas* canvas;
+
+	ConsoleIterator savedLine;
+	ConsoleIterator line;
+	brokenlines_t* lines;
+	size_t lines_index;
 public:
-	ConsoleHistoryView(ConsoleHistory*);
+	ConsoleHistoryView(ConsoleHistory*, DCanvas* canvas);
+	std::string getLineFromView();
+	void resetView();
 };
 
 static ConsoleHistory consoleHistory;
-static ConsoleHistoryView consoleHistoryView(&consoleHistory);
+static ConsoleHistoryView* consoleHistoryView = NULL;
 
 /**
  * Constructor.
@@ -206,17 +214,17 @@ void ConsoleHistory::append(const std::string& message)
  *
  * @return The last line iterator.
  */
-ConsoleIterator ConsoleHistory::getLastLine()
+ConsoleIterator ConsoleHistory::begin()
 {
 	return this->history.begin();
 }
 
 /**
- * Get an iterator that points to the first line of the console.
+ * Get an iterator that points to the ending sentinel.
  *
  * @return The first line iterator.
  */
-ConsoleIterator ConsoleHistory::getFirstLine()
+ConsoleIterator ConsoleHistory::end()
 {
 	return this->history.end();
 }
@@ -224,8 +232,67 @@ ConsoleIterator ConsoleHistory::getFirstLine()
 /**
  * Constructor
  */
-ConsoleHistoryView::ConsoleHistoryView(ConsoleHistory* console_history) : consoleHistory(console_history)
+ConsoleHistoryView::ConsoleHistoryView(ConsoleHistory* console_history, DCanvas* canvas) : consoleHistory(console_history), canvas(canvas), lines(NULL)
 {
+	this->savedLine = console_history->begin();
+	this->resetView();
+}
+
+/**
+ * Traverses the view and returns a line of history that will fit in the
+ * current screen width.
+ *
+ * @return
+ */
+std::string ConsoleHistoryView::getLineFromView()
+{
+	if (this->line == this->consoleHistory->end())
+		// We're at the end, so return a blank line.
+		return "";
+
+	std::string line = *(this->line);
+
+	canvas->SetFont(ConFont);
+	if (this->lines == NULL) {
+		if (canvas->StringWidth(line.c_str()) <= canvas->width)
+		{
+			// The entire line can fit in the console.
+			++(this->line);
+			return line;
+		}
+
+		// Break lines up if we haven't already done so.
+		this->lines = V_BreakLines(canvas->width, line.c_str(), true);
+
+		// Since we just broke the lines, find the last line and return it.
+		short width;
+		size_t index = 0;
+		while (this->lines[index].width != -1)
+			index++;
+
+		this->lines_index = index - 1;
+		return this->lines[this->lines_index].string;
+	}
+
+	// Return the next line
+	(this->lines_index) -= 1;
+	const char* ret = this->lines[this->lines_index].string;
+
+	if (this->lines_index == 0) {
+		// We encountered the last line, so free our broken lines and
+		// advance to the next line.
+		V_FreeBrokenLines(this->lines);
+		this->lines = NULL;
+
+		++(this->line);
+	}
+
+	return ret;
+}
+
+void ConsoleHistoryView::resetView()
+{
+	this->line = this->consoleHistory->begin();
 }
 
 EXTERN_CVAR (con_notifytime)
@@ -298,7 +365,13 @@ EXTERN_CVAR (con_scrlock)
 //
 void STACK_ARGS C_Close()
 {
-	if(conback)
+	if (vidactive)
+	{
+		delete consoleHistoryView;
+		consoleHistoryView = NULL;
+	}
+
+	if (conback)
 	{
 		I_FreeScreen(conback);
 		conback = NULL;
@@ -321,6 +394,9 @@ void C_InitConsole (int width, int height, BOOL ingame)
 
 	if ( (vidactive = ingame) )
 	{
+		if (consoleHistoryView == NULL)
+			consoleHistoryView = new ConsoleHistoryView(&consoleHistory, screen);
+
 		if (!gotconback)
 		{
 			BOOL stylize = false;
@@ -963,18 +1039,15 @@ void C_DrawConsole (void)
 	if (menuactive)
 		return;
 
-	ConsoleIterator it = consoleHistory.getLastLine();
-	ConsoleIterator it_end = consoleHistory.getFirstLine();
-
 	if (lines > 0)
 	{
 		for (; lines > 1; lines--)
 		{
 			screen->SetFont(ConFont);
-			screen->DrawText(CR_GREY, left, offset + lines * 8, (*it).c_str());
+			screen->DrawText(CR_GREY, left, offset + lines * 8, consoleHistoryView->getLineFromView().c_str());
 			screen->SetFont(SmallFont);
-			it++;
 		}
+		consoleHistoryView->resetView();
 
 		for (; lines > 1; lines--)
 		{
@@ -1804,5 +1877,10 @@ BEGIN_COMMAND (consoletest)
 	Printf(PRINT_HIGH, "\n");
 	Printf(PRINT_HIGH, "This line has no newline at the end");
 	Printf(PRINT_HIGH, "This line has a newline\nsplitting the two lines.");
+
+	Printf(PRINT_HIGH, "Colors: ""\x1c""AA""\x1c""BB""\x1c""CC""\x1c""DD"
+	                   "\x1c""EE""\x1c""FF""\x1c""GG""\x1c""HH""\x1c""II"
+	                   "\x1c""JJ""\x1c""KK\n");
+	Printf(PRINT_HIGH, "\x1c+Let's try to be bold.\n");
 }
 END_COMMAND (consoletest)
