@@ -683,7 +683,7 @@ int PrintString (int printlevel, const char *outline)
 	if (printlevel < (int)msglevel)
 		return 0;
 
-	if (vidactive && !midprinting)
+	if (vidactive && !midprinting && screen != NULL)
 		C_AddNotifyString (printlevel, outline);
 
 	if (printlevel >= PRINT_CHAT && printlevel < 64)
