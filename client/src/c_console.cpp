@@ -297,6 +297,8 @@ void ConsoleHistoryView::readHistory()
 	if (this->consoleHistory->empty())
 		return;
 
+	this->canvas->SetFont(ConFont);
+
 	// If we're on the ending sentinel, skip past it.
 	if (this->latest == this->consoleHistory->end())
 		--(this->latest);
@@ -306,8 +308,21 @@ void ConsoleHistoryView::readHistory()
 	while (this->latest != begin)
 	{
 		--(this->latest);
-		this->consoleView.push_front(*(this->latest));
+		int width = this->canvas->StringWidth(this->latest->c_str());
+		if (width > this->canvas->width)
+		{
+			brokenlines_t* lines = V_BreakLines(this->canvas->width, this->latest->c_str());
+			for (int i = 0; lines[i].width != -1; i++)
+				this->consoleView.push_front(lines[i].string);
+			V_FreeBrokenLines(lines);
+		}
+		else
+		{
+			this->consoleView.push_front(*(this->latest));
+		}
 	}
+
+	this->canvas->SetFont(SmallFont);
 
 	// Stick to the bottom for now
 	this->currentLine = this->consoleView.begin();
