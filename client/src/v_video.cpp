@@ -231,14 +231,14 @@ void DCanvas::DrawPatchFullScreen(const patch_t* patch) const
 	if (isProtectedRes())
 	{
 		DrawPatch(patch, 0, 0);
-	}   
+	}
 	else if (width * 3 > height * 4)
-	{   
+	{
 		// widescreen resolution - draw pic in 4:3 ratio in center of screen
 		int picwidth = 4 * height / 3;
 		int picheight = height;
 		DrawPatchStretched(patch, (width - picwidth) / 2, 0, picwidth, picheight);
-	}   
+	}
 	else
 	{
 		// 4:3 resolution - draw pic to the entire screen
@@ -548,7 +548,7 @@ CVAR_FUNC_IMPL (sv_allowwidescreen)
 	// change setmodeneeded when the value of sv_allowwidescreen
 	// changes our ability to use wide-fov
 	bool wide_fov = V_UseWidescreen() || V_UseLetterBox();
-	static bool last_value = !wide_fov; 
+	static bool last_value = !wide_fov;
 
 	if (last_value != wide_fov)
 		setmodeneeded = true;
@@ -571,7 +571,7 @@ bool V_UsePillarBox()
 		return false;
 	if (I_GetVideoWidth() == 640 && I_GetVideoHeight() == 400)
 		return false;
-	
+
 	float ratio = float(I_GetVideoWidth()) / float(I_GetVideoHeight());
 	return (!vid_widescreen || (!serverside && !sv_allowwidescreen)) && ratio > (4.0f / 3.0f);
 }
@@ -592,7 +592,7 @@ bool V_UseLetterBox()
 		return false;
 	if (I_GetVideoWidth() == 640 && I_GetVideoHeight() == 400)
 		return false;
-	
+
 	float ratio = float(I_GetVideoWidth()) / float(I_GetVideoHeight());
 	return (vid_widescreen && (serverside || sv_allowwidescreen)) && ratio <= (4.0f / 3.0f);
 }
@@ -610,7 +610,7 @@ bool V_UseWidescreen()
 		return false;
 	if (I_GetVideoWidth() == 640 && I_GetVideoHeight() == 400)
 		return false;
-	
+
 	float ratio = float(I_GetVideoWidth()) / float(I_GetVideoHeight());
 	return (vid_widescreen && (serverside || sv_allowwidescreen)) && ratio > (4.0f / 3.0f);
 }
@@ -659,7 +659,7 @@ static bool V_DoModeSetup(int width, int height, int bits)
 	DisplayBits = bits;
 
 	SquareWidth = 4.0f * DisplayHeight / 3.0f;
-	
+
 	if (SquareWidth > DisplayWidth)
         SquareWidth = DisplayWidth;
 
@@ -669,7 +669,7 @@ static bool V_DoModeSetup(int width, int height, int bits)
 	// [SL] Add a bit to the screen width if it's a power-of-two to avoid
 	// cache thrashing
 	int cache_fudge = (width % 256) == 0 ? 4 : 0;
-	
+
 	screen = I_AllocateScreen(width + cache_fudge, height, bits, primary);
 
 	V_ForceBlend (0,0,0,0);
@@ -693,9 +693,9 @@ bool V_SetResolution(int width, int height, int bits)
 
 	if (screen)
 	{
-		oldwidth = I_GetVideoWidth(); 
-		oldheight = I_GetVideoHeight(); 
-		oldbits = I_GetVideoBitDepth(); 
+		oldwidth = I_GetVideoWidth();
+		oldheight = I_GetVideoHeight();
+		oldbits = I_GetVideoBitDepth();
 	}
 	else
 	{
@@ -706,7 +706,7 @@ bool V_SetResolution(int width, int height, int bits)
 	}
 
 	// Make sure we don't set the resolution smaller than Doom's original 320x200
-	// resolution. Bad things might happen. 
+	// resolution. Bad things might happen.
 	width = clamp(width, 320, MAXWIDTH);
 	height = clamp(height, 200, MAXHEIGHT);
 
@@ -720,7 +720,7 @@ bool V_SetResolution(int width, int height, int bits)
 
 		// Try the desired resolution
 		if (!I_CheckResolution (width, height, bits))
-		{				
+		{
 			// Try the previous resolution (if any)
 			if (!I_CheckResolution (oldwidth, oldheight, oldbits))
 		   		return false;
@@ -745,19 +745,19 @@ BEGIN_COMMAND (vid_setmode)
 		return;
 	}
 	// Width
-	if (argc > 1) 
+	if (argc > 1)
 		width = atoi(argv[1]);
-	
+
 	// Height (optional)
 	if (argc > 2)
 		height = atoi(argv[2]);
 	if (height == 0)
-		height = I_GetVideoHeight(); 
+		height = I_GetVideoHeight();
 
 	// Bits (always 8-bit for now)
 	bits = 8;
 
-	if (width < 320 || height < 200) 
+	if (width < 320 || height < 200)
 		Printf(PRINT_HIGH, "%dx%d is too small.  Minimum resolution is 320x200.\n", width, height);
 
 	if (width > MAXWIDTH || height > MAXHEIGHT)
@@ -867,13 +867,16 @@ void V_Init (void)
 
 	V_InitPalette();
 
+	// Initialize ZDoom fonts.
 	if (W_CheckNumForName("FONTA_S") >= 0)
 		SmallFont = new FFont("SmallFont", "FONTA%02u", HU_FONTSTART, HU_FONTSIZE, 1);
 	else
 		SmallFont = new FFont("SmallFont", "STCFN%.3d", HU_FONTSTART, HU_FONTSIZE, HU_FONTSTART);
+	ConFont = new FSingleLumpFont("ConsoleFont", W_GetNumForName("CONFONT"));
+
+	// Set the default font to something reasonable.
 	screen->SetFont(SmallFont);
 
-	ConFont = new FSingleLumpFont("ConsoleFont", W_GetNumForName("CONFONT"));
 	C_InitConsole(screen->width, screen->height, true);
 }
 

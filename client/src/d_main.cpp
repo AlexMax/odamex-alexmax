@@ -227,6 +227,8 @@ void D_Display (void)
 		if (!V_SetResolution (NewWidth, NewHeight, NewBits))
 			I_FatalError ("Could not change screen mode");
 
+		// Set the default font to something reasonable.
+		screen->SetFont(SmallFont);
 		// Recalculate various view parameters.
 		setsizeneeded = true;
 		// Trick status bar into rethinking its position

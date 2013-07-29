@@ -572,7 +572,7 @@ void C_InitConsole (int width, int height, BOOL ingame)
 			{
 				string[(int)zap[1]] = 0;
 			}
-			Printf (PRINT_HIGH, "%s", string);
+			// Printf (PRINT_HIGH, "%s", string);
 		}
 
 		M_Free(old);
