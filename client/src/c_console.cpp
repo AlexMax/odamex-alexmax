@@ -149,6 +149,10 @@ public:
 	std::string getLine();
 	void getLineReset();
 	void readHistory();
+	void scrollUp();
+	void scrollDown();
+	void scrollTop();
+	void scrollBottom();
 };
 
 static ConsoleHistory consoleHistory;
@@ -342,6 +346,28 @@ void ConsoleHistoryView::readHistory()
 	// Stick to the bottom for now
 	this->currentLine = this->consoleView.begin();
 	this->currentIteratedLine = this->consoleView.begin();
+}
+
+void ConsoleHistoryView::scrollUp()
+{
+	if (this->currentLine != --(this->consoleView.end()))
+		++(this->currentLine);
+}
+
+void ConsoleHistoryView::scrollDown()
+{
+	if (this->currentLine != this->consoleView.begin())
+		--(this->currentLine);
+}
+
+void ConsoleHistoryView::scrollTop()
+{
+	this->currentLine = --(this->consoleView.end());
+}
+
+void ConsoleHistoryView::scrollBottom()
+{
+	this->currentLine = this->consoleView.begin();
 }
 
 EXTERN_CVAR (con_notifytime)
@@ -696,7 +722,13 @@ int PrintString (int printlevel, const char *outline)
 
 	// If we have an active view of the history, update that too.
 	if (consoleHistoryView != NULL)
+	{
 		consoleHistoryView->readHistory();
+
+		// If we have scroll lock activated, scroll all the way to the bottom.
+		if (con_scrlock == 0.0f)
+			consoleHistoryView->scrollBottom();
+	}
 
 	/*
 	cp = outline;
@@ -1257,36 +1289,31 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 	case KEY_JOY7: // Left Trigger
 #endif
 	case KEY_PGUP:
-		if ((int)(ConRows) > (int)(ConBottom/8))
-		{
-			if (KeysShifted)
-				// Move to top of console buffer
-				RowAdjust = ConRows - SkipRows - ConBottom/8;
-			else
-				// Start scrolling console buffer up
-				ScrollState = SCROLLUP;
-		}
+		// Scroll console buffer up.
+		consoleHistoryView->scrollUp();
 		break;
 #ifdef _XBOX
 	case KEY_JOY8: // Right Trigger
 #endif
 	case KEY_PGDN:
-		if (KeysShifted)
-			// Move to bottom of console buffer
-			RowAdjust = 0;
-		else
-			// Start scrolling console buffer down
-			ScrollState = SCROLLDN;
+		// Scroll console buffer down.
+		consoleHistoryView->scrollDown();
 		break;
 	case KEY_HOME:
-		// Move cursor to start of line
-
-		buffer[1] = buffer[len+4] = 0;
+		if (KeysShifted)
+			// Move to top of console buffer.
+			consoleHistoryView->scrollTop();
+		else
+			// Move cursor to start of line.
+			buffer[1] = buffer[len+4] = 0;
 		break;
 	case KEY_END:
-		// Move cursor to end of line
-
-		buffer[1] = buffer[0];
+		if (KeysShifted)
+			// Move to bottom of console buffer
+			consoleHistoryView->scrollBottom();
+		else
+			// Move cursor to end of line.
+			buffer[1] = buffer[0];
 		makestartposgood ();
 		break;
 	case KEY_LEFTARROW:
@@ -1369,8 +1396,10 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 		// Do nothing
 		break;
 	case KEY_LCTRL:
+	case KEY_RCTRL:
 		KeysCtrl = true;
 		break;
+	case KEY_LSHIFT:
 	case KEY_RSHIFT:
 		// SHIFT was pressed
 		KeysShifted = true;
@@ -1459,8 +1488,10 @@ BOOL C_HandleKey (event_t *ev, byte *buffer, int len)
 			// Execute command line (ENTER)
 			buffer[2 + buffer[0]] = 0;
 
-			if (con_scrlock == 1) // NES - If con_scrlock = 1, send console scroll to bottom.
-				RowAdjust = 0;   // con_scrlock = 0 does it automatically.
+			// NES - If con_scrlock = 1, send console scroll to bottom.
+			//       con_scrlock = 0 does it automatically.
+			if (con_scrlock == 1.0f && consoleHistoryView != NULL)
+				consoleHistoryView->scrollBottom();
 
 			if (HistHead && stricmp (HistHead->String, (char *)&buffer[2]) == 0)
 			{
