@@ -1478,9 +1478,6 @@ void G_ScreenShot (char *filename)
 // G_InitFromSavegame
 // Can be called by the startup code or the menu task.
 //
-extern BOOL setsizeneeded;
-void R_ExecuteSetViewSize (void);
-
 char savename[256];
 
 void G_LoadGame (char* name)
@@ -2295,6 +2292,36 @@ void G_TimeDemo(const char* name)
 	gameaction = ga_playdemo;
 }
 
+//
+// G_CleanupDemo
+//
+void G_CleanupDemo()
+{
+	if (demoplayback)
+	{
+		Z_Free(demobuffer);
+
+		demoplayback = false;
+		netgame = false;
+		multiplayer = false;
+		serverside = false;
+
+		cvar_t::C_RestoreCVars();		// [RH] Restore cvars demo might have changed
+	}
+
+	if (demorecording)
+	{
+		if (recorddemo_fp)
+		{
+			fputc(DEM_STOP, recorddemo_fp);
+			fclose(recorddemo_fp);
+			recorddemo_fp = NULL;
+		}
+
+		demorecording = false;
+		Printf(PRINT_HIGH, "Demo %s recorded\n", demoname);
+	}
+}
 
 /*
 ===================
@@ -2310,14 +2337,7 @@ BOOL G_CheckDemoStatus (void)
 {
 	if (demoplayback)
 	{
-		Z_Free (demobuffer);
-
-		demoplayback = false;
-		netgame = false;
-		multiplayer = false;
-		serverside = false;
-
-		cvar_t::C_RestoreCVars ();		// [RH] Restore cvars demo might have changed
+		G_CleanupDemo();
 
 		extern bool demotest;
 		if (demotest)
@@ -2358,15 +2378,7 @@ BOOL G_CheckDemoStatus (void)
 
 	if (demorecording)
 	{
-		if(recorddemo_fp)
-		{
-			fputc(DEM_STOP, recorddemo_fp);
-			fclose(recorddemo_fp);
-			recorddemo_fp = NULL;
-		}
-
-		demorecording = false;
-		Printf (PRINT_HIGH, "Demo %s recorded\n", demoname);
+		G_CleanupDemo();
 	}
 
 	return false;

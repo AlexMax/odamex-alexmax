@@ -172,6 +172,7 @@ static const char* steam_install_subdirs[] =
 	"steamapps\\common\\final doom\\base",
 	"steamapps\\common\\ultimate doom\\base",
 	"steamapps\\common\\DOOM 3 BFG Edition\\base\\wads",
+	"steamapps\\common\\master levels of doom\\master\\wads", //Let Odamex find the Master Levels pwads too
 };
 
 
@@ -1120,7 +1121,7 @@ void D_AddCmdParameterFiles(void)
 // TICRATE times a second. If the framerate is uncapped, the logic function
 // will still be called TICRATE times a second but the render function will
 // be called as often as possible. After each iteration through the loop,
-// the program yields briefly to the operating system. 
+// the program yields briefly to the operating system.
 //
 void D_RunTics(void (*logic_func)(), void(*render_func)())
 {
@@ -1149,7 +1150,7 @@ void D_RunTics(void (*logic_func)(), void(*render_func)())
 		{
 			logic_func();
 			accumulator -= logic_dt;
-		} 
+		}
 	}
 	else
 	{
@@ -1158,31 +1159,41 @@ void D_RunTics(void (*logic_func)(), void(*render_func)())
 
 	// [SL] use linear interpolation for rendering entities if the renderer
 	// framerate is not synced with the physics frequency
-	if (!fixed_render_ticrate || maxfps != TICRATE)
-		render_lerp_amount = clamp((fixed_t)(accumulator * FRACUNIT / logic_dt), 0, FRACUNIT);
-	else
+	if (fixed_render_ticrate && maxfps == TICRATE)
 		render_lerp_amount = FRACUNIT;
-
-	// disable interpolation while paused to avoid jackhammering since the physics aren't
-	// updated while paused
+	else
+		render_lerp_amount = clamp((fixed_t)(accumulator * FRACUNIT / logic_dt), 0, FRACUNIT);
+	
+	// disable interpolation while paused since the physics aren't updated while paused
 	if (paused || menuactive)
 		render_lerp_amount = FRACUNIT;
 
 	render_func();
 
+	static float previous_maxfps = -1;
+
 	if (fixed_render_ticrate)
 	{
-		const uint64_t render_dt = 1000LL * 1000LL * 1000LL / maxfps;
-		int64_t sleep_time = render_dt - I_GetTime() + current_time;
-		
-		// sleep if it will be for at least 1ms
-		if (sleep_time > 1000LL * 1000LL)
-			I_Sleep(sleep_time);
+		static uint64_t previous_block, current_block;
+		uint64_t render_dt = 1000LL * 1000LL * 1000LL / maxfps;
+
+		if (maxfps != previous_maxfps)
+			previous_block = current_time / render_dt;
+
+		// with fixed_render_ticrate, frames are rendered within fixed blocks of time
+		// and at the end of a frame, sleep until the start of the next block
+		do
+			I_Yield();
+		while ( (current_block = I_GetTime() / render_dt) <= previous_block);
+
+		previous_block = current_block;
+		previous_maxfps = maxfps;
 	}
 	else if (!timingdemo)
 	{
 		// sleep for 1ms to allow the operating system some time
 		I_Yield();
+		previous_maxfps = -1;
 	}
 }
 

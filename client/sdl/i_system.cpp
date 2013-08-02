@@ -39,13 +39,13 @@
     #include <io.h>
     #include <direct.h>
     #include <process.h>
-    #include <mmsystem.h>
 
     #ifdef _XBOX
         #include <xtl.h>
     #else
         #include <shlwapi.h>
 		#include <winsock2.h>
+		#include <mmsystem.h>
     #endif // !_XBOX
 #endif // WIN32
 
@@ -301,48 +301,11 @@ QWORD I_MSTime()
 //
 void I_Sleep(uint64_t sleep_time)
 {
-	const uint64_t one_billion = 1000LL * 1000LL * 1000LL;
-
 #if defined UNIX
-	uint64_t start_time = I_GetTime();
-	int result;
+	usleep(sleep_time / 1000LL);
 
-	// loop to finish sleeping  if select() gets interrupted by the signal handler
-	do
-	{
-		uint64_t current_time = I_GetTime();
-		if (current_time - start_time >= sleep_time)
-			break;
-		sleep_time -= current_time - start_time;
-
-		struct timeval timeout;
-		timeout.tv_sec = sleep_time / one_billion;
-		timeout.tv_usec = (sleep_time % one_billion) / 1000;
-
-		result = select(0, NULL, NULL, NULL, &timeout);
-	} while (result == -1 && errno == EINTR);
-
-#elif defined WIN32
-	uint64_t start_time = I_GetTime();
-	if (sleep_time > 5000000LL)
-		sleep_time -= 500000LL;		// [SL] hack to get the timing right for 35Hz
-
-	// have to create a dummy socket for select to work on Windows
-	static bool initialized = false;
-	static fd_set dummy;
-
-	if (!initialized)
-	{
-		SOCKET s = socket(PF_INET, SOCK_STREAM, IPPROTO_TCP);
-		FD_ZERO(&dummy);
-		FD_SET(s, &dummy);
-	}
-
-	struct timeval timeout;
-	timeout.tv_sec = sleep_time / one_billion;
-	timeout.tv_usec = (sleep_time % one_billion) / 1000;
-
-	select(0, NULL, NULL, &dummy, &timeout);
+#elif defined(WIN32) && !defined(_XBOX)
+	Sleep(sleep_time / 1000000LL);
 
 #else
 	SDL_Delay(sleep_time / 1000000LL);
